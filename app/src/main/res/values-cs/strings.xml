@@ -5173,4 +5173,7 @@
     <string name="tour_183_also_songs_from">Skladby v Knihovně z vybraných playlistů</string>
     <string name="tour_183_also_lock">Opakování a Další na zamykací obrazovce</string>
     <string name="tour_183_also_uploads">Nahrávání a mazání v Nahraných</string>
+    <string name="show_furigana">Zobrazit furiganu</string>
+    <string name="hiragana_readings_above_kanji">Čtení hiragana nad kandži v japonských textech</string>
+    <string name="furigana_uses_the_japanese_reading_data">Používá japonská čtecí data (stáhnou se jednou níže).</string>
 </resources>

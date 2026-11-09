@@ -5029,4 +5029,7 @@
     <string name="tour_183_also_songs_from">Τραγούδια της Βιβλιοθήκης από τις λίστες που διαλέγεις</string>
     <string name="tour_183_also_lock">Επανάληψη και Επόμενα στην οθόνη κλειδώματος</string>
     <string name="tour_183_also_uploads">Μεταφόρτωση και διαγραφή στις Μεταφορτώσεις</string>
+    <string name="show_furigana">Εμφάνιση φουριγκάνα</string>
+    <string name="hiragana_readings_above_kanji">Αναγνώσεις χιραγκάνα πάνω από τα κάντζι σε ιαπωνικούς στίχους</string>
+    <string name="furigana_uses_the_japanese_reading_data">Χρησιμοποιεί τα ιαπωνικά δεδομένα ανάγνωσης (λήψη μία φορά παρακάτω).</string>
 </resources>
