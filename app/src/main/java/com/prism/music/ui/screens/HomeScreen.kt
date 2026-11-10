@@ -975,39 +975,43 @@ internal fun SongSection(
     val start: (Int) -> Unit = { i -> play?.invoke(songs, i) ?: c.player.playQueue(songs, i, QueueSource(QueueKind.OTHER, title)) }
     val indexOf: (BrowseItem) -> Int = { item -> songs.indexOfFirst { it.id == item.id }.coerceAtLeast(0) }
     SectionHeader(title, strapline = strapline, onMore = onMore)
-    when (cfg.style) {
-        // Grid (#44): two rows of covers, where List is four rows of songs.
-        // One or two songs sit in a single row rather than a column of two.
-        SectionStyle.GRID -> LazyHorizontalGrid(
-            GridCells.Fixed(if (songs.size > 2) 2 else 1), Modifier.height(if (songs.size > 2) 2 * 212.dp else 212.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp),
-        ) {
-            items(songs.size) { i -> ItemCard(SongItem(songs[i]), width = 140.dp) { start(i) } }
-        }
-        SectionStyle.LIST -> {
-            val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-            val snapping = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(
-                remember(grid) {
-                    androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider(
-                        grid, androidx.compose.foundation.gestures.snapping.SnapPosition.Start,
-                    )
-                },
-            )
-            LazyHorizontalGrid(
-                GridCells.Fixed(songs.size.coerceIn(1, 4)), Modifier.height(64.dp * songs.size.coerceIn(1, 4)),
-                state = grid,
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                flingBehavior = if (snap) snapping else androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior(),
+    // Select many: a song row here (Quick picks' rows, Liked songs, On repeat…) is held to start picking, as in a list.
+    // The card styles have no picking of their own yet; their long press still offers the menu.
+    com.prism.music.ui.components.SelectableSongs(songs) {
+        when (cfg.style) {
+            // Grid (#44): two rows of covers, where List is four rows of songs.
+            // One or two songs sit in a single row rather than a column of two.
+            SectionStyle.GRID -> LazyHorizontalGrid(
+                GridCells.Fixed(if (songs.size > 2) 2 else 1), Modifier.height(if (songs.size > 2) 2 * 212.dp else 212.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
             ) {
-                items(songs.size) { i ->
-                    // The song playing is marked, as in a playlist (#242: Quick picks never showed it).
-                    Box(Modifier.width(330.dp)) { SongRow(songs[i], playing = current?.id == songs[i].id) { start(i) } }
+                items(songs.size) { i -> ItemCard(SongItem(songs[i]), width = 140.dp) { start(i) } }
+            }
+            SectionStyle.LIST -> {
+                val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                val snapping = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(
+                    remember(grid) {
+                        androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider(
+                            grid, androidx.compose.foundation.gestures.snapping.SnapPosition.Start,
+                        )
+                    },
+                )
+                LazyHorizontalGrid(
+                    GridCells.Fixed(songs.size.coerceIn(1, 4)), Modifier.height(64.dp * songs.size.coerceIn(1, 4)),
+                    state = grid,
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    flingBehavior = if (snap) snapping else androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior(),
+                ) {
+                    items(songs.size) { i ->
+                        // The song playing is marked, as in a playlist (#242: Quick picks never showed it).
+                        Box(Modifier.width(330.dp)) { SongRow(songs[i], playing = current?.id == songs[i].id) { start(i) } }
+                    }
                 }
             }
+            SectionStyle.HERO -> HeroRow(songs.map { SongItem(it) }) { item -> start(indexOf(item)) }
+            SectionStyle.CAROUSEL -> ItemCarousel(songs.map { SongItem(it) }, { item -> start(indexOf(item)) })
+            SectionStyle.DIAL -> SpeedDialPages(songs.map { SongItem(it) }, open = { item -> start(indexOf(item)) })
         }
-        SectionStyle.HERO -> HeroRow(songs.map { SongItem(it) }) { item -> start(indexOf(item)) }
-        SectionStyle.CAROUSEL -> ItemCarousel(songs.map { SongItem(it) }, { item -> start(indexOf(item)) })
-        SectionStyle.DIAL -> SpeedDialPages(songs.map { SongItem(it) }, open = { item -> start(indexOf(item)) })
     }
 }
 

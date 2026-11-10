@@ -83,9 +83,11 @@ fun SavedWhilePlayingScreen(bottomPadding: Dp) {
         when {
             list == null -> LoadingState()
             list.isEmpty() -> EmptyState(PrismIcons.DownloadDone, tr(R.string.saved_while_playing_none_title), tr(R.string.saved_while_playing_none_body))
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = bottomPadding + 16.dp)) {
-                itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
-                    SwipeToQueue(s) { SongRow(s) { c.player.playQueue(list, i, source) } }
+            else -> com.prism.music.ui.components.SelectableSongs(list) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = bottomPadding + 16.dp)) {
+                    itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
+                        SwipeToQueue(s) { SongRow(s) { c.player.playQueue(list, i, source) } }
+                    }
                 }
             }
         }

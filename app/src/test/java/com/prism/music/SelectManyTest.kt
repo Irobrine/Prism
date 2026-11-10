@@ -1,5 +1,7 @@
 package com.prism.music
 
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.CompositionLocalProvider
@@ -133,7 +135,7 @@ class SelectManyTest {
         assertEquals("picking over: a tap plays again", 1, played)
     }
 
-    /** Home's shelves, an artist's top songs: their rows aren't pickable, even while a list elsewhere is picking. */
+    /** Home's card shelves, a podcast's episodes: rows not in a [SelectableSongs] aren't pickable, even while a list elsewhere is picking. */
     @Test fun aListNotTakingPartIsLeftAsItWas() {
         val s = SongSelection()
         var played = 0
@@ -168,5 +170,44 @@ class SelectManyTest {
         shown.value = false
         compose.waitForIdle()
         assertFalse(s.selecting)
+    }
+
+    /** Rows of the app's own making (an artist's top songs) pick through [com.prism.music.ui.components.rememberSongPick]. */
+    @Test fun aCustomRowPicksThroughTheHelper() {
+        val s = SongSelection()
+        var played = 0
+        compose.setContent {
+            CompositionLocalProvider(LocalRowMarks provides marks, LocalSongSelection provides s) {
+                SelectableSongs(listOf(a, b)) {
+                    androidx.compose.foundation.layout.Column {
+                        CustomRow(a) { played++ }
+                        CustomRow(b) { played++ }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Alpha").performTouchInput { longClick() }
+        compose.waitForIdle()
+        assertEquals(setOf("a"), s.picked!!.keys)
+        compose.onNodeWithText("Bravo").performClick()
+        compose.waitForIdle()
+        assertEquals("a tap picks rather than plays", setOf("a", "b"), s.picked!!.keys)
+        assertEquals(0, played)
+        s.clear()
+        compose.waitForIdle()
+        compose.onNodeWithText("Bravo").performClick()
+        assertEquals("picking over: its tap plays again", 1, played)
+    }
+}
+
+@androidx.compose.runtime.Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun CustomRow(song: Song, onPlay: () -> Unit) {
+    val pick = com.prism.music.ui.components.rememberSongPick(song, onPlay)
+    androidx.compose.foundation.layout.Row(
+        androidx.compose.ui.Modifier.fillMaxWidth()
+            .combinedClickable(onClick = { if (pick != null) pick.tap() else onPlay() }, onLongClick = { pick?.hold() }),
+    ) {
+        androidx.compose.material3.Text(song.title)
     }
 }

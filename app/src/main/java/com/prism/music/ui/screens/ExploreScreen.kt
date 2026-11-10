@@ -71,7 +71,16 @@ fun ExploreScreen(bottomPadding: Dp) {
     val open: (BrowseItem) -> Unit = { item -> nav.open(item) { c.player.playSingle(it.song) } }
     val failedBoth = explore.state is Load.Err && charts.state is Load.Err
 
-    SubPage(tr(R.string.explore), bottomPadding, Modifier.testTag("explore")) {
+    // Select many: the song shelves the page draws, each showing its first rows (All takes those).
+    val shelves = (charts.state as? Load.Ok)?.value?.shelves.orEmpty() + (explore.state as? Load.Ok)?.value.orEmpty()
+    val pickSongs = remember(shelves) {
+        shelves
+            .filter { s -> s.items.isNotEmpty() && s.items.all { it is SongItem } && s.items.none { (it as SongItem).song.isVideo } }
+            .flatMap { s -> s.items.filterIsInstance<SongItem>().map { it.song }.take(SONG_ROWS) }
+            .distinctBy { it.id }
+    }
+
+    SubPage(tr(R.string.explore), bottomPadding, Modifier.testTag("explore"), selectableSongs = pickSongs) {
         if (failedBoth) {
             item("failed") { ErrorState((charts.state as Load.Err).message) { charts.reload(false); explore.reload(false) } }
             return@SubPage
