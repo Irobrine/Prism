@@ -704,12 +704,25 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         continueVideo()
         maybeAutoplay()
         prefetchNext()
+        autoDownloadOnStream(song, mediaItem.videoModeId != null)
         songCoverForVideo(song)
         albumForSong(song)
         updateButtons()
         PlayTileService.update(this)
         carLyrics.refresh()
         scheduleSave()
+    }
+
+    /**
+     * This branch's "always download": with it on, a song (or the music video being watched) is saved for offline as
+     * soon as it starts streaming. [downloadWifiOnly] still applies to when the download runs; live streams, episodes
+     * and songs on this phone have nothing to save.
+     */
+    private fun autoDownloadOnStream(song: Song, videoMode: Boolean) {
+        if (song.isLive || song.isEpisode) return
+        val s = c.settings.current
+        if (s.downloadOnStream) c.downloads.download(song)
+        if (videoMode && s.downloadVideoOnStream) c.downloads.downloadVideo(song)
     }
 
     /** Podcast episodes' playback speed (the player's ⋯ sets it); music always plays at 1×. */
@@ -1827,6 +1840,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 ) player.seekTo(player.currentPosition + lag)
             }
             watchVideo(song.id)
+            autoDownloadOnStream(song, videoMode = true)
         }
         return null
     }
