@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.prism.music.data.ModelStore
 import com.prism.music.data.lyrics.RubySpan
@@ -37,8 +38,6 @@ import com.prism.music.ui.theme.LocalContainer
 /** How big a reading is against the line it sits over, and how tall its row is. */
 private const val RUBY_SCALE = 0.45f
 private const val RUBY_LINE = 0.85f
-/** How much extra room a furigana line needs between its rows. */
-private const val RUBY_ROOM = 0.7f
 
 /**
  * Each line's kanji and its hiragana reading, line for line, when furigana is on and this is a Japanese song with the
@@ -66,14 +65,37 @@ fun rememberFurigana(state: LyricsState): List<List<RubySpan>>? {
     return ruby
 }
 
-/** [style] with room above its rows for furigana (wrapped lines need it too). */
-internal fun TextStyle.withRubyRoom(): TextStyle {
+/** A reading's style, measured and drawn the same way. */
+private fun TextStyle.rubyStyle(size: TextUnit): TextStyle = copy(
+    fontSize = size, lineHeight = size * RUBY_LINE, fontWeight = FontWeight.Normal,
+    letterSpacing = 0.sp, textAlign = TextAlign.Start, textDirection = TextDirection.Ltr,
+    // The reading's own font padding isn't wanted here: [rememberRubyRoom] measures what it needs.
+    lineHeightStyle = null,
+)
+
+/**
+ * How much room (in sp) the tallest of [ruby]'s readings needs above the text, or null when there are none. Every row of
+ * a wrapped line keeps this same room, so a later row's reading can't sit down over the row above it.
+ */
+@Composable
+internal fun rememberRubyRoom(ruby: List<RubySpan>?, style: TextStyle): Float? {
+    if (ruby.isNullOrEmpty()) return null
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val rubyStyle = remember(style) { style.rubyStyle(style.fontSize * RUBY_SCALE) }
+    return remember(ruby, rubyStyle, density) {
+        val tallest = ruby.maxOf { measurer.measure(AnnotatedString(it.reading), rubyStyle, maxLines = 1).size.height }
+        with(density) { tallest.toSp().value }
+    }
+}
+
+/** [style] with [room] sp kept above each of its rows for the readings (wrapped lines need it too). */
+internal fun TextStyle.withRubyRoom(room: Float): TextStyle {
     if (!fontSize.isSp || !lineHeight.isSp) return this
-    val extra = fontSize.value * RUBY_SCALE * RUBY_ROOM
     return copy(
-        lineHeight = (lineHeight.value + extra).sp,
-        // The extra room goes between rows; the last row doesn't need it below it.
-        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.LastLineBottom),
+        lineHeight = (lineHeight.value + room).sp,
+        // The extra room goes below each row, as the gap the next row's readings sit in.
+        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Top, LineHeightStyle.Trim.LastLineBottom),
     )
 }
 
@@ -85,22 +107,18 @@ internal fun TextStyle.withRubyRoom(): TextStyle {
 internal fun RubyOverlay(
     ruby: List<RubySpan>?,
     style: TextStyle,
+    room: Float?,
     layout: TextLayoutResult?,
     modifier: Modifier,
     color: Color,
     content: @Composable (Modifier) -> Unit,
 ) {
-    if (ruby.isNullOrEmpty()) { content(modifier); return }
+    if (ruby.isNullOrEmpty() || room == null) { content(modifier); return }
     val density = LocalDensity.current
     val rubySize = style.fontSize * RUBY_SCALE
-    val pad = with(density) { (rubySize * RUBY_LINE).toDp() }
+    val pad = with(density) { room.sp.toDp() }
     val measurer = rememberTextMeasurer()
-    val rubyStyle = remember(style, rubySize) {
-        style.copy(
-            fontSize = rubySize, lineHeight = rubySize * RUBY_LINE, fontWeight = FontWeight.Normal,
-            letterSpacing = 0.sp, textAlign = TextAlign.Start, textDirection = TextDirection.Ltr,
-        )
-    }
+    val rubyStyle = remember(style, rubySize) { style.rubyStyle(rubySize) }
     // Each reading, split where its kanji wrap onto another row, measured once.
     val pieces = remember(layout, ruby) { layout?.let { rubyPieces(it, ruby) }.orEmpty() }
     val measured = remember(pieces, rubyStyle) { pieces.map { it to measurer.measure(AnnotatedString(it.reading), rubyStyle, maxLines = 1) } }
@@ -108,8 +126,8 @@ internal fun RubyOverlay(
         content(modifier.padding(top = pad))
         val l = layout ?: return@Box
         Canvas(Modifier.matchParentSize()) {
-            val room = pad.toPx()
-            for ((piece, reading) in measured) drawRuby(l, piece, reading, room, color)
+            val roomPx = pad.toPx()
+            for ((piece, reading) in measured) drawRuby(l, piece, reading, roomPx, color)
         }
     }
 }
@@ -126,8 +144,9 @@ internal fun TextWithFurigana(
     overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     var layout by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
-    val st = if (!ruby.isNullOrEmpty()) style.withRubyRoom() else style
-    RubyOverlay(ruby, st, layout, modifier, color) { m ->
+    val room = rememberRubyRoom(ruby, style)
+    val st = if (room != null) style.withRubyRoom(room) else style
+    RubyOverlay(ruby, st, room, layout, modifier, color) { m ->
         Text(text, m, style = st, color = color, maxLines = maxLines, overflow = overflow, onTextLayout = { layout = it })
     }
 }
