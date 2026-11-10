@@ -5044,6 +5044,14 @@
     <string name="deleted_from_your_uploads">Deleted from your uploads</string>
     <string name="couldn_t_delete_it_s">Couldn\'t delete it: %1$s</string>
     <string name="uploads_couldn_t_find_it">YouTube Music didn\'t list it any more</string>
+    <!-- 1.8.3 Edit metadata -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
+    <string name="metadata_saved">Metadata saved</string>
+    <string name="reset_metadata">Reset metadata</string>
+    <string name="metadata_reset">Metadata reset</string>
+    <string name="metadata_mixed">Mixed</string>
+    <string name="metadata_currently">Currently %s</string>
     <!-- 1.8.3 Tour -->
     <string name="tour_183_smart_title">Smart playlists</string>
     <string name="tour_183_smart_body">Playlists that fill themselves from rules you set, and keep up as your library changes.</string>

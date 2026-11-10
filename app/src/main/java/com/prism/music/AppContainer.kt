@@ -368,7 +368,9 @@ class AppContainer(val app: Application) {
     }
     /** Search by a line of the lyrics, from the box itself (1.7.6). */
     val lyricSearch = com.prism.music.data.lyrics.LyricSearch(http, ytm, db.lyricsSearch(), db.songs(), lyrics::textLines)
-    val meta = MetaRepository(http, db.meta())
+    /** The listener's own artist, album and genre on songs (1.8.3), shown everywhere without changing the file. */
+    val metadata = com.prism.music.data.SongMetadata(app)
+    val meta = MetaRepository(http, db.meta(), metadata::genreOf)
     val canvas = com.prism.music.data.canvas.CanvasRepository(http).apply {
         hiddenPrefs = app.getSharedPreferences("canvas_hidden", android.content.Context.MODE_PRIVATE)
         savedPrefs = app.getSharedPreferences("canvas_saved", android.content.Context.MODE_PRIVATE)
