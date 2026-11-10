@@ -1475,6 +1475,12 @@ data class AppSettings(
     val downloadWifiOnly: Boolean = true,
     val downloadLikes: Boolean = true,
     /**
+     * "Always download": songs and music videos are saved for offline as soon as they're streamed, without asking.
+     * [downloadWifiOnly] still decides when their download may run. Off by default.
+     */
+    val downloadOnStream: Boolean = false,
+    val downloadVideoOnStream: Boolean = false,
+    /**
      * Smart Downloads' picks: the songs you're most likely to play are downloaded ahead. Off on a new install (#339,
      * 1.8.1.1: Home offers it once); listeners who had it on before keep it ([addNewHomeSections]).
      */
@@ -1894,6 +1900,8 @@ class SettingsRepository(
         val cacheSizeMb = intPreferencesKey("cache_size_mb")
         val downloadWifiOnly = booleanPreferencesKey("download_wifi_only")
         val downloadLikes = booleanPreferencesKey("download_likes")
+        val downloadOnStream = booleanPreferencesKey("download_on_stream")
+        val downloadVideoOnStream = booleanPreferencesKey("download_video_on_stream")
         val smartDownloads = booleanPreferencesKey("smart_downloads")
         val smartDownloadGb = floatPreferencesKey("smart_download_gb")
         val offlineGb = floatPreferencesKey("offline_gb")
@@ -2251,7 +2259,7 @@ class SettingsRepository(
                 "audio_diagnostics", "search_keyboard", "double_tap_seek_seconds", "stop_on_swipe_away", "data_saver",
                 "video_continues", "lossless", "lossless_local", "normalize", "skip_silence", "mix", "mix_seconds", "mix_auto",
                 "mix_beat_match", "mix_tempo_cellular", "content_country", "video_max_height", "cache_size_mb", "download_wifi_only",
-                "download_likes", "smart_downloads", "smart_download_gb", "offline_gb", "smart_downloads_cellular", "eq",
+                "download_likes", "download_on_stream", "download_video_on_stream", "smart_downloads", "smart_download_gb", "offline_gb", "smart_downloads_cellular", "eq",
                 "home_layout", "auto_add_sections", "home_hide_kinds", "home_header_picture", "search_sections", "search_chips", "replay_hours", "greeting_text", "greeting_show_name", "home_shortcuts",
                 "home_recent_tiles", "home_playlists", "home_customize_button", "home_continue", "quick_picks_radio",
                 "home_customize_top_button", "home_podcasts_button", "font_stamp", "lyrics_font_name", "local_sections", "local_sort",
@@ -2458,6 +2466,8 @@ class SettingsRepository(
             cacheSizeMb = p[K.cacheSizeMb] ?: d.cacheSizeMb,
             downloadWifiOnly = p[K.downloadWifiOnly] ?: d.downloadWifiOnly,
             downloadLikes = p[K.downloadLikes] ?: d.downloadLikes,
+            downloadOnStream = p[K.downloadOnStream] ?: d.downloadOnStream,
+            downloadVideoOnStream = p[K.downloadVideoOnStream] ?: d.downloadVideoOnStream,
             smartDownloads = p[K.smartDownloads] ?: d.smartDownloads,
             smartDownloadGb = p[K.smartDownloadGb] ?: d.smartDownloadGb,
             offlineGb = p[K.offlineGb] ?: run {
@@ -3093,6 +3103,8 @@ class SettingsRepository(
     fun setCacheSizeMb(v: Int) = edit { it[K.cacheSizeMb] = v }
     fun setDownloadWifiOnly(v: Boolean) = edit { it[K.downloadWifiOnly] = v }
     fun setDownloadLikes(v: Boolean) = edit { it[K.downloadLikes] = v }
+    fun setDownloadOnStream(v: Boolean) = edit { it[K.downloadOnStream] = v }
+    fun setDownloadVideoOnStream(v: Boolean) = edit { it[K.downloadVideoOnStream] = v }
     fun setSmartDownloads(v: Boolean) = edit { it[K.smartDownloads] = v }
     fun setSmartDownloadGb(v: Float) = edit { it[K.smartDownloadGb] = v }
     fun setOfflineGb(v: Float) = edit { it[K.offlineGb] = v }

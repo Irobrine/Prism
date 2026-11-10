@@ -2495,6 +2495,13 @@ private fun DownloadSettings() {
                 prefs.setDownloadLikes(it)
                 if (it) c.downloads.downloadAll(c.library.liked.value)
             }
+            // This branch's "always download": the stream itself saves the song or video it's playing.
+            Toggle(tr(R.string.download_songs_when_you_play_them), tr(R.string.download_songs_on_stream_detail), s.downloadOnStream) {
+                prefs.setDownloadOnStream(it)
+            }
+            Toggle(tr(R.string.download_videos_when_you_play_them), tr(R.string.download_videos_on_stream_detail), s.downloadVideoOnStream) {
+                prefs.setDownloadVideoOnStream(it)
+            }
             // #298 (1.8.2).
             var choosingKept by remember { mutableStateOf(false) }
             val keptCount = s.behavior.keptPlaylists.size
