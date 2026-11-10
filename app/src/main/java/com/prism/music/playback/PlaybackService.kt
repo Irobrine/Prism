@@ -715,16 +715,29 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         scheduleSave()
     }
 
+    /** The song or video that just started, saved once it's under way (a download beside the stream slowed its start). */
+    private var onStreamDownloadJob: Job? = null
+    /** The next queue songs, saved once the playing one is under way. */
+    private var aheadDownloadJob: Job? = null
+
     /**
-     * This branch's "always download": with it on, a song (or the music video being watched) is saved for offline as
-     * soon as it starts streaming. [downloadWifiOnly] still applies to when the download runs; live streams, episodes
-     * and songs on this phone have nothing to save.
+     * This branch's "always download": with it on, a song (or the music video being watched) is saved for offline once
+     * it has started playing. Waiting until then matters: adding the download while the stream was still being opened
+     * made a tapped song take noticeably longer to start. [downloadWifiOnly] still applies to when the download runs;
+     * live streams, episodes and songs on this phone have nothing to save.
      */
     private fun autoDownloadOnStream(song: Song, videoMode: Boolean) {
         if (song.isLive || song.isEpisode) return
         val s = c.settings.current
-        if (s.downloadOnStream) c.downloads.download(song)
-        if (videoMode && s.downloadVideoOnStream) c.downloads.downloadVideo(song)
+        if (!s.downloadOnStream && !(videoMode && s.downloadVideoOnStream)) return
+        onStreamDownloadJob?.cancel()
+        onStreamDownloadJob = scope.launch {
+            untilUnderWay(song.id, DOWNLOAD_ON_STREAM_MS)
+            if (player.currentMediaItem?.mediaId != song.id) return@launch
+            val now = c.settings.current
+            if (now.downloadOnStream) c.downloads.download(song)
+            if (videoMode && now.downloadVideoOnStream && player.currentMediaItem?.videoModeId != null) c.downloads.downloadVideo(song)
+        }
     }
 
     /** Podcast episodes' playback speed (the player's ⋯ sets it); music always plays at 1×. */
@@ -1661,16 +1674,27 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     /**
      * Settings → Downloads → Download songs ahead: the songs after the one playing are kept downloaded too
-     * ([com.prism.music.data.prefs.AppSettings.downloadQueueAhead], 1 to 5; 0 is off). Live streams and episodes
-     * have no download, and one already here or queued is left as it is.
+     * ([com.prism.music.data.prefs.AppSettings.downloadQueueAhead], 1 to 5; 0 is off). They start once the playing song
+     * is under way, with a short gap between them, so the stream being opened is never held up. Live streams and
+     * episodes have no download, and one already here or queued is left as it is.
      */
     private fun downloadUpcoming() {
         val ahead = c.settings.current.downloadQueueAhead
         if (ahead <= 0) return
-        for (item in upcoming(ahead)) {
-            val song = item.toSong() ?: continue
-            if (song.isLive || song.isEpisode || song.isLocal || song.isRss) continue
-            c.downloads.download(song)
+        aheadDownloadJob?.cancel()
+        aheadDownloadJob = scope.launch {
+            val playing = player.currentMediaItem?.mediaId ?: return@launch
+            untilUnderWay(playing, DOWNLOAD_AHEAD_MS)
+            if (player.currentMediaItem?.mediaId != playing) return@launch
+            val n = c.settings.current.downloadQueueAhead.coerceIn(0, 5)
+            if (n <= 0) return@launch
+            for (item in upcoming(n)) {
+                if (player.currentMediaItem?.mediaId != playing) return@launch
+                val song = item.toSong() ?: continue
+                if (song.isLive || song.isEpisode || song.isLocal || song.isRss) continue
+                c.downloads.download(song)
+                delay(DOWNLOAD_AHEAD_GAP_MS)
+            }
         }
     }
 
@@ -3052,6 +3076,12 @@ private const val SETTLE_MS = 2_000L
 private const val MIN_MIDSONG_CHANGE_DB = 1.5f
 /** Queued songs are got ready once the playing one has played this long (not as it starts: that slowed its loading). */
 private const val UNDER_WAY_MS = 5_000L
+/** "Download on stream" starts saving once the playing song has played this long (starting with it slowed the tap). */
+private const val DOWNLOAD_ON_STREAM_MS = 1_500L
+/** "Download songs ahead" waits a little longer, so it never competes with the playing song's own stream. */
+private const val DOWNLOAD_AHEAD_MS = 2_500L
+/** Between the ahead songs saved, so the main thread stays free for playback. */
+private const val DOWNLOAD_AHEAD_GAP_MS = 75L
 /**
  * How long after switching to a music video its measured offset may still move it to the matching moment (#203);
  * later the video stays where it is and only the lyrics follow the offset.
