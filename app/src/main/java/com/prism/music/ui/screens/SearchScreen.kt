@@ -252,10 +252,7 @@ fun SearchScreen(bottomPadding: Dp) {
     val phoneTracks by c.localMusic.tracks.collectAsState()
     val onPhoneHits by androidx.compose.runtime.produceState(emptyList<com.prism.music.data.model.Song>(), live, onPhone, phoneTracks) {
         value = if (live.isBlank() || onPhone) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            val titleTags = phoneTracks.associate { it.song.id to it.searchTags }
-            val artistTags = phoneTracks.associate { it.song.id to it.artistTags }
-            val albumTags = phoneTracks.associate { it.song.id to it.albumTags }
-            (phoneMatches(live, phoneTracks.map { it.song }, titleTags, artistTags, albumTags) + phoneMatches(live, c.downloads.completedSongs()))
+            (phoneMatches(live, phoneTracks.map { it.song }) + phoneMatches(live, c.downloads.completedSongs()))
                 .distinctBy { it.id }.take(3)
         }
     }
@@ -408,10 +405,7 @@ private fun PhoneResults(query: String, bottomPadding: Dp, onPlay: () -> Unit) {
     // them while the screen waited (1.7.4). Null until the first answer for this query is in.
     val found by produceState<Pair<List<com.prism.music.data.model.Song>, List<com.prism.music.data.model.Song>>?>(null, query, tracks, dls) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            phoneMatches(
-                query, tracks.map { it.song }, tracks.associate { it.song.id to it.searchTags },
-                tracks.associate { it.song.id to it.artistTags }, tracks.associate { it.song.id to it.albumTags },
-            ) to phoneMatches(query, c.downloads.completedSongs())
+            phoneMatches(query, tracks.map { it.song }) to phoneMatches(query, c.downloads.completedSongs())
         }
     }
     val (files, downloads) = found ?: return
@@ -449,16 +443,11 @@ private fun PhoneResults(query: String, bottomPadding: Dp, onPlay: () -> Unit) {
 
 /**
  * [songs] (music files or downloads) with every typed word in their title, artist or album, the best first: titles
- * that start with it, then titles, artists and albums that have it. The maps hold the indexed Latin spellings of local
- * files' titles, artists and albums (#363); a song without them (a download) has its own worked out instead.
+ * that start with it, then titles, artists and albums that have it. What Prism shows for a song is what it reads, with
+ * the listener's metadata edits (1.8.3); local files' indexed Latin spellings (#363) are used, and an edited field's
+ * are read now.
  */
-internal fun phoneMatches(
-    query: String,
-    songs: List<com.prism.music.data.model.Song>,
-    tags: Map<String, List<String>> = emptyMap(),
-    artistTags: Map<String, List<String>> = emptyMap(),
-    albumTags: Map<String, List<String>> = emptyMap(),
-): List<com.prism.music.data.model.Song> {
+internal fun phoneMatches(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> {
     val q = phoneNorm(query)
     val words = q.split(' ').filter { it.isNotBlank() }
     if (words.isEmpty()) return emptyList()
@@ -467,9 +456,11 @@ internal fun phoneMatches(
         if (roman.isEmpty()) normal else "$normal ${roman.joinToString(" ") { phoneNorm(it) }}"
     fun matches(hay: String) = words.all { it in hay } || joined in hay.replace(" ", "")
     fun rank(s: com.prism.music.data.model.Song): Int? {
-        val title = withRoman(phoneNorm(s.title), tags[s.id] ?: SearchTags.forText(s.title))
-        val artist = withRoman(phoneNorm(s.artistText), artistTags[s.id] ?: SearchTags.forText(s.artistText))
-        val album = withRoman(phoneNorm(s.album?.title.orEmpty()), albumTags[s.id] ?: SearchTags.forText(s.album?.title.orEmpty()))
+        // What Prism shows for it, with the listener's metadata edits; an edited field's spellings are read now.
+        val text = SearchTags.textFor(s)
+        val title = withRoman(phoneNorm(text.title), text.titleTags)
+        val artist = withRoman(phoneNorm(text.artist), text.artistTags)
+        val album = withRoman(phoneNorm(text.album), text.albumTags)
         val titleMatch = matches(title)
         val artistMatch = matches(artist)
         val albumMatch = matches(album)

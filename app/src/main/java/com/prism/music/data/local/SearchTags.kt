@@ -2,6 +2,9 @@ package com.prism.music.data.local
 
 import android.os.Build
 import com.prism.music.data.ModelStore
+import com.prism.music.data.SongMetadata
+import com.prism.music.data.SongMetadataEdit
+import com.prism.music.data.model.Song
 import com.prism.music.data.lyrics.roman.Cyrillic
 import com.prism.music.data.lyrics.roman.Greek
 import com.prism.music.data.lyrics.roman.Hangul
@@ -54,6 +57,58 @@ object SearchTags {
         val tags = tagsOf(trimmed, scripts)
         synchronized(cache) { cache[trimmed] = tags }
         return tags
+    }
+
+    /**
+     * What search reads for a song: the title, artist and album as Prism shows them, with the listener's own metadata
+     * edits (1.8.3), and the Latin spellings each answers to. [titleTags], [artistTags] and [albumTags] are the indexed
+     * spellings of the song's own fields (local files are scanned once); an edited field is read now, so search follows
+     * the edit.
+     */
+    data class Text(
+        val song: Song,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val titleTags: List<String>,
+        val artistTags: List<String>,
+        val albumTags: List<String>,
+    )
+
+    private data class Indexed(val title: List<String>, val artist: List<String>, val album: List<String>)
+
+    /** The spellings local files were scanned with, by song id: search reads them without reading every title again. */
+    private val indexed = java.util.concurrent.ConcurrentHashMap<String, Indexed>()
+
+    /** Keeps the indexed spellings of a scanned file's own title, artist and album. */
+    fun index(songId: String, titleTags: List<String>, artistTags: List<String>, albumTags: List<String>) {
+        indexed[songId] = Indexed(titleTags, artistTags, albumTags)
+    }
+
+    /** Forgets the indexed spellings (a scan starts over; the tests start from none). */
+    fun clearIndex() = indexed.clear()
+
+    fun textFor(song: Song): Text {
+        val tags = indexed[song.id]
+        return textFor(song, tags?.title.orEmpty(), tags?.artist.orEmpty(), tags?.album.orEmpty())
+    }
+
+    fun textFor(
+        song: Song,
+        titleTags: List<String>,
+        artistTags: List<String>,
+        albumTags: List<String>,
+    ): Text {
+        val edit: SongMetadataEdit? = SongMetadata.shared?.of(song.id)
+        val shown = SongMetadata.shownOf(song)
+        fun read(edited: String?, indexed: List<String>, text: String) =
+            if (edited != null) forText(text) else indexed.ifEmpty { forText(text) }
+        return Text(
+            song, shown.title, shown.artistText, shown.album?.title.orEmpty(),
+            read(edit?.title, titleTags, shown.title),
+            read(edit?.artist, artistTags, shown.artistText),
+            read(edit?.album, albumTags, shown.album?.title.orEmpty()),
+        )
     }
 
     private fun tagsOf(text: String, scripts: Set<Script>): List<String> {
