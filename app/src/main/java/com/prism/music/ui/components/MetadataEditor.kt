@@ -36,9 +36,10 @@ import com.prism.music.tr
 import com.prism.music.ui.theme.LocalContainer
 
 /**
- * Artist, album and genre for one song or every picked one (1.8.3). The fields begin with what the songs show now; a
- * field left as it is isn't touched, and one typed for several songs goes on all of them. Changes show on this phone and
- * leave the file and YouTube Music as they are. "Reset metadata" puts the songs back.
+ * Title, artist, album and genre for one song or every picked one (1.8.3). Each field begins with what the songs show
+ * now, so it can be edited from there; several songs that share a value show it too. A field left as it is isn't touched,
+ * and one typed for several songs goes on all of them. Changes show on this phone and leave the file and YouTube Music as
+ * they are. "Reset metadata" puts the songs back.
  */
 @Composable
 fun MetadataEditorSheet(songs: List<Song>, onDismiss: () -> Unit) {
@@ -50,31 +51,40 @@ fun MetadataEditorSheet(songs: List<Song>, onDismiss: () -> Unit) {
 
     // As they show now, including any edit already made.
     val shown = remember(list, edits) { list.map { SongVersions.shownOf(it) } }
+    val titleValues = remember(shown) { shown.map { it.title } }
     val artistValues = remember(shown) { shown.map { if (it.artistText == UNKNOWN_ARTIST) "" else it.artistText } }
     val albumValues = remember(shown) { shown.map { it.album?.title.orEmpty() } }
-    val initialArtist = common(artistValues)
-    val initialAlbum = common(albumValues)
+    val initialTitle = SongMetadataEdit.common(titleValues)
+    val initialArtist = SongMetadataEdit.common(artistValues)
+    val initialAlbum = SongMetadataEdit.common(albumValues)
 
     // The genre songs already go by (looked up earlier), and the listener's own edits.
     val known by produceState<Map<String, String>>(emptyMap(), list) {
         value = runCatching { c.meta.cachedGenres(list) }.getOrDefault(emptyMap())
     }
-    val currentGenre = common(remember(known, list) { list.map { known[it.id].orEmpty() } })
-    val overrideGenres = remember(list, edits) { list.map { edits[it.id]?.genre.orEmpty() } }
-    val initialGenre = common(overrideGenres)
+    val genreValues = remember(list, edits, known) {
+        list.map { edits[it.id]?.genre ?: known[it.id].orEmpty() }
+    }
+    val currentGenre = SongMetadataEdit.common(genreValues)
 
+    val mixedTitle = remember(titleValues) { titleValues.distinct().size > 1 }
     val mixedArtist = remember(artistValues) { artistValues.distinct().size > 1 }
     val mixedAlbum = remember(albumValues) { albumValues.distinct().size > 1 }
-    val mixedGenre = remember(overrideGenres) { overrideGenres.distinct().size > 1 }
+    val mixedGenre = remember(genreValues) { genreValues.distinct().size > 1 }
 
+    var title by remember(list) { mutableStateOf(initialTitle) }
     var artist by remember(list) { mutableStateOf(initialArtist) }
     var album by remember(list) { mutableStateOf(initialAlbum) }
-    var genre by remember(list) { mutableStateOf(initialGenre) }
+    var genre by remember(list) { mutableStateOf(currentGenre) }
+    var genreEdited by remember(list) { mutableStateOf(false) }
+    // The genres looked up arrive a moment after the sheet opens: fill it in unless the listener has typed one.
+    androidx.compose.runtime.LaunchedEffect(currentGenre) { if (!genreEdited) genre = currentGenre }
 
+    val titleChanged = title.trim() != initialTitle.trim()
     val artistChanged = artist.trim() != initialArtist.trim()
     val albumChanged = album.trim() != initialAlbum.trim()
-    val genreChanged = genre.trim() != initialGenre.trim()
-    val changed = artistChanged || albumChanged || genreChanged
+    val genreChanged = genre.trim() != currentGenre.trim()
+    val changed = titleChanged || artistChanged || albumChanged || genreChanged
 
     PrismSheet(onDismiss = onDismiss) { close ->
         Column(
@@ -83,11 +93,18 @@ fun MetadataEditorSheet(songs: List<Song>, onDismiss: () -> Unit) {
         ) {
             Text(tr(R.string.edit_metadata), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
             Text(
-                list.singleOrNull()?.title ?: songCount(list.size),
+                shown.singleOrNull()?.title ?: songCount(list.size),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(16.dp))
+            PrismTextField(
+                title, { title = it.take(SongMetadataEdit.MAX_LENGTH) }, Modifier.fillMaxWidth().testTag("metadataTitle"),
+                label = { Text(tr(R.string.title)) },
+                placeholder = { Text(if (mixedTitle) tr(R.string.metadata_mixed) else "") },
+                singleLine = true,
+            )
+            Spacer(Modifier.height(12.dp))
             PrismTextField(
                 artist, { artist = it.take(SongMetadataEdit.MAX_LENGTH) }, Modifier.fillMaxWidth().testTag("metadataArtist"),
                 label = { Text(tr(R.string.artist)) },
@@ -103,11 +120,9 @@ fun MetadataEditorSheet(songs: List<Song>, onDismiss: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             PrismTextField(
-                genre, { genre = it.take(SongMetadataEdit.MAX_LENGTH) }, Modifier.fillMaxWidth().testTag("metadataGenre"),
+                genre, { genre = it.take(SongMetadataEdit.MAX_LENGTH); genreEdited = true }, Modifier.fillMaxWidth().testTag("metadataGenre"),
                 label = { Text(tr(R.string.genre)) },
                 placeholder = { Text(if (mixedGenre) tr(R.string.metadata_mixed) else tr(R.string.genre_example)) },
-                supportingText = currentGenre.takeIf { it.isNotBlank() && it != genre.trim() }
-                    ?.let { { Text(tr(R.string.metadata_currently, it)) } },
                 singleLine = true,
             )
             Spacer(Modifier.height(10.dp))
@@ -133,6 +148,7 @@ fun MetadataEditorSheet(songs: List<Song>, onDismiss: () -> Unit) {
                     {
                         c.metadata.set(
                             ids,
+                            title = title.takeIf { titleChanged },
                             artist = artist.takeIf { artistChanged },
                             album = album.takeIf { albumChanged },
                             genre = genre.takeIf { genreChanged },
@@ -146,6 +162,3 @@ fun MetadataEditorSheet(songs: List<Song>, onDismiss: () -> Unit) {
         }
     }
 }
-
-/** The value every song gives, or "" when they differ (a multi-select's "Mixed"). */
-private fun common(values: List<String>): String = values.distinct().singleOrNull()?.takeIf { it.isNotBlank() }.orEmpty()
