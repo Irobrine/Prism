@@ -25,8 +25,22 @@ class RubySourceTest {
         val s = SourceFurigana.of("君(きみ)の名前（なまえ）")!!
         assertEquals("君の名前", s.clean)
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(6, 8, "なまえ")), s.spans)
+        assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(2, 4, "なまえ")), s.cleanSpans)
         val merged = s.merge(listOf(RubySpan(0, 1, "きみ"), RubySpan(2, 4, "なまえ"), RubySpan(2, 3, "な")))
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(6, 8, "なまえ")), merged)
+    }
+
+    @Test
+    fun shorteningTheTextKeepsWordsAndTimings() {
+        val line = LyricLine(
+            100, "君(きみ)の名前(なまえ)", 1_100,
+            words = listOf(LyricWord(100, 500, "君(きみ)"), LyricWord(500, 1_100, "の名前(なまえ)")),
+        )
+        val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
+        assertEquals("君の名前", clean.text)
+        assertEquals(listOf("君", "の名前"), clean.words.map { it.text })
+        assertEquals(listOf(100L to 500L, 500L to 1_100L), clean.words.map { it.startMs to it.endMs })
+        assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(2, 4, "なまえ")), clean.sourceRuby)
     }
 
     @Test
@@ -57,6 +71,9 @@ class RubySourceTest {
         )
         val source = romanizer.furigana(listOf(LyricLine(0, "君(きみ)の名前")))!!
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(6, 8, "なまえ")), source.single())
+        val cleanedLine = SourceFurigana.of("君(きみ)の名前")!!.cleanLine(LyricLine(0, "君(きみ)の名前"))
+        val cleaned = romanizer.furigana(listOf(cleanedLine))!!
+        assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(2, 4, "なまえ")), cleaned.single())
         // 名 isn't annotated (its reading is in parentheses after the kana は): the dictionary gives it.
         val mixed = romanizer.furigana(listOf(LyricLine(0, "君(きみ)の名は(な)")))!!
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(6, 7, "な")), mixed.single())
