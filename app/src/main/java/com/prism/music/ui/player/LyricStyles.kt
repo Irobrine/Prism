@@ -274,7 +274,8 @@ fun SungLine(
     val timed = if (look.timesWords) remember(line) { line.withWords() } else line
     val plan = look.sungPlan(timed.isWordSynced, onCard, strip, axis != null, dimAlpha)
     val set = if (plan.weight != null) st.copy(fontWeight = FontWeight(plan.weight)) else st
-    val readingColor = if (onCard) look.sungSolid else Color.White.copy(alpha = 0.9f)
+    // The readings take the look's fill too, so Color fills colors them as it colors the kanji.
+    val readingColor = if (look.sung != null || onCard) look.sungSolid else Color.White.copy(alpha = 0.9f)
     // The readings follow the line's own animation: wiped with its sweep, brightened as its words grow, or typed in.
     val motion = when (plan.kind) {
         SungKind.PLAIN -> null
@@ -293,7 +294,7 @@ fun SungLine(
         }
     }
     val withRuby = @Composable { m: Modifier ->
-        RubyOverlay(ruby, st, room, layout, m, readingColor, motion) { inner -> drawn(inner) }
+        RubyOverlay(ruby, st, room, layout, m, readingColor, look.sung, motion) { inner -> drawn(inner) }
     }
     // The glow is a blurred copy of the sung words behind them (a text shadow is cut off at the line's edges). The copy is
     // the letters thickened by an outline and only lightly blurred, so the light hugs each letter's shape instead of
