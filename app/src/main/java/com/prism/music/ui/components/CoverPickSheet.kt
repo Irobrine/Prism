@@ -42,7 +42,10 @@ import kotlinx.coroutines.withContext
  */
 sealed class CoverFor(val key: String, val title: String, val original: String?) {
     class OfSong(val song: Song, key: String) : CoverFor(key, song.title, song.thumbnail)
-    class OfAlbum(val id: String, title: String, thumbnail: String?, key: String) : CoverFor(key, title, thumbnail)
+    /** [shows] tells which playing songs are on this album: its own id, or a file album's MediaStore id. */
+    class OfAlbum(
+        val id: String, title: String, thumbnail: String?, key: String, val shows: (Song) -> Boolean = { it.album?.id == id },
+    ) : CoverFor(key, title, thumbnail)
 }
 
 /** The covers of [song]'s other recordings with the same title, as YouTube lists them: square album covers, no repeats. */
@@ -72,7 +75,7 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
     fun refresh() {
         when (target) {
             is CoverFor.OfSong -> c.player.refreshCovers { it.id == target.song.id }
-            is CoverFor.OfAlbum -> c.player.refreshCovers { it.album?.id == target.id }
+            is CoverFor.OfAlbum -> c.player.refreshCovers(target.shows)
         }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
