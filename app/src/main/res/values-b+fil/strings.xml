@@ -5004,6 +5004,14 @@
     <string name="deleted_from_your_uploads">Nabura sa mga upload mo</string>
     <string name="couldn_t_delete_it_s">Hindi mabura: %1$s</string>
     <string name="uploads_couldn_t_find_it">Hindi na ito nakalista sa YouTube Music</string>
+    <!-- 1.8.3 Edit metadata -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
+    <string name="metadata_saved">Metadata saved</string>
+    <string name="reset_metadata">Reset metadata</string>
+    <string name="metadata_reset">Metadata reset</string>
+    <string name="metadata_mixed">Mixed</string>
+    <string name="metadata_currently">Currently %s</string>
     <!-- 1.8.3 Tour -->
     <string name="tour_183_smart_title">Mga smart playlist</string>
     <string name="tour_183_smart_body">Mga playlist na kusang napupuno ayon sa mga rule mo at sumasabay sa library mo.</string>
@@ -5029,12 +5037,4 @@
     <string name="tour_183_also_songs_from">Mga kanta sa Library mula sa mga playlist na pinili mo</string>
     <string name="tour_183_also_lock">Ulitin at Susunod sa lock screen</string>
     <string name="tour_183_also_uploads">Mag-upload at magbura sa Mga Upload</string>
-    <!-- 1.8.3 Edit metadata -->
-    <string name="edit_metadata">Edit metadata</string>
-    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
-    <string name="metadata_saved">Metadata saved</string>
-    <string name="reset_metadata">Reset metadata</string>
-    <string name="metadata_reset">Metadata reset</string>
-    <string name="metadata_mixed">Mixed</string>
-    <string name="metadata_currently">Currently %s</string>
 </resources>

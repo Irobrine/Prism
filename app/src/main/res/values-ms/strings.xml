@@ -4932,6 +4932,14 @@
     <string name="deleted_from_your_uploads">Dipadam daripada muat naik anda</string>
     <string name="couldn_t_delete_it_s">Tidak dapat memadam: %1$s</string>
     <string name="uploads_couldn_t_find_it">YouTube Music tidak lagi menyenaraikannya</string>
+    <!-- 1.8.3 Edit metadata -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
+    <string name="metadata_saved">Metadata saved</string>
+    <string name="reset_metadata">Reset metadata</string>
+    <string name="metadata_reset">Metadata reset</string>
+    <string name="metadata_mixed">Mixed</string>
+    <string name="metadata_currently">Currently %s</string>
     <!-- 1.8.3 Tour -->
     <string name="tour_183_smart_title">Senarai main pintar</string>
     <string name="tour_183_smart_body">Senarai main yang terisi sendiri mengikut peraturan anda dan seiring dengan pustaka anda.</string>
@@ -4957,12 +4965,4 @@
     <string name="tour_183_also_songs_from">Lagu Pustaka daripada senarai main yang anda pilih</string>
     <string name="tour_183_also_lock">Ulang dan Seterusnya pada skrin kunci</string>
     <string name="tour_183_also_uploads">Muat naik dan padam dalam Muat naik</string>
-    <!-- 1.8.3 Edit metadata -->
-    <string name="edit_metadata">Edit metadata</string>
-    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
-    <string name="metadata_saved">Metadata saved</string>
-    <string name="reset_metadata">Reset metadata</string>
-    <string name="metadata_reset">Metadata reset</string>
-    <string name="metadata_mixed">Mixed</string>
-    <string name="metadata_currently">Currently %s</string>
 </resources>
