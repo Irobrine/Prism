@@ -14,8 +14,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shader
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -130,6 +133,7 @@ internal fun RubyOverlay(
     layout: TextLayoutResult?,
     modifier: Modifier,
     color: Color,
+    fill: Brush? = null,
     motion: RubyMotion? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
@@ -164,7 +168,7 @@ internal fun RubyOverlay(
             val sung = if (motion != null && (motion.kind == SungKind.SWEEP || motion.kind == SungKind.GROW)) {
                 sungChars(motion.line, offsets, now)
             } else 0f
-            for ((piece, readings) in measured) drawRuby(l, piece, readings, roomPx, color, motion, offsets, now, sung)
+            for ((piece, readings) in measured) drawRuby(l, piece, readings, roomPx, color, fill, l.size.width.toFloat(), motion, offsets, now, sung)
         }
     }
 }
@@ -238,9 +242,33 @@ private fun typewriterAlpha(line: LyricLine, offsets: List<Pair<Int, Int>>, now:
     return (shown * 10).roundToInt() / 10f
 }
 
+/**
+ * [fill] across the line's [width] px, moved so the reading drawn at [x] samples the same run of color as the kanji
+ * under it. [fadeFrom] and [fadeTo] (px) fade it out past the sweep's edge; left unset, the whole run is drawn.
+ */
+private class LineFill(
+    private val fill: ShaderBrush,
+    private val width: Float,
+    private val x: Float,
+    private val fadeFrom: Float = Float.NEGATIVE_INFINITY,
+    private val fadeTo: Float = Float.POSITIVE_INFINITY,
+) : ShaderBrush() {
+    override fun createShader(size: Size): Shader {
+        val shader = fill.createShader(Size(width, size.height))
+        // The reading is drawn from its own left edge; move the line's run so this reading sits where its kanji does.
+        shader.setLocalMatrix(android.graphics.Matrix().apply { setTranslate(-x, 0f) })
+        if (fadeFrom == Float.NEGATIVE_INFINITY) return shader
+        val mask = android.graphics.LinearGradient(
+            fadeFrom - x, 0f, fadeTo - x, 0f, android.graphics.Color.WHITE, android.graphics.Color.TRANSPARENT,
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        return android.graphics.ComposeShader(shader, mask, android.graphics.PorterDuff.Mode.DST_IN)
+    }
+}
+
 private fun DrawScope.drawRuby(
     layout: TextLayoutResult, piece: RubyPiece, readings: List<TextLayoutResult>, room: Float, color: Color,
-    motion: RubyMotion?, offsets: List<Pair<Int, Int>>, now: Long, sung: Float,
+    fill: Brush?, lineWidth: Float, motion: RubyMotion?, offsets: List<Pair<Int, Int>>, now: Long, sung: Float,
 ) {
     val first = layout.getBoundingBox(piece.start)
     val last = layout.getBoundingBox(piece.end)
@@ -255,33 +283,39 @@ private fun DrawScope.drawRuby(
     // Above the row's letters; [room] is the padding kept above the text for it.
     val y = (room + first.top - reading.size.height).coerceAtLeast(0f)
     val at = Offset(x, y)
+    // The sung part in the look's fill: a Color fills' gradient runs across the whole line, as it does under the kanji.
+    fun drawLit(alpha: Float = 1f, fadeFrom: Float = Float.NEGATIVE_INFINITY, fadeTo: Float = Float.POSITIVE_INFINITY) {
+        when {
+            fill is ShaderBrush -> drawText(reading, brush = LineFill(fill, lineWidth, x, fadeFrom, fadeTo), alpha = alpha, topLeft = at)
+            fadeFrom == Float.NEGATIVE_INFINITY -> drawText(reading, color = color, alpha = alpha, topLeft = at)
+            else -> {
+                val lit = Brush.horizontalGradient(0f to color, 1f to color.copy(alpha = 0f), startX = fadeFrom, endX = fadeTo)
+                drawText(reading, brush = lit, alpha = alpha, topLeft = at)
+            }
+        }
+    }
     when (motion?.kind) {
-        null, SungKind.PLAIN -> drawText(reading, color = color, topLeft = at)
+        null, SungKind.PLAIN -> drawLit()
         // Word by word: the reading appears as the word it's over does.
         SungKind.TYPEWRITER -> {
             val a = typewriterAlpha(motion.line, offsets, now, piece.start)
-            if (a > 0f) drawText(reading, color = color, alpha = color.alpha * a, topLeft = at)
+            if (a > 0f) drawLit(alpha = a)
         }
         // Words grow from dim to bright: the reading thickens and brightens with the kanji it's over.
         SungKind.GROW -> {
             val lit = (fraction * 10).roundToInt()
-            val a = motion.dimAlpha + (1f - motion.dimAlpha) * lit / 10f
-            drawText(reading, color = color, alpha = color.alpha * a, topLeft = at)
+            drawLit(alpha = motion.dimAlpha + (1f - motion.dimAlpha) * lit / 10f)
         }
         // The light wipes through the line: it wipes through the reading the same way.
         SungKind.SWEEP -> {
             if (fraction < 1f && motion.dim.alpha > 0f) drawText(reading, color = motion.dim, topLeft = at)
             if (fraction > 0f) {
-                if (fraction >= 1f) drawText(reading, color = color, topLeft = at)
+                if (fraction >= 1f) drawLit()
                 else {
-                    // A soft edge where the light is (the brush is in the canvas's coordinates, as the reading is drawn).
+                    // A soft edge where the light is.
                     val edge = x + w * fraction
                     val feather = reading.size.height * 0.55f
-                    val lit = Brush.horizontalGradient(
-                        0f to color, 1f to color.copy(alpha = 0f),
-                        startX = edge - feather, endX = edge + feather,
-                    )
-                    drawText(reading, brush = lit, topLeft = at)
+                    drawLit(fadeFrom = edge - feather, fadeTo = edge + feather)
                 }
             }
         }
