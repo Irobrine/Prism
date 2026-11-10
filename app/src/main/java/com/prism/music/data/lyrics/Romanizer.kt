@@ -190,13 +190,19 @@ class Romanizer(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<RubySpan>>?) = size > 128
     }
 
+    // Kuromoji's IPADIC also gives the kana over the kanji. It's reused when it's the reader already loaded; if the
+    // listener's reader is another one (Sudachi), this one is loaded beside it, let go a few minutes after the last line.
+    private val furiganaLock = Mutex()
+    @Volatile private var furiganaJapanese: Japanese? = null
+    private var furiganaReleaseJob: Job? = null
+
     /**
      * Each line's kanji with the hiragana above it ([RubySpan]), line for line; null while the Japanese reading data
      * isn't on the phone. Lines that need none come back empty.
      */
     suspend fun furigana(lines: List<LyricLine>): List<List<RubySpan>>? {
         if (lines.none { hasKanji(it.text) }) return emptyList()
-        val reader = japaneseReader() ?: return null
+        val reader = furiganaReader() ?: return null
         return withContext(Dispatchers.Default) {
             lines.map { line ->
                 synchronized(rubyMemory) { rubyMemory[line.text] } ?: reader.furigana(JapaneseKanji.fromChinese(line.text)).also { spans ->
@@ -204,6 +210,25 @@ class Romanizer(
                 }
             }
         }
+    }
+
+    /**
+     * The reader that gives the kana above the kanji. Kuromoji's IPADIC does; another reader (Sudachi) spells lines out
+     * in Latin letters but doesn't give their kana, so furigana stays on IPADIC rather than depend on that reader. Null
+     * while the IPADIC dictionary isn't on the phone.
+     */
+    private suspend fun furiganaReader(): Japanese? {
+        japaneseForTests?.let { return it }
+        (japaneseReader() as? Japanese)?.let { return it }
+        if (!models.ready(ModelStore.Model.JAPANESE)) return null
+        val reader = furiganaLock.withLock {
+            furiganaJapanese ?: runCatching { withContext(Dispatchers.Default) { Japanese.load(models.dir(ModelStore.Model.JAPANESE)) } }
+                .onFailure { android.util.Log.w("PrismRoman", "Couldn't load the Japanese dictionary for furigana: $it") }
+                .getOrNull()?.also { furiganaJapanese = it }
+        }
+        furiganaReleaseJob?.cancel()
+        furiganaReleaseJob = scope.launch { delay(RELEASE_AFTER_MS); furiganaLock.withLock { furiganaJapanese = null } }
+        return reader
     }
 
     /**
