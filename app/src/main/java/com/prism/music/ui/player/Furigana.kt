@@ -45,8 +45,8 @@ import kotlin.math.roundToInt
 /** How big a reading is against the line it sits over, and how tall its row is. */
 private const val RUBY_SCALE = 0.45f
 private const val RUBY_LINE = 0.85f
-/** How far above the line's baseline a reading sits, as a share of the line's size (its kanji nearly touch it). */
-private const val RUBY_GAP = 0.82f
+/** How far above the line's baseline a reading's centre sits, as a share of the line's size. Its kanji stay just below. */
+private const val RUBY_CENTER = 1.05f
 /** How much of its kanji's width a reading may use, leaving room between it and the readings beside it. */
 private const val RUBY_FIT = 0.92f
 
@@ -293,9 +293,10 @@ private fun DrawScope.drawRuby(
     val center = (first.left + last.right) / 2f
     val w = reading.size.width
     val x = (center - w / 2f).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
-    // Above the row's letters, by the reading's baseline so it sits close to the kanji (and still clear of the row above).
+    // Above the row's letters. The readings' centres share one line, so a shrunk reading sits at the same height as its
+    // neighbours, and the whole row sits a little clear of the kanji and clear of the row above.
     val baseline = layout.getLineBaseline(layout.getLineForOffset(piece.start))
-    val y = (room + baseline - fontPx * RUBY_GAP - reading.firstBaseline).coerceAtLeast(0f)
+    val y = (room + baseline - fontPx * RUBY_CENTER - reading.size.height / 2f).coerceAtLeast(0f)
     val at = Offset(x, y)
     // The sung part in the look's fill: a Color fills' gradient runs across the whole line, as it does under the kanji.
     fun drawLit(alpha: Float = 1f, fadeFrom: Float = Float.NEGATIVE_INFINITY, fadeTo: Float = Float.POSITIVE_INFINITY) {
