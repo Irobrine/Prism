@@ -90,17 +90,25 @@ class PlaylistCovers(private val context: Context) {
     fun useImage(id: String, url: String) = put(id, url)
 
     /** Copies a picked photo into the app as a square, so it survives the original being moved or deleted. */
-    suspend fun usePhoto(id: String, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+    suspend fun usePhoto(id: String, uri: Uri): Boolean = usePhoto(listOf(id), uri)
+
+    /**
+     * [usePhoto] for several songs at once (Select many): one copy of the square, shared by every id, so changing a
+     * hundred covers doesn't keep a hundred photos. A later change or reset of one leaves the rest's file alone.
+     */
+    suspend fun usePhoto(ids: List<String>, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        val keys = ids.distinct()
+        if (keys.isEmpty()) return@withContext false
         val bmp = runCatching { decode(uri) }.getOrNull() ?: return@withContext false
         val side = minOf(bmp.width, bmp.height)
         val square = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
         val out = if (side > 1200) Bitmap.createScaledBitmap(square, 1200, 1200, true) else square
         dir.mkdirs()
         // A fresh name each time, so the new picture isn't served from the image cache.
-        val safe = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val safe = keys.first().replace(Regex("[^A-Za-z0-9_-]"), "_")
         val file = File(dir, "$safe-${System.currentTimeMillis()}.jpg")
         runCatching { file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 90, it) } }.getOrElse { return@withContext false }
-        withContext(Dispatchers.Main) { put(id, Uri.fromFile(file).toString()) }
+        withContext(Dispatchers.Main) { keys.forEach { put(it, Uri.fromFile(file).toString()) } }
         true
     }
 
@@ -124,6 +132,8 @@ class PlaylistCovers(private val context: Context) {
     }
 
     private fun deleteIfOurs(value: String) {
+        // One file can be shared by several songs (a photo picked for them all): only let go once nothing points to it.
+        if (covers.containsValue(value)) return
         if (!value.startsWith("file:")) return
         val f = File(Uri.parse(value).path ?: return)
         if (f.canonicalPath.startsWith(dir.canonicalPath)) f.delete()
