@@ -271,9 +271,10 @@ fun LocalMusicScreen(bottomPadding: Dp) {
         else {
             val joined = words.joinToString("")
             sorted(tracks, sort).filter { t ->
-                val s = t.song
-                val hay = "${s.title} ${s.artistText} ${s.album?.title.orEmpty()} " +
-                    "${t.searchTags.joinToString(" ")} ${t.artistTags.joinToString(" ")} ${t.albumTags.joinToString(" ")}".lowercase()
+                // What Prism shows for it, with the listener's metadata edits; an edited field's spellings are read now.
+                val text = com.prism.music.data.local.SearchTags.textFor(t.song, t.searchTags, t.artistTags, t.albumTags)
+                val hay = "${text.title} ${text.artist} ${text.album} " +
+                    "${text.titleTags.joinToString(" ")} ${text.artistTags.joinToString(" ")} ${text.albumTags.joinToString(" ")}".lowercase()
                 words.all { it in hay } || joined in hay.replace(" ", "")
             }.map { it.song }
         }

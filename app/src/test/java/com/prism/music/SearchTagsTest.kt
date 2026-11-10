@@ -5,8 +5,10 @@ import com.prism.music.data.model.AlbumRef
 import com.prism.music.data.model.ArtistRef
 import com.prism.music.data.model.Song
 import com.prism.music.ui.screens.phoneMatches
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -14,6 +16,9 @@ import org.junit.Test
  * which unit tests have inside its jar ([com.prism.music.data.lyrics.roman.Japanese.bundled]).
  */
 class SearchTagsTest {
+    @Before fun clearIndexed() = SearchTags.clearIndex()
+    @After fun clearIndexedAgain() = SearchTags.clearIndex()
+
     private fun song(id: String, title: String) =
         Song(id = "local:$id", title = title, artists = listOf(ArtistRef("Someone")))
 
@@ -47,31 +52,34 @@ class SearchTagsTest {
     @Test fun searchingBySoundFindsJapaneseTitles() {
         for (title in listOf("鳥の歌", "とりのうた", "トリノウタ")) {
             val s = song("1", title)
-            val tags = mapOf(s.id to SearchTags.forTitle(title))
+            SearchTags.index(s.id, SearchTags.forTitle(title), emptyList(), emptyList())
             for (query in listOf("tori no uta", "torinouta", "TORI NO UTA")) {
-                assertEquals("[$query] on [$title]", listOf(s.id), phoneMatches(query, listOf(s), tags).map { it.id })
+                assertEquals("[$query] on [$title]", listOf(s.id), phoneMatches(query, listOf(s)).map { it.id })
             }
             // A download has no indexed tags: they're worked out for it all the same.
+            SearchTags.clearIndex()
             assertEquals("[$title] without the map", listOf(s.id), phoneMatches("tori no uta", listOf(s)).map { it.id })
         }
     }
 
     @Test fun aDifferentTitleDoesntMatch() {
         val s = song("2", "鼻の歌")
-        assertTrue(phoneMatches("tori no uta", listOf(s), mapOf(s.id to SearchTags.forTitle(s.title))).isEmpty())
+        SearchTags.index(s.id, SearchTags.forTitle(s.title), emptyList(), emptyList())
+        assertTrue(phoneMatches("tori no uta", listOf(s)).isEmpty())
     }
 
     @Test fun searchingBySoundFindsArtistsAndAlbums() {
         val s = Song(
             id = "local:3", title = "Unrelated", artists = listOf(ArtistRef("鳥の歌")), album = AlbumRef("君の名は"),
         )
-        val artistTags = mapOf(s.id to SearchTags.forText(s.artistText))
-        val albumTags = mapOf(s.id to SearchTags.forText(s.album?.title.orEmpty()))
-        assertEquals("artist", listOf(s.id), phoneMatches("tori no uta", listOf(s), artistTags = artistTags).map { it.id })
-        assertEquals("artist, no spaces", listOf(s.id), phoneMatches("torinouta", listOf(s), artistTags = artistTags).map { it.id })
-        assertEquals("album", listOf(s.id), phoneMatches("kimi no na wa", listOf(s), albumTags = albumTags).map { it.id })
-        assertEquals("album, no spaces", listOf(s.id), phoneMatches("kiminonawa", listOf(s), albumTags = albumTags).map { it.id })
+        SearchTags.index(s.id, emptyList(), SearchTags.forText(s.artistText), emptyList())
+        assertEquals("artist", listOf(s.id), phoneMatches("tori no uta", listOf(s)).map { it.id })
+        assertEquals("artist, no spaces", listOf(s.id), phoneMatches("torinouta", listOf(s)).map { it.id })
+        SearchTags.index(s.id, emptyList(), emptyList(), SearchTags.forText(s.album?.title.orEmpty()))
+        assertEquals("album", listOf(s.id), phoneMatches("kimi no na wa", listOf(s)).map { it.id })
+        assertEquals("album, no spaces", listOf(s.id), phoneMatches("kiminonawa", listOf(s)).map { it.id })
         // Downloads have no indexed tags: artists and albums are read lazily for them too.
+        SearchTags.clearIndex()
         assertEquals("without the maps", listOf(s.id), phoneMatches("tori no uta", listOf(s)).map { it.id })
         assertEquals("without the maps", listOf(s.id), phoneMatches("kimi no na wa", listOf(s)).map { it.id })
     }

@@ -187,6 +187,9 @@ class LocalMusic(
     }
 
     private fun publish(tracks: List<Track>) {
+        // The spellings search reads without scanning every title again, in step with the list it shows.
+        SearchTags.clearIndex()
+        tracks.forEach { SearchTags.index(it.song.id, it.searchTags, it.artistTags, it.albumTags) }
         byId = tracks.associateBy { it.song.id }
         _tracks.value = tracks
     }
