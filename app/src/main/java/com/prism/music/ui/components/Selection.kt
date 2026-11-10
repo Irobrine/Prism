@@ -26,9 +26,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -52,8 +54,8 @@ import com.prism.music.ui.theme.PrismIcons
 /**
  * Select many (1.8.3, G141 / #381): long-press a song in a list to start picking, tap more, "All" for the whole list, and
  * act on them together from one bar. One selection for the app (MainActivity's, [LocalSongSelection]); a list takes part
- * by wrapping itself in [SelectableSongs], so lists that don't (Home's shelves, an artist's top songs) keep long-press as
- * the song's menu.
+ * by wrapping itself in [SelectableSongs], so lists that don't (Home's card shelves, a podcast's episodes) keep long-press
+ * as the song's menu.
  */
 @Stable
 class SongSelection {
@@ -107,6 +109,46 @@ val LocalSongSelection = staticCompositionLocalOf<SongSelection?> { null }
 
 /** The list a row is in, when that list takes part in Select many. */
 val LocalSelectScope = staticCompositionLocalOf<SelectScope?> { null }
+
+/**
+ * A song in a list taking part in Select many, for rows that aren't a [com.prism.music.ui.components.SongRow] (an
+ * artist's top songs): [tap] picks while picking and plays otherwise, [hold] starts picking or picks / unpicks, and
+ * [picked] is what a row marks with a check (null while not picking).
+ */
+@Stable
+class SongPick internal constructor(
+    val picked: Boolean?,
+    private val toggle: () -> Unit,
+    private val start: () -> Unit,
+    private val play: () -> Unit,
+) {
+    fun tap() { if (picked != null) toggle() else play() }
+    fun hold() { if (picked != null) toggle() else start() }
+}
+
+/**
+ * [song]'s tap and hold in a list taking part in Select many; null when it doesn't (a row that keeps its own menu).
+ * [onPlay] is what a tap does while not picking.
+ */
+@Composable
+fun rememberSongPick(song: Song, onPlay: () -> Unit): SongPick? {
+    val selection = LocalSongSelection.current ?: return null
+    val scope = LocalSelectScope.current ?: return null
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val play = rememberUpdatedState(onPlay)
+    val picked by remember(song.id, selection) { derivedStateOf { selection.picked?.let { song.id in it } } }
+    return remember(song, selection, scope, picked) {
+        SongPick(
+            picked,
+            toggle = { selection.toggle(song) },
+            start = {
+                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                selection.start(song, scope)
+            },
+            play = { play.value() },
+        )
+    }
+}
 
 /**
  * Makes the song rows in [content] pickable: long-press picks, and [songs] is what "All" picks. A change of [resetKey]

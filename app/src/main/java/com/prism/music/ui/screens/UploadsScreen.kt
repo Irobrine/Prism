@@ -245,17 +245,19 @@ fun UploadsScreen(bottomPadding: Dp) {
                 // Sideways swipes on a song queue it (SwipeToQueue), so the lists change from the chips, as in Local files.
                 HorizontalPager(pager, Modifier.weight(1f), userScrollEnabled = false) { page ->
                     when (UploadTab.entries[page]) {
-                        UploadTab.SONGS -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = bottomPadding + 16.dp)) {
-                            item { SortBar(songCount(songs.size), UploadSongSort.entries, songSort, { it.label }) { songSort = it; c.library.setSort("uploads:songs", it.name) } }
-                            if (songs.isEmpty()) item { NoUploadMatches(query) }
-                            itemsIndexed(songs, key = { i, s -> "u" + s.id + ":" + i }) { _, s ->
-                                SwipeToQueue(s) {
-                                    SongRow(
-                                        s, if (ready != null && s.id !in ready) Modifier.alpha(0.4f) else Modifier,
-                                        extraActions = listOf(com.prism.music.ui.components.SheetItem(PrismIcons.Delete, tr(R.string.delete_from_your_uploads), danger = true) { deleting = s }),
-                                    ) {
-                                        if (ready != null && s.id !in ready) Toast.makeText(context, tr(R.string.you_re_offline_and_this_song), Toast.LENGTH_SHORT).show()
-                                        else playable(songs).let { q -> c.player.playQueue(q, q.indexOfFirst { it.id == s.id }.coerceAtLeast(0), source) }
+                        UploadTab.SONGS -> com.prism.music.ui.components.SelectableSongs(songs) {
+                            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = bottomPadding + 16.dp)) {
+                                item { SortBar(songCount(songs.size), UploadSongSort.entries, songSort, { it.label }) { songSort = it; c.library.setSort("uploads:songs", it.name) } }
+                                if (songs.isEmpty()) item { NoUploadMatches(query) }
+                                itemsIndexed(songs, key = { i, s -> "u" + s.id + ":" + i }) { _, s ->
+                                    SwipeToQueue(s) {
+                                        SongRow(
+                                            s, if (ready != null && s.id !in ready) Modifier.alpha(0.4f) else Modifier,
+                                            extraActions = listOf(com.prism.music.ui.components.SheetItem(PrismIcons.Delete, tr(R.string.delete_from_your_uploads), danger = true) { deleting = s }),
+                                        ) {
+                                            if (ready != null && s.id !in ready) Toast.makeText(context, tr(R.string.you_re_offline_and_this_song), Toast.LENGTH_SHORT).show()
+                                            else playable(songs).let { q -> c.player.playQueue(q, q.indexOfFirst { it.id == s.id }.coerceAtLeast(0), source) }
+                                        }
                                     }
                                 }
                             }

@@ -163,6 +163,11 @@ fun SubPage(
      */
     pinned: (@Composable () -> Unit)? = null,
     pinnedKey: Any? = null,
+    /**
+     * When the page lists songs, the songs Select many takes (held to pick, and All for them). Null leaves every row as
+     * it was, so pages of settings, playlists and cards don't start picking.
+     */
+    selectableSongs: List<com.prism.music.data.model.Song>? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val nav = LocalNavigator.current
@@ -186,20 +191,23 @@ fun SubPage(
     BoxWithConstraints(modifier.fillMaxSize()) {
         // On a wide window the page keeps a readable width in the middle (it still scrolls from anywhere).
         val gutter = ((maxWidth - SUBPAGE_MAX_WIDTH) / 2).coerceAtLeast(0.dp)
-        LazyColumn(
-            state = state,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = horizontalPadding + gutter, end = horizontalPadding + gutter, top = statusTop + 60.dp, bottom = bottomPadding + 28.dp),
-            verticalArrangement = Arrangement.spacedBy(spacing),
-        ) {
-            item(key = "subpage:title") {
-                Column(Modifier.padding(start = 20.dp - horizontalPadding.coerceAtMost(20.dp), end = 20.dp, bottom = 10.dp)) {
-                    Text(title, style = pageTitleStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (!subtitle.isNullOrBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+        val page: @Composable () -> Unit = {
+            LazyColumn(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = horizontalPadding + gutter, end = horizontalPadding + gutter, top = statusTop + 60.dp, bottom = bottomPadding + 28.dp),
+                verticalArrangement = Arrangement.spacedBy(spacing),
+            ) {
+                item(key = "subpage:title") {
+                    Column(Modifier.padding(start = 20.dp - horizontalPadding.coerceAtMost(20.dp), end = 20.dp, bottom = 10.dp)) {
+                        Text(title, style = pageTitleStyle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (!subtitle.isNullOrBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    }
                 }
+                content()
             }
-            content()
         }
+        if (selectableSongs != null) SelectableSongs(selectableSongs) { page() } else page()
         if (melts) TopScrollEdge({ bar }, 60.dp)
         // Pinned, the preview sits on the page's own color edge to edge, so the rows scrolling up don't show beside or
         // behind it (they did, through the title, on the owner's phone).

@@ -496,10 +496,13 @@ private fun source(title: String) = QueueSource(QueueKind.LIBRARY, title)
 private fun TrackList(songs: List<Song>, title: String, bottomPadding: Dp, numbered: Boolean = false) {
     val c = LocalContainer.current
     val current by c.player.currentSong.collectAsState()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
-        itemsIndexed(songs, key = { i, s -> "t" + s.id + ":" + i }) { i, s ->
-            SwipeToQueue(s) {
-                SongRow(s, index = if (numbered) i + 1 else null, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+    // Select many: hold a row to pick it, tap more, and All for this list (an album's tracks, the files shown).
+    com.prism.music.ui.components.SelectableSongs(songs) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
+            itemsIndexed(songs, key = { i, s -> "t" + s.id + ":" + i }) { i, s ->
+                SwipeToQueue(s) {
+                    SongRow(s, index = if (numbered) i + 1 else null, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+                }
             }
         }
     }
@@ -510,13 +513,16 @@ private fun TrackList(songs: List<Song>, title: String, bottomPadding: Dp, numbe
 private fun SongsPage(songs: List<Song>, sort: Order<SongKey>, onSort: (Order<SongKey>) -> Unit, title: String, bottomPadding: Dp) {
     val c = LocalContainer.current
     val current by c.player.currentSong.collectAsState()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 0.dp, bottom = bottomPadding + 16.dp)) {
-        item {
-            SortRow(songCount(songs.size), tr(R.string.sort_songs), SongKey.entries, sort, { it.label }, { it.dirs }, onSort)
-        }
-        itemsIndexed(songs, key = { _, s -> "l" + s.id }) { i, s ->
-            SwipeToQueue(s) {
-                SongRow(s, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+    // Select many, as on Local files' other song lists.
+    com.prism.music.ui.components.SelectableSongs(songs) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 0.dp, bottom = bottomPadding + 16.dp)) {
+            item {
+                SortRow(songCount(songs.size), tr(R.string.sort_songs), SongKey.entries, sort, { it.label }, { it.dirs }, onSort)
+            }
+            itemsIndexed(songs, key = { _, s -> "l" + s.id }) { i, s ->
+                SwipeToQueue(s) {
+                    SongRow(s, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+                }
             }
         }
     }
@@ -660,25 +666,28 @@ private fun ArtistPage(artist: LocalArtist, bottomPadding: Dp, onOpenAlbum: (Loc
         artist.albums.map { a -> a to a.tracks.filter { it.song.id in mine }.map { it.song } }.filter { it.second.isNotEmpty() }
     }
     val all = remember(byAlbum) { byAlbum.flatMap { it.second } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
-        byAlbum.forEach { (album, songs) ->
-            item(key = "h" + album.id) {
-                Row(
-                    Modifier.fillMaxWidth().clickable { onOpenAlbum(album) }.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Artwork(album.art, Modifier.size(44.dp), LocalUi.current.albumArt, size = 226, placeholderIcon = PrismIcons.Album)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(album.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        album.year.takeIf { it > 0 }?.let { Text("$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    // Select many: every song of theirs on this page, for All.
+    com.prism.music.ui.components.SelectableSongs(all) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
+            byAlbum.forEach { (album, songs) ->
+                item(key = "h" + album.id) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onOpenAlbum(album) }.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Artwork(album.art, Modifier.size(44.dp), LocalUi.current.albumArt, size = 226, placeholderIcon = PrismIcons.Album)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(album.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            album.year.takeIf { it > 0 }?.let { Text("$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                        androidx.compose.material3.Icon(PrismIcons.ChevronRight, tr(R.string.open_album), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    androidx.compose.material3.Icon(PrismIcons.ChevronRight, tr(R.string.open_album), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-            itemsIndexed(songs, key = { i, s -> "s" + album.id + ":" + s.id + ":" + i }) { _, s ->
-                SwipeToQueue(s) {
-                    SongRow(s, playing = current?.id == s.id) { c.player.playQueue(all, all.indexOf(s), source(artist.name)) }
+                itemsIndexed(songs, key = { i, s -> "s" + album.id + ":" + s.id + ":" + i }) { _, s ->
+                    SwipeToQueue(s) {
+                        SongRow(s, playing = current?.id == s.id) { c.player.playQueue(all, all.indexOf(s), source(artist.name)) }
+                    }
                 }
             }
         }
