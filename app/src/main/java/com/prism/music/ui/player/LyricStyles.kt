@@ -269,7 +269,8 @@ fun SungLine(
     ruby: List<RubySpan>? = null,
 ) {
     var layout by remember(line) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-    val st = (if (!ruby.isNullOrEmpty()) style.withRubyRoom() else style).copy(shadow = look.shadow ?: style.shadow)
+    val room = rememberRubyRoom(ruby, style)
+    val st = (if (room != null) style.withRubyRoom(room) else style).copy(shadow = look.shadow ?: style.shadow)
     val timed = if (look.timesWords) remember(line) { line.withWords() } else line
     val plan = look.sungPlan(timed.isWordSynced, onCard, strip, axis != null, dimAlpha)
     val set = if (plan.weight != null) st.copy(fontWeight = FontWeight(plan.weight)) else st
@@ -282,7 +283,7 @@ fun SungLine(
         }
     }
     val withRuby = @Composable { m: Modifier ->
-        RubyOverlay(ruby, st, layout, m, if (onCard) look.sungSolid else Color.White.copy(alpha = 0.9f)) { inner -> drawn(inner) }
+        RubyOverlay(ruby, st, room, layout, m, if (onCard) look.sungSolid else Color.White.copy(alpha = 0.9f)) { inner -> drawn(inner) }
     }
     // The glow is a blurred copy of the sung words behind them (a text shadow is cut off at the line's edges). The copy is
     // the letters thickened by an outline and only lightly blurred, so the light hugs each letter's shape instead of
@@ -316,8 +317,9 @@ fun RestingLine(
     ruby: List<RubySpan>? = null,
 ) {
     var layout by remember(line) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-    val st = if (!ruby.isNullOrEmpty()) style.withRubyRoom() else style
-    RubyOverlay(ruby, st, layout, modifier, look.others.copy(alpha = alpha)) { m ->
+    val room = rememberRubyRoom(ruby, style)
+    val st = if (room != null) style.withRubyRoom(room) else style
+    RubyOverlay(ruby, st, room, layout, modifier, look.others.copy(alpha = alpha)) { m ->
         Text(
             line.text, m, color = look.others.copy(alpha = alpha), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
             style = st.copy(fontWeight = FontWeight(look.weight), shadow = look.shadow ?: style.shadow),
