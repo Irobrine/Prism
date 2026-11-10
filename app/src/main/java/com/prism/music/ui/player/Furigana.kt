@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
@@ -29,11 +31,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.prism.music.data.ModelStore
+import com.prism.music.data.lyrics.LyricLine
 import com.prism.music.data.lyrics.RubySpan
 import com.prism.music.data.lyrics.hasKanji
 import com.prism.music.data.lyrics.roman.Script
 import com.prism.music.ui.theme.LocalAppSettings
 import com.prism.music.ui.theme.LocalContainer
+import kotlin.math.roundToInt
 
 /** How big a reading is against the line it sits over, and how tall its row is. */
 private const val RUBY_SCALE = 0.45f
@@ -100,8 +104,23 @@ internal fun TextStyle.withRubyRoom(room: Float): TextStyle {
 }
 
 /**
+ * How the readings over a sung line move with it: [kind] is the line's animation ([SungKind]), [line] and [clock] give
+ * which word is being sung, [dim] is where they're still to come, and the weights are the grow animation's ends.
+ */
+internal data class RubyMotion(
+    val kind: SungKind,
+    val line: LyricLine,
+    val clock: State<Long>,
+    val dim: Color = Color.Unspecified,
+    val dimAlpha: Float = 1f,
+    val lightWeight: Int = 300,
+    val sungWeight: Int = 500,
+)
+
+/**
  * Draws [ruby] above the text [content] draws, using [layout] (that text's own layout) to line each reading up over its
- * kanji. The room above comes from a matching top padding, so nothing else moves.
+ * kanji. The room above comes from a matching top padding, so nothing else moves. [motion] makes the readings follow the
+ * line's animation: wiped through with its sweep, brightening as its words are sung, or appearing with its typewriter.
  */
 @Composable
 internal fun RubyOverlay(
@@ -111,6 +130,7 @@ internal fun RubyOverlay(
     layout: TextLayoutResult?,
     modifier: Modifier,
     color: Color,
+    motion: RubyMotion? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
     if (ruby.isNullOrEmpty() || room == null) { content(modifier); return }
@@ -119,15 +139,32 @@ internal fun RubyOverlay(
     val pad = with(density) { room.sp.toDp() }
     val measurer = rememberTextMeasurer()
     val rubyStyle = remember(style, rubySize) { style.rubyStyle(rubySize) }
-    // Each reading, split where its kanji wrap onto another row, measured once.
+    // Each reading, split where its kanji wrap onto another row. A growing line's reading is measured at each weight step
+    // too, so it thickens with the word it's over.
     val pieces = remember(layout, ruby) { layout?.let { rubyPieces(it, ruby) }.orEmpty() }
-    val measured = remember(pieces, rubyStyle) { pieces.map { it to measurer.measure(AnnotatedString(it.reading), rubyStyle, maxLines = 1) } }
+    val growSteps = if (motion?.kind == SungKind.GROW) ((motion.sungWeight - motion.lightWeight) / WEIGHT_STEP).coerceAtLeast(0) else 0
+    val measured = remember(pieces, rubyStyle, motion?.kind, motion?.lightWeight, motion?.sungWeight, growSteps) {
+        pieces.map { piece ->
+            val readings = if (growSteps == 0) listOf(measurer.measure(AnnotatedString(piece.reading), rubyStyle, maxLines = 1))
+            else (0..growSteps).map { k ->
+                val weight = FontWeight((motion?.lightWeight ?: 0) + k * WEIGHT_STEP)
+                measurer.measure(AnnotatedString(piece.reading), rubyStyle.copy(fontWeight = weight), maxLines = 1)
+            }
+            piece to readings
+        }
+    }
+    // Each word's span in the line, for timing a reading to the word it's over.
+    val offsets = remember(motion?.line) { motion?.line?.wordOffsets().orEmpty() }
     Box(modifier, propagateMinConstraints = true) {
         content(modifier.padding(top = pad))
         val l = layout ?: return@Box
         Canvas(Modifier.matchParentSize()) {
             val roomPx = pad.toPx()
-            for ((piece, reading) in measured) drawRuby(l, piece, reading, roomPx, color)
+            val now = motion?.clock?.value ?: 0L
+            val sung = if (motion != null && (motion.kind == SungKind.SWEEP || motion.kind == SungKind.GROW)) {
+                sungChars(motion.line, offsets, now)
+            } else 0f
+            for ((piece, readings) in measured) drawRuby(l, piece, readings, roomPx, color, motion, offsets, now, sung)
         }
     }
 }
@@ -183,13 +220,70 @@ private fun rubyPieces(layout: TextLayoutResult, ruby: List<RubySpan>): List<Rub
     return out
 }
 
-private fun DrawScope.drawRuby(layout: TextLayoutResult, piece: RubyPiece, reading: TextLayoutResult, room: Float, color: Color) {
+/** Each word's span in [this] line's text: where it starts, and just past where it ends. */
+private fun LyricLine.wordOffsets(): List<Pair<Int, Int>> {
+    var acc = 0
+    return words.map { w -> val start = acc; acc += w.text.length; start to acc }
+}
+
+/** How much of [piece]'s kanji has been sung, from 0 (none) to 1 (all). */
+private fun sungFraction(piece: RubyPiece, sung: Float): Float =
+    ((sung - piece.start) / (piece.end - piece.start + 1).toFloat()).coerceIn(0f, 1f)
+
+/** How visible the word at [offset] is in the typewriter animation at [now], from 0 to 1 (in tenths, as it types). */
+private fun typewriterAlpha(line: LyricLine, offsets: List<Pair<Int, Int>>, now: Long, offset: Int): Float {
+    val i = line.words.indices.firstOrNull { offset >= offsets[it].first && offset < offsets[it].second } ?: return 1f
+    val w = line.words[i]
+    val shown = ((now - w.startMs).toFloat() / TYPE_IN_MS).coerceIn(0f, 1f)
+    return (shown * 10).roundToInt() / 10f
+}
+
+private fun DrawScope.drawRuby(
+    layout: TextLayoutResult, piece: RubyPiece, readings: List<TextLayoutResult>, room: Float, color: Color,
+    motion: RubyMotion?, offsets: List<Pair<Int, Int>>, now: Long, sung: Float,
+) {
     val first = layout.getBoundingBox(piece.start)
     val last = layout.getBoundingBox(piece.end)
+    val fraction = if (motion != null && (motion.kind == SungKind.GROW || motion.kind == SungKind.SWEEP)) {
+        sungFraction(piece, sung)
+    } else 0f
+    // A growing reading has a layout for each weight step; the others have just the one.
+    val reading = if (readings.size > 1) readings[(fraction * readings.lastIndex).roundToInt().coerceIn(0, readings.lastIndex)] else readings.first()
     val center = (first.left + last.right) / 2f
     val w = reading.size.width
     val x = (center - w / 2f).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
     // Above the row's letters; [room] is the padding kept above the text for it.
     val y = (room + first.top - reading.size.height).coerceAtLeast(0f)
-    drawText(reading, color = color, topLeft = Offset(x, y))
+    val at = Offset(x, y)
+    when (motion?.kind) {
+        null, SungKind.PLAIN -> drawText(reading, color = color, topLeft = at)
+        // Word by word: the reading appears as the word it's over does.
+        SungKind.TYPEWRITER -> {
+            val a = typewriterAlpha(motion.line, offsets, now, piece.start)
+            if (a > 0f) drawText(reading, color = color, alpha = color.alpha * a, topLeft = at)
+        }
+        // Words grow from dim to bright: the reading thickens and brightens with the kanji it's over.
+        SungKind.GROW -> {
+            val lit = (fraction * 10).roundToInt()
+            val a = motion.dimAlpha + (1f - motion.dimAlpha) * lit / 10f
+            drawText(reading, color = color, alpha = color.alpha * a, topLeft = at)
+        }
+        // The light wipes through the line: it wipes through the reading the same way.
+        SungKind.SWEEP -> {
+            if (fraction < 1f && motion.dim.alpha > 0f) drawText(reading, color = motion.dim, topLeft = at)
+            if (fraction > 0f) {
+                if (fraction >= 1f) drawText(reading, color = color, topLeft = at)
+                else {
+                    // A soft edge where the light is (the brush is in the canvas's coordinates, as the reading is drawn).
+                    val edge = x + w * fraction
+                    val feather = reading.size.height * 0.55f
+                    val lit = Brush.horizontalGradient(
+                        0f to color, 1f to color.copy(alpha = 0f),
+                        startX = edge - feather, endX = edge + feather,
+                    )
+                    drawText(reading, brush = lit, topLeft = at)
+                }
+            }
+        }
+    }
 }
