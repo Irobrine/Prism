@@ -678,6 +678,9 @@ fun SongActionsSheet(song: Song, extra: List<SheetItem> = emptyList(), onDismiss
     if (credits) { SongCreditsSheet(song) { credits = false; onDismiss() }; return }
     var details by remember { mutableStateOf(false) }
     if (details) { SongDetailsSheet(song) { details = false; onDismiss() }; return }
+    // 1.8.3: the listener's own artist, album and genre in its place.
+    var editingMetadata by remember { mutableStateOf(false) }
+    if (editingMetadata) { MetadataEditorSheet(listOf(song)) { editingMetadata = false; onDismiss() }; return }
     if (versions) { SongVersionsSheet(song) { versions = false; onDismiss() }; return }
     // #305: the song's own cover.
     var cover by remember { mutableStateOf(false) }
@@ -707,6 +710,8 @@ fun SongActionsSheet(song: Song, extra: List<SheetItem> = emptyList(), onDismiss
         else if (song.isEpisode) ActionItem(PrismIcons.DoneAll, tr(R.string.mark_as_played)) { c.episodes.markPlayed(song.id) } else null,
         if (rss) null else ActionItem(PrismIcons.PlaylistAdd, tr(R.string.add_to_playlist), keepOpen = true) { pickPlaylist = true },
         if (rss) null else ActionItem(PrismIcons.Tag, tr(R.string.add_a_tag), value = tagsValue(songTags), active = songTags.isNotEmpty(), keepOpen = true) { tagging = true },
+        // 1.8.3: artist, album and genre, shown on this phone.
+        ActionItem(PrismIcons.Edit, tr(R.string.edit_metadata), active = c.metadata.of(song.id) != null, keepOpen = true) { editingMetadata = true },
         // A picked version's album and artists (#328): it plays as that recording.
         shown.album?.id?.let { id -> ActionItem(PrismIcons.Album, tr(R.string.go_to_album), value = shown.album?.title?.takeIf { it.length <= 22 }) { nav.go(Routes.album(id)) } },
     ) + goToArtists(shown) { route -> nav.go(route) } + listOfNotNull(

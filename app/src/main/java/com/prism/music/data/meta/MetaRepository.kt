@@ -174,7 +174,12 @@ object Genres {
  * every song by them), falling back to the artist's related artists, and
  * finally to whatever the rest of the collection is mostly made of.
  */
-class MetaRepository(private val http: OkHttpClient, private val dao: MetaDao) {
+class MetaRepository(
+    private val http: OkHttpClient,
+    private val dao: MetaDao,
+    /** The listener's own genre on a song (1.8.3's metadata edits), which wins over anything looked up. */
+    private val genreOverride: (String) -> String? = { null },
+) {
     /** Diagnostics hook (tests print it). */
     var trace: ((String) -> Unit)? = null
     /** Deezer allows ~50 requests per 5 s; iTunes only ~20 a minute, so it's a last resort. */
@@ -562,6 +567,7 @@ class MetaRepository(private val http: OkHttpClient, private val dao: MetaDao) {
      * (and they're queued). [wait]: ask iTunes now rather than in the background (slow: it's paced).
      */
     suspend fun genreFor(song: Song, wait: Boolean = false): String? = withContext(Dispatchers.IO) {
+        genreOverride(song.id)?.let { return@withContext it }
         val k = "song3:${song.id}"
         dao.genre(k)?.let { cached -> categoryOf(cached.genre)?.let { return@withContext it } }
         // A song without an artist (an untagged file) isn't guessed from its title alone: a search for "Track 01" or
@@ -609,6 +615,8 @@ class MetaRepository(private val http: OkHttpClient, private val dao: MetaDao) {
         val keys = artists.flatMap { listOf(exactArtistKey(it), artistKey(it)) }
         val byArtist = keys.chunked(500).flatMap { dao.genres(it) }.associate { it.key to categoryOf(it.genre) }
         songs.mapNotNull { s ->
+            // An edited genre is the listener's own answer: no lookup replaces it.
+            genreOverride(s.id)?.let { return@mapNotNull s.id to it }
             if (s.primaryArtist.isBlank()) return@mapNotNull bySong[s.id]?.let { s.id to it }
             val g = bySong[s.id]
                 ?: itunesSongs[itunesSongsKey(s.primaryArtist)]?.let { fromItunes(s, it) }
@@ -658,7 +666,8 @@ class MetaRepository(private val http: OkHttpClient, private val dao: MetaDao) {
         }
         if (!refineInline) return@onIo
         // Then each song's own genre from iTunes, artist by artist (most songs first), as iTunes allows (~20 a minute).
-        val byArtist = songs.filter { it.primaryArtist.isNotBlank() }.groupBy { it.primaryArtist }.entries.sortedByDescending { it.value.size }
+        val byArtist = songs.filter { it.primaryArtist.isNotBlank() && genreOverride(it.id) == null }
+            .groupBy { it.primaryArtist }.entries.sortedByDescending { it.value.size }
         for ((artist, list) in byArtist) {
             val cached = dao.genre(itunesSongsKey(artist)) != null
             val its = runCatching { itunesArtistSongs(artist) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: continue

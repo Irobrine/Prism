@@ -4957,4 +4957,12 @@
     <string name="tour_183_also_songs_from">선택한 재생목록으로 보관함 노래 보기</string>
     <string name="tour_183_also_lock">잠금 화면의 반복 및 다음 곡</string>
     <string name="tour_183_also_uploads">업로드에서 업로드 및 삭제</string>
+    <!-- 1.8.3 Edit metadata -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
+    <string name="metadata_saved">Metadata saved</string>
+    <string name="reset_metadata">Reset metadata</string>
+    <string name="metadata_reset">Metadata reset</string>
+    <string name="metadata_mixed">Mixed</string>
+    <string name="metadata_currently">Currently %s</string>
 </resources>

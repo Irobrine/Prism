@@ -5,7 +5,10 @@ import com.prism.music.data.model.Song
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** #328 (1.8.1.1): the song as Prism shows it: as the version picked to play in its place, if any. */
+/**
+ * #328 (1.8.1.1): the song as Prism shows it: as the version picked to play in its place, if any, with the listener's
+ * own artist and album edits (1.8.3) on top.
+ */
 val Song.shown: Song get() = SongVersions.shownOf(this)
 
 /**
@@ -93,8 +96,11 @@ class SongVersions(private val prefs: SharedPreferences) {
         @Volatile var shared: SongVersions? = null
             internal set
 
-        /** [shown] for [song], or [song] itself before the picks have been read. */
-        fun shownOf(song: Song): Song = shared?.shown(song) ?: song
+        /**
+         * [shown] for [song], then the listener's own artist and album edits (1.8.3): the one way every list, player and
+         * notification asks what to show for a song.
+         */
+        fun shownOf(song: Song): Song = SongMetadata.shownOf(shared?.shown(song) ?: song)
 
         private val BRACKETS = Regex("\\s*[(\\[][^)\\]]*[)\\]]")
         private val DASH = Regex("\\s+[-–—]\\s+.*$")

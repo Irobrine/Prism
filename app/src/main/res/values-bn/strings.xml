@@ -5029,4 +5029,12 @@
     <string name="tour_183_also_songs_from">আপনার বাছা প্লেলিস্ট থেকে লাইব্রেরির গান</string>
     <string name="tour_183_also_lock">লক স্ক্রিনে রিপিট ও এরপর</string>
     <string name="tour_183_also_uploads">আপলোডে আপলোড ও মুছে ফেলা</string>
+    <!-- 1.8.3 Edit metadata -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
+    <string name="metadata_saved">Metadata saved</string>
+    <string name="reset_metadata">Reset metadata</string>
+    <string name="metadata_reset">Metadata reset</string>
+    <string name="metadata_mixed">Mixed</string>
+    <string name="metadata_currently">Currently %s</string>
 </resources>
