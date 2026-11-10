@@ -1482,6 +1482,8 @@ data class AppSettings(
      */
     val downloadOnStream: Boolean = false,
     val downloadVideoOnStream: Boolean = false,
+    /** Songs after the one playing to keep downloaded too: 0 (off) to 5. */
+    val downloadQueueAhead: Int = 0,
     /**
      * Smart Downloads' picks: the songs you're most likely to play are downloaded ahead. Off on a new install (#339,
      * 1.8.1.1: Home offers it once); listeners who had it on before keep it ([addNewHomeSections]).
@@ -1905,6 +1907,7 @@ class SettingsRepository(
         val downloadLikes = booleanPreferencesKey("download_likes")
         val downloadOnStream = booleanPreferencesKey("download_on_stream")
         val downloadVideoOnStream = booleanPreferencesKey("download_video_on_stream")
+        val downloadQueueAhead = intPreferencesKey("download_queue_ahead")
         val smartDownloads = booleanPreferencesKey("smart_downloads")
         val smartDownloadGb = floatPreferencesKey("smart_download_gb")
         val offlineGb = floatPreferencesKey("offline_gb")
@@ -2262,7 +2265,7 @@ class SettingsRepository(
                 "audio_diagnostics", "search_keyboard", "double_tap_seek_seconds", "stop_on_swipe_away", "data_saver",
                 "video_continues", "lossless", "lossless_local", "normalize", "skip_silence", "mix", "mix_seconds", "mix_auto",
                 "mix_beat_match", "mix_tempo_cellular", "content_country", "video_max_height", "cache_size_mb", "download_wifi_only",
-                "download_likes", "download_on_stream", "download_video_on_stream", "smart_downloads", "smart_download_gb", "offline_gb", "smart_downloads_cellular", "eq",
+                "download_likes", "download_on_stream", "download_video_on_stream", "download_queue_ahead", "smart_downloads", "smart_download_gb", "offline_gb", "smart_downloads_cellular", "eq",
                 "home_layout", "auto_add_sections", "home_hide_kinds", "home_header_picture", "search_sections", "search_chips", "replay_hours", "greeting_text", "greeting_show_name", "home_shortcuts",
                 "home_recent_tiles", "home_playlists", "home_customize_button", "home_continue", "quick_picks_radio",
                 "home_customize_top_button", "home_podcasts_button", "font_stamp", "lyrics_font_name", "local_sections", "local_sort",
@@ -2472,6 +2475,7 @@ class SettingsRepository(
             downloadLikes = p[K.downloadLikes] ?: d.downloadLikes,
             downloadOnStream = p[K.downloadOnStream] ?: d.downloadOnStream,
             downloadVideoOnStream = p[K.downloadVideoOnStream] ?: d.downloadVideoOnStream,
+            downloadQueueAhead = (p[K.downloadQueueAhead] ?: d.downloadQueueAhead).coerceIn(0, 5),
             smartDownloads = p[K.smartDownloads] ?: d.smartDownloads,
             smartDownloadGb = p[K.smartDownloadGb] ?: d.smartDownloadGb,
             offlineGb = p[K.offlineGb] ?: run {
@@ -3110,6 +3114,7 @@ class SettingsRepository(
     fun setDownloadLikes(v: Boolean) = edit { it[K.downloadLikes] = v }
     fun setDownloadOnStream(v: Boolean) = edit { it[K.downloadOnStream] = v }
     fun setDownloadVideoOnStream(v: Boolean) = edit { it[K.downloadVideoOnStream] = v }
+    fun setDownloadQueueAhead(v: Int) = edit { it[K.downloadQueueAhead] = v.coerceIn(0, 5) }
     fun setSmartDownloads(v: Boolean) = edit { it[K.smartDownloads] = v }
     fun setSmartDownloadGb(v: Float) = edit { it[K.smartDownloadGb] = v }
     fun setOfflineGb(v: Float) = edit { it[K.offlineGb] = v }
