@@ -207,11 +207,15 @@ class Romanizer(
         return withContext(Dispatchers.Default) {
             lines.map { line ->
                 synchronized(rubyMemory) { rubyMemory[line.text] } ?: run {
-                    // KuGou and the like can write the reading in parentheses after the kanji: 君(きみ)の. Read the
-                    // words without them, so the dictionary keeps its context, then keep the source's own readings.
-                    val source = SourceFurigana.of(line.text)
-                    val dictionary = reader.furigana(JapaneseKanji.fromChinese(source?.clean ?: line.text))
-                    val spans = source?.merge(dictionary) ?: dictionary
+                    // A line cleaned of the source's parenthesized readings carries them as [LyricLine.sourceRuby]. Raw
+                    // lines (from other callers) are parsed here, and the dictionary reads the words without them.
+                    val spans = if (line.sourceRuby.isNotEmpty()) {
+                        mergeFurigana(line.sourceRuby, reader.furigana(JapaneseKanji.fromChinese(line.text)))
+                    } else {
+                        val source = SourceFurigana.of(line.text)
+                        val dictionary = reader.furigana(JapaneseKanji.fromChinese(source?.clean ?: line.text))
+                        source?.merge(dictionary) ?: dictionary
+                    }
                     synchronized(rubyMemory) { rubyMemory[line.text] = spans }
                     spans
                 }

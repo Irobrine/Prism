@@ -115,6 +115,7 @@ import com.prism.music.data.lyrics.LyricLine
 import com.prism.music.data.lyrics.Lyrics
 import com.prism.music.data.lyrics.LyricsRepository
 import com.prism.music.data.lyrics.RubySpan
+import com.prism.music.data.lyrics.SourceFurigana
 import com.prism.music.data.model.Song
 import com.prism.music.data.prefs.LyricsSource
 import com.prism.music.ui.theme.LocalContainer
@@ -227,7 +228,20 @@ class LyricsState(
     var settled = false
         private set
 
-    val lines: List<LyricLine> get() = lyrics?.lines.orEmpty()
+    /** The lines as drawn: a source's parenthesized readings become furigana and leave the text and its word timings. */
+    private var cleanedFor: Lyrics? = null
+    private var cleanedLines: List<LyricLine> = emptyList()
+    val lines: List<LyricLine>
+        get() {
+            val current = lyrics
+            if (current !== cleanedFor) {
+                cleanedFor = current
+                cleanedLines = current?.lines.orEmpty().map { line ->
+                    SourceFurigana.of(line.text)?.cleanLine(line) ?: line
+                }
+            }
+            return cleanedLines
+        }
     val unavailable: Boolean get() = !loading && lyrics == null && !waiting
 
     /** [savedOnly]: only what's saved on the phone, no lyric service asked (then [waiting] if there's nothing). */
