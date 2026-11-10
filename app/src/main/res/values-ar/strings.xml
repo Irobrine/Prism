@@ -5317,4 +5317,7 @@
     <string name="tour_183_also_songs_from">أغاني المكتبة من القوائم التي تختارها</string>
     <string name="tour_183_also_lock">التكرار والتالي على شاشة القفل</string>
     <string name="tour_183_also_uploads">الرفع والحذف في الملفات المرفوعة</string>
+    <string name="show_furigana">إظهار الفوريغانا</string>
+    <string name="hiragana_readings_above_kanji">قراءات الهيراغانا فوق الكانجي في كلمات الأغاني اليابانية</string>
+    <string name="furigana_uses_the_japanese_reading_data">يستخدم بيانات القراءة اليابانية (تُنزَّل مرة واحدة أدناه).</string>
 </resources>

@@ -114,6 +114,7 @@ import androidx.compose.ui.unit.sp
 import com.prism.music.data.lyrics.LyricLine
 import com.prism.music.data.lyrics.Lyrics
 import com.prism.music.data.lyrics.LyricsRepository
+import com.prism.music.data.lyrics.RubySpan
 import com.prism.music.data.model.Song
 import com.prism.music.data.prefs.LyricsSource
 import com.prism.music.ui.theme.LocalContainer
@@ -466,6 +467,7 @@ fun CurrentLyricStrip(state: LyricsState, isPlaying: Boolean, overScrubber: Bool
     // Romanized "instead": the strip sings the Latin spelling too (same timings).
     val roman = rememberRomanized(state)
     val instead = romanizeMode(state.song.id) == com.prism.music.data.prefs.RomanizeMode.INSTEAD
+    val furigana = rememberFurigana(state)
     // As the lyrics page draws them (1.8.0: always; "Same look everywhere" is gone).
     val settings = LocalAppSettings.current
     val look = rememberLyricsLook(settings, com.prism.music.data.PlaylistCovers.artOf(state.song))
@@ -521,10 +523,14 @@ fun CurrentLyricStrip(state: LyricsState, isPlaying: Boolean, overScrubber: Bool
                     ) { (i, t) ->
                         val line = lines.getOrNull(i)
                         if (line != null && !line.isGap && (line.isWordSynced || !look.plainWhenLineTimed)) {
-                            SungLine(line, clock, stripStyle.copy(shadow = look.shadow), look, null, maxLines = rows, strip = true)
+                            SungLine(
+                                line, clock, stripStyle.copy(shadow = look.shadow), look, null, maxLines = rows, strip = true,
+                                ruby = if (instead) null else furigana?.getOrNull(i),
+                            )
                         } else {
-                            Text(
-                                t, style = stripStyle, color = if (instrumental) Color.White.copy(alpha = 0.5f) else Color.White, maxLines = rows, overflow = TextOverflow.Ellipsis,
+                            TextWithFurigana(
+                                t, if (instead || line == null || line.isGap) null else furigana?.getOrNull(i), stripStyle,
+                                if (instrumental) Color.White.copy(alpha = 0.5f) else Color.White, maxLines = rows,
                             )
                         }
                     }
@@ -604,6 +610,7 @@ fun SweptLine(
     litBrush: Brush? = null,
     dimColor: Color? = null,
     glow: androidx.compose.ui.graphics.Shadow? = null,
+    onLayout: ((TextLayoutResult) -> Unit)? = null,
 ) {
     var layout by remember(line) { mutableStateOf<TextLayoutResult?>(null) }
     val offsets = remember(line) {
@@ -632,7 +639,7 @@ fun SweptLine(
                     val l = layout ?: return@drawWithContent drawContent()
                     drawSweep(l, rows.edges(l), line, offsets, clock.value, litBrush ?: SolidColor(Color.White), dim, style, glow ?: style.shadow)
                 },
-                style = style, color = dim, maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it },
+                style = style, color = dim, maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it; onLayout?.invoke(it) },
             )
         }
         return
@@ -659,7 +666,7 @@ fun SweptLine(
                         }
                     },
             ),
-            style = style, color = dim, maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it },
+            style = style, color = dim, maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it; onLayout?.invoke(it) },
         )
         Text(
             line.text, style = style.copy(brush = litBrush, shadow = glow ?: style.shadow), color = if (litBrush != null) Color.Unspecified else Color.White,
@@ -875,15 +882,16 @@ fun LyricProgress(startMs: Long, endMs: Long, clock: State<Long>, origin: Float,
 /**
  * A line's own words on the lyrics page: sung ([active], in the look's style) or resting (at [alpha]), and under a
  * synced line timed from [startMs] to [endMs] the thin progress line ([progress]: not while browsing), growing from
- * [origin] (as [LyricProgress]).
+ * [origin] (as [LyricProgress]). [ruby] are the readings over its kanji, when there are any.
  */
 @Composable
 internal fun LyricLineWords(
     shown: LyricLine, startMs: Long, endMs: Long, active: Boolean, synced: Boolean, progress: Boolean, clock: State<Long>,
     style: TextStyle, look: LyricsLook, axis: androidx.compose.ui.text.font.FontFamily?, onCard: Boolean, alpha: Float, origin: Float,
+    ruby: List<RubySpan>? = null,
 ) {
-    if (active) SungLine(shown, clock, style, look, axis, Modifier.fillMaxWidth(), onCard = onCard)
-    else RestingLine(shown, style, look, alpha, Modifier.fillMaxWidth())
+    if (active) SungLine(shown, clock, style, look, axis, Modifier.fillMaxWidth(), onCard = onCard, ruby = ruby)
+    else RestingLine(shown, style, look, alpha, Modifier.fillMaxWidth(), ruby = ruby)
     // How far the line has been sung: a thin line of split light under it. #399: every synced line that can show it keeps
     // its room, drawn only under the sung one, so a line is as tall sung as resting (the old line shrank and the new one
     // grew at every change, in the middle of the scroll to it: the lines below jumped and the scroll ended off its place).
@@ -927,6 +935,7 @@ fun WeightSweptLine(
     /** The sung words' fill (null: white). */
     litBrush: Brush? = null,
     dimAlpha: Float = UNSUNG_ALPHA,
+    onLayout: ((TextLayoutResult) -> Unit)? = null,
 ) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val steps = ((sungWeight - lightWeight) / WEIGHT_STEP).coerceAtLeast(0)
@@ -965,7 +974,7 @@ fun WeightSweptLine(
             append(w.text.substring(core.length))
         }
     }
-    Text(text, modifier, style = axisStyle)
+    Text(text, modifier, style = axisStyle, onTextLayout = { onLayout?.invoke(it) })
 }
 
 /**
@@ -1168,6 +1177,8 @@ fun LyricsPanel(
     // Lyrics in a script the listener can't read, in Latin letters: under each line, or in its place.
     val roman = rememberRomanized(state)
     val romanInstead = romanizeMode(state.song.id) == com.prism.music.data.prefs.RomanizeMode.INSTEAD
+    // Japanese kanji with their hiragana readings above (Settings → Lyrics & Sing).
+    val furigana = rememberFurigana(state)
 
     if (lines.isEmpty()) {
         Box(modifier.pointerInput(Unit) { detectTapGestures { onRevealControls() } }, contentAlignment = Alignment.Center) {
@@ -1245,6 +1256,8 @@ fun LyricsPanel(
             val romanLine = roman?.getOrNull(index)
             // "Instead": the line is sung in Latin letters (the original's timings kept); in capitals when that's picked.
             val shown = remember(line, romanLine, romanInstead, look.uppercase) { look.shown(if (romanInstead && romanLine != null) romanLine else line) }
+            // The readings belong to the Japanese text, so they stay off when the Latin line is shown in its place.
+            val rubyLine = if (romanInstead) null else furigana?.getOrNull(index)
             // Arabic, Hebrew and the like read right to left: such a line starts at the right (its direction comes from
             // its words; left unset, Compose laid every line out left to right, so Arabic sat on the left).
             val rtl = remember(shown) { isRtl(shown.text) }
@@ -1313,7 +1326,7 @@ fun LyricsPanel(
                     if (look.extraAbove) { romanised(false); translationLine(false) }
                     LyricLineWords(
                         shown, line.timeMs, line.endMs, isActive, synced, progress = !browsing, clock, style, look, axisFamily, onCard, lineAlpha,
-                        origin = when { centred && !line.alignEnd -> 0.5f; line.alignEnd != rtl -> 1f; else -> 0f },
+                        origin = when { centred && !line.alignEnd -> 0.5f; line.alignEnd != rtl -> 1f; else -> 0f }, ruby = rubyLine,
                     )
                     if (!look.extraAbove) romanised(true)
                     // Background vocals, smaller under the line, lighting up word by word in their own time (#66).

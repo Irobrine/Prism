@@ -1361,6 +1361,8 @@ data class AppSettings(
     val romanize: RomanizeMode = RomanizeMode.UNDER,
     /** Also scripts of the phone's own language (off: a Korean phone isn't shown Korean in Latin letters). */
     val romanizeAll: Boolean = false,
+    /** Hiragana (furigana) above the kanji in Japanese lyrics. */
+    val lyricsFurigana: Boolean = true,
     /** Sing gets songs ready (downloads them whole) on mobile data too. */
     val singOnCellular: Boolean = false,
     /** Settings → Lyrics → Sing: the playing and next songs are got ready even while Sing is off, so it starts at once. */
@@ -1840,6 +1842,7 @@ class SettingsRepository(
         val lyricsFileTranslation = booleanPreferencesKey("lyrics_file_translation")
         val romanize = stringPreferencesKey("romanize_lyrics")
         val romanizeAll = booleanPreferencesKey("romanize_all")
+        val lyricsFurigana = booleanPreferencesKey("lyrics_furigana")
         val singOnCellular = booleanPreferencesKey("sing_cellular")
         val singAlwaysReady = booleanPreferencesKey("sing_always_ready")
         val singCacheMb = intPreferencesKey("sing_cache_mb")
@@ -2242,7 +2245,7 @@ class SettingsRepository(
                 "onboarded", "cookie", "visitor_data", "data_sync_id", "auth_user", "discord_presence", "account_name", "account_email",
                 "account_avatar", "haptics", "immersive_player", "preload", "preload_cellular", "canvas_enabled", "canvas_on_cellular",
                 "soft_spatial", "soft_spatial_amount", "lyrics_on_player", "lyrics_order", "lyrics_off", "prefer_synced", "skip_censored",
-                "lyrics_translate", "lyrics_translate_to", "romanize_lyrics", "romanize_all", "sing_cellular", "sing_always_ready",
+                "lyrics_translate", "lyrics_translate_to", "romanize_lyrics", "romanize_all", "lyrics_furigana", "sing_cellular", "sing_always_ready",
                 "sing_cache_mb", "dj_flow", "release_notifications", "rewind_notification", "web_remote", "handoff_available",
                 "car_lyrics", "car_lyrics_style", "car_lyrics_on_phone", "car_lyrics_keep_title", "auto_grid", "nerd_stats",
                 "show_quality", "square_video_covers", "lyrics_on_mobile_data", "best_part_button", "show_video_switch",
@@ -2404,6 +2407,7 @@ class SettingsRepository(
             lyricsFileTranslation = p[K.lyricsFileTranslation] ?: d.lyricsFileTranslation,
             romanize = p.enum(K.romanize, d.romanize),
             romanizeAll = p[K.romanizeAll] ?: d.romanizeAll,
+            lyricsFurigana = p[K.lyricsFurigana] ?: d.lyricsFurigana,
             singOnCellular = p[K.singOnCellular] ?: d.singOnCellular,
             singAlwaysReady = p[K.singAlwaysReady] ?: d.singAlwaysReady,
             singCacheMb = p[K.singCacheMb] ?: d.singCacheMb,
@@ -3039,6 +3043,7 @@ class SettingsRepository(
     fun setLyricsFileTranslation(v: Boolean) = edit { it[K.lyricsFileTranslation] = v }
     fun setRomanize(v: RomanizeMode) = edit { it[K.romanize] = v.name }
     fun setRomanizeAll(v: Boolean) = edit { it[K.romanizeAll] = v }
+    fun setLyricsFurigana(v: Boolean) = edit { it[K.lyricsFurigana] = v }
     fun setSingOnCellular(v: Boolean) = edit { it[K.singOnCellular] = v }
     fun setSingAlwaysReady(v: Boolean) = edit { it[K.singAlwaysReady] = v }
     fun setSingCacheMb(v: Int) = edit { it[K.singCacheMb] = v }

@@ -5029,4 +5029,7 @@
     <string name="tour_183_also_songs_from">Kitaplık\'taki şarkılar, seçtiğin listelerden</string>
     <string name="tour_183_also_lock">Kilit ekranında Tekrarla ve Sıradaki</string>
     <string name="tour_183_also_uploads">Yüklemeler\'de yükleme ve silme</string>
+    <string name="show_furigana">Furigana göster</string>
+    <string name="hiragana_readings_above_kanji">Japonca şarkı sözlerinde kanjilerin üzerinde hiragana okunuşları</string>
+    <string name="furigana_uses_the_japanese_reading_data">Japonca okuma verilerini kullanır (aşağıda bir kez indirilir).</string>
 </resources>
