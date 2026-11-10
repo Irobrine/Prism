@@ -712,7 +712,7 @@ fun SweptLine(
 }
 
 /** Characters of [line] sung by [now], with a fractional part inside the word being sung ([offsets]: each word's span). */
-private fun sungChars(line: LyricLine, offsets: List<Pair<Int, Int>>, now: Long): Float {
+internal fun sungChars(line: LyricLine, offsets: List<Pair<Int, Int>>, now: Long): Float {
     var sung = 0f
     for ((i, w) in line.words.withIndex()) {
         val (s, e) = offsets[i]
@@ -904,7 +904,7 @@ internal fun LyricLineWords(
 /** Weights of [WeightSweptLine]: words still to come, and sung ones; the word being sung moves between them. */
 private const val LIGHT_WEIGHT = 300
 private const val SUNG_WEIGHT = 500
-private const val WEIGHT_STEP = 20
+internal const val WEIGHT_STEP = 20
 private const val WEIGHT_STEPS = (SUNG_WEIGHT - LIGHT_WEIGHT) / WEIGHT_STEP
 
 /**
