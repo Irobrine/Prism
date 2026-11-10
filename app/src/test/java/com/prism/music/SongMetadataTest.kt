@@ -17,8 +17,8 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * Artist, album and genre edits (1.8.3): kept on the phone by song, shown in place of the song's own, on one song or
- * many at once, and taken back; an edit follows a picked version too, and the file itself is never changed.
+ * Title, artist, album and genre edits (1.8.3): kept on the phone by song, shown in place of the song's own, on one song
+ * or many at once, and taken back; an edit follows a picked version too, and the file itself is never changed.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -41,14 +41,16 @@ class SongMetadataTest {
 
     @Test fun anEditShowsInPlaceOfTheSongsOwnAndStaysOnThePhone() {
         val store = SongMetadata(context)
-        store.set(listOf("a"), artist = "The Band (live)", album = "Roads (2026)", genre = "Rock")
+        store.set(listOf("a"), title = "Night Drive (Remastered)", artist = "The Band (live)", album = "Roads (2026)", genre = "Rock")
         val shown = store.shown(song)
         assertEquals("a", shown.id)
+        assertEquals("Night Drive (Remastered)", shown.title)
         assertEquals(listOf(ArtistRef("The Band (live)", "UCband")), shown.artists)
         assertEquals(AlbumRef("Roads (2026)", "MPREb_roads"), shown.album)
         assertEquals("Rock", store.genreOf("a"))
         // Read in at the next start, before anything shows it.
         val again = SongMetadata(context)
+        assertEquals("Night Drive (Remastered)", again.shown(song).title)
         assertEquals("The Band (live)", again.shown(song).artistText)
         assertEquals("Roads (2026)", again.shown(song).album?.title)
         assertEquals("Rock", again.genreOf("a"))
@@ -56,26 +58,37 @@ class SongMetadataTest {
 
     @Test fun oneChangeLeavesTheOthersAsTheyWere() {
         val store = SongMetadata(context)
-        store.set(listOf("a"), artist = "Ana", genre = "Jazz")
+        store.set(listOf("a"), title = "Night Drive (Mine)", artist = "Ana", genre = "Jazz")
         store.set(listOf("a"), album = "Blue")
-        assertEquals(SongMetadataEdit("Ana", "Blue", "Jazz"), store.of("a"))
+        assertEquals(SongMetadataEdit(title = "Night Drive (Mine)", artist = "Ana", album = "Blue", genre = "Jazz"), store.of("a"))
     }
 
     @Test fun severalSongsTakeTheTypedFieldsAtOnce() {
         val b = Song("b", "Bravo", listOf(ArtistRef("Bo")), AlbumRef("Other"))
         val store = SongMetadata(context)
-        store.set(listOf("a", "b", "a"), artist = "  The   Band  ", album = "Roads")
+        store.set(listOf("a", "b", "a"), title = "  Night   Drive  ", artist = "  The   Band  ", album = "Roads")
+        assertEquals("Night Drive", store.of("a")?.title)
+        assertEquals("Night Drive", store.of("b")?.title)
         assertEquals("The Band", store.of("a")?.artist)
         assertEquals("The Band", store.of("b")?.artist)
         assertEquals("Roads", store.shown(b).album?.title)
+        assertEquals("Night Drive", store.shown(b).title)
         // Nothing typed is no edit (not a blank name).
         store.set(listOf("a"), artist = "   ")
         assertEquals("The Band", store.of("a")?.artist)
     }
 
+    /** A field several songs share is the one the editor begins with; one they don't is left for the listener. */
+    @Test fun aValueSeveralSongsShareIsTheOneTheEditorShows() {
+        assertEquals("The Band", SongMetadataEdit.common(listOf("The Band", "The Band")))
+        assertEquals("Rock", SongMetadataEdit.common(listOf("Rock", "Rock", "Rock")))
+        assertEquals("", SongMetadataEdit.common(listOf("The Band", "Another Band")))
+        assertEquals("", SongMetadataEdit.common(listOf("", "")))
+    }
+
     @Test fun resetPutsTheSongBack() {
         val store = SongMetadata(context)
-        store.set(listOf("a"), artist = "Mine", album = "Mine", genre = "Mine")
+        store.set(listOf("a"), title = "Mine", artist = "Mine", album = "Mine", genre = "Mine")
         store.clear(listOf("a"))
         assertNull(store.of("a"))
         assertEquals(song, store.shown(song))
@@ -92,10 +105,10 @@ class SongMetadataTest {
         val versions = SongVersions(versionsPrefs)
         versions.set("vid", SongVersions.Pick("off", "The Band · Roads · 3:32", official))
         val store = SongMetadata(context)
-        store.set(listOf("vid"), artist = "My Band", album = "My Roads")
+        store.set(listOf("vid"), title = "My Night Drive", artist = "My Band", album = "My Roads")
         val shown = SongVersions.shownOf(video)
         assertEquals("vid", shown.id)
-        assertEquals("Night Drive", shown.title)
+        assertEquals("My Night Drive", shown.title)
         assertEquals(listOf(ArtistRef("My Band", "UCband")), shown.artists)
         assertEquals(AlbumRef("My Roads", "MPREb_roads"), shown.album)
     }

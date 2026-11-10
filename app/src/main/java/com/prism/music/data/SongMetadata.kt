@@ -11,30 +11,34 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * The listener's own artist, album and genre for a song (1.8.3): from its menu or Select many. Kept on this phone under
- * the song's id, so it follows the song everywhere it shows without changing the file or YouTube Music.
+ * The listener's own title, artist, album and genre for a song (1.8.3): from its menu or Select many. Kept on this phone
+ * under the song's id, so it follows the song everywhere it shows without changing the file or YouTube Music.
  */
 @Serializable
 data class SongMetadataEdit(
+    val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
     val genre: String? = null,
 ) {
-    val isEmpty: Boolean get() = artist.isNullOrBlank() && album.isNullOrBlank() && genre.isNullOrBlank()
+    val isEmpty: Boolean get() = title.isNullOrBlank() && artist.isNullOrBlank() && album.isNullOrBlank() && genre.isNullOrBlank()
 
     companion object {
-        /** Room for a long credit or album name (and a genre list), while keeping a typo from filling the phone. */
+        /** Room for a long title, credit or album name (and a genre list), while keeping a typo from filling the phone. */
         const val MAX_LENGTH = 160
 
         /** [value] tidied for keeping: trimmed, spaces run together, at most [MAX_LENGTH]; null when blank. */
         fun clean(value: String?): String? =
             value?.trim()?.replace(Regex("\\s+"), " ")?.take(MAX_LENGTH)?.trim()?.takeIf { it.isNotEmpty() }
+
+        /** The value every song gives, or "" when they differ (a multi-select's "Mixed"). */
+        fun common(values: List<String>): String = values.distinct().singleOrNull()?.takeIf { it.isNotBlank() }.orEmpty()
     }
 }
 
 /**
- * Artist, album and genre edits on this phone, by song id. An edit changes what Prism shows (lists, the player, the
- * notification) and the genre its mixes and smart playlists go by; the file and YouTube Music are left as they are.
+ * Title, artist, album and genre edits on this phone, by song id. An edit changes what Prism shows (lists, the player,
+ * the notification) and the genre its mixes and smart playlists go by; the file and YouTube Music are left as they are.
  * Kept in SharedPreferences, read in at start like [SongVersions]' picks, and shown in Compose at once.
  */
 class SongMetadata(context: Context) {
@@ -57,15 +61,23 @@ class SongMetadata(context: Context) {
      * Sets the fields given (null keeps the one a song has) on [ids]. A typo's spaces are tidied; an empty field is no
      * edit, not a blank name. [clear] takes every edit off the songs.
      */
-    fun set(ids: Collection<String>, artist: String? = null, album: String? = null, genre: String? = null) {
+    fun set(
+        ids: Collection<String>,
+        title: String? = null,
+        artist: String? = null,
+        album: String? = null,
+        genre: String? = null,
+    ) {
+        val t = SongMetadataEdit.clean(title)
         val a = SongMetadataEdit.clean(artist)
         val al = SongMetadataEdit.clean(album)
         val g = SongMetadataEdit.clean(genre)
-        if (a == null && al == null && g == null) return
+        if (t == null && a == null && al == null && g == null) return
         val next = _edits.value.toMutableMap()
         ids.distinct().forEach { id ->
             val old = next[id] ?: SongMetadataEdit()
             val merged = SongMetadataEdit(
+                title = t ?: old.title,
                 artist = a ?: old.artist,
                 album = al ?: old.album,
                 genre = g ?: old.genre,
@@ -75,7 +87,7 @@ class SongMetadata(context: Context) {
         save(ids, next)
     }
 
-    /** Puts the songs back to their own artist, album and genre. */
+    /** Puts the songs back to their own title, artist, album and genre. */
     fun clear(ids: Collection<String>) {
         if (ids.isEmpty()) return
         val next = _edits.value.toMutableMap()
@@ -83,10 +95,11 @@ class SongMetadata(context: Context) {
         save(ids, next)
     }
 
-    /** [song] with the listener's artist and album in place of its own (a picked version's, if any, shows as it is). */
+    /** [song] with the listener's title, artist and album in place of its own (a picked version's, if any, shows as it is). */
     fun shown(song: Song): Song {
         val e = shownEdits.value[song.id] ?: return song
         return song.copy(
+            title = e.title ?: song.title,
             // The song's first artist keeps its id, so its page still opens from the edited name.
             artists = e.artist?.let { listOf(ArtistRef(it, song.artists.firstOrNull()?.id)) } ?: song.artists,
             album = e.album?.let { AlbumRef(it, song.album?.id) } ?: song.album,
