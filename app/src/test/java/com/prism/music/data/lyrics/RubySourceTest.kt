@@ -29,11 +29,18 @@ class RubySourceTest {
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(6, 8, "なまえ")), merged)
     }
 
-    /** Only hiragana right after kanji: after kana or a space, or holding anything else, isn't a reading. */
+    @Test
+    fun findsReadingsPrintedWithFullWidthParenthesesAndASpace() {
+        val s = SourceFurigana.of("君 （きみ）の名前（なまえ）")!!
+        assertEquals("君の名前", s.clean)
+        assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(7, 9, "なまえ")), s.spans)
+    }
+
+    /** Only hiragana after kanji: after kana, or holding anything else, isn't a reading. */
     @Test
     fun doesNotTakeOtherParenthesesForReadings() {
         assertNull(SourceFurigana.of("食べる(たべる)"))
-        assertNull(SourceFurigana.of("君  (きみ)"))
+        assertNull(SourceFurigana.of("君  (笑)"))
         assertNull(SourceFurigana.of("君(笑)"))
         assertNull(SourceFurigana.of("君(ららららららら)"))
     }
