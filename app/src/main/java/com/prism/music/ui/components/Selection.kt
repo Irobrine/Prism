@@ -206,6 +206,7 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     val guest = together as? com.prism.music.playback.together.TogetherState.Guest
     var addingTo by remember { mutableStateOf<List<Song>?>(null) }
     var asking by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    var changingCover by remember { mutableStateOf<List<Song>?>(null) }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     fun downloaded(s: Song) = com.prism.music.download.rowDownloaded(s, downloads, standIns) { c.downloads.playsFromPhone(it) }
 
@@ -214,6 +215,9 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     }
     var tagging by remember { mutableStateOf<List<Song>?>(null) }
     tagging?.let { list -> TagPicker(list, null) { tagging = null; selection.clear() } }
+    changingCover?.let { list ->
+        CoverPickSheet(CoverFor.OfSongs(list, list.map { c.covers.songKey(it.id) })) { changingCover = null; selection.clear() }
+    }
     asking?.let { (text, go) ->
         AlertDialog(
             onDismissRequest = { asking = null },
@@ -267,6 +271,10 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
                 BarButton(PrismIcons.PlaylistAdd, tr(R.string.add_to_playlist), ink, enabled = forList.isNotEmpty()) { addingTo = forList }
                 val forTags = songs.filter(com.prism.music.data.TagStore::taggable)
                 BarButton(PrismIcons.Tag, tr(R.string.add_a_tag), ink, enabled = forTags.isNotEmpty()) { tagging = forTags }
+                // Change cover (1.8.3): one photo for every picked song that can have one (a live song's or an episode's
+                // own picture isn't its cover). Each song keeps its own, so an album's others aren't changed with it.
+                val forCover = songs.filter { !it.isEpisode && !it.isLive }
+                BarButton(PrismIcons.Photo, tr(R.string.change_cover), ink, enabled = forCover.isNotEmpty()) { changingCover = forCover }
                 val (likeThem, likeWhich) = SelectionPlan.like(songs, liked)
                 BarButton(
                     if (likeThem) PrismIcons.Heart else PrismIcons.HeartFilled, if (likeThem) tr(R.string.like) else tr(R.string.unlike), ink,
