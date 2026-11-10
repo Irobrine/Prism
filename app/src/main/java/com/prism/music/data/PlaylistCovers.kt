@@ -51,6 +51,22 @@ class PlaylistCovers(private val context: Context) {
     /** An album's own cover (#305), kept under the album's id; its songs show it too. */
     fun albumKey(id: String) = "album:$id"
 
+    /** A file album's own cover, kept under its key ("id:<MediaStore id>" or "edited:<title>"). */
+    fun localAlbumKey(id: String) = "localalbum:$id"
+
+    /** The picture picked for a file album (by its album key), else [fallback]. */
+    fun localAlbumArt(id: String, fallback: String?): String? = covers[localAlbumKey(id)] ?: fallback
+
+    /**
+     * A file song's album key, as Local files names its albums: the listener's edited album title when it has one, else
+     * Android's album id.
+     */
+    private fun fileAlbumKey(song: com.prism.music.data.model.Song): String? {
+        val track = com.prism.music.data.local.LocalMusic.shared?.track(song.id) ?: return null
+        val edited = SongMetadata.shared?.of(song.id)?.album?.trim()?.takeIf { it.isNotEmpty() }
+        return if (edited != null) "edited:${edited.lowercase()}" else "id:${track.albumId}"
+    }
+
     /**
      * #305: the picture to show for [song] wherever it shows: the one picked for it, else the one picked for its album,
      * else the cover of the version picked to play in its place (#328), else its own. Read in a composable, it follows a
@@ -58,12 +74,13 @@ class PlaylistCovers(private val context: Context) {
      */
     fun art(song: com.prism.music.data.model.Song): String? = picked(song) ?: SongVersions.shared?.coverOf(song.id) ?: song.thumbnail
 
-    /** The cover picked for [song] (or its album), if any. */
+    /** The cover picked for [song] (or its album), if any; a file's album is looked up by its [fileAlbumKey]. */
     fun picked(song: com.prism.music.data.model.Song): String? =
         // With no covers picked (most phones), no keys are made for each row drawn (the empty check is read too, so a
         // first pick still shows at once).
         if (covers.isEmpty()) null
         else covers[songKey(song.id)] ?: song.album?.id?.let { covers[albumKey(it)] }
+            ?: if (song.isLocal) fileAlbumKey(song)?.let { covers[localAlbumKey(it)] } else null
 
     /** An album's picture: the one picked for it (#305), else [fallback]. */
     fun albumArt(id: String, fallback: String?): String? = covers[albumKey(id)] ?: fallback

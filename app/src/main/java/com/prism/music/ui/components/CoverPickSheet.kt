@@ -45,8 +45,14 @@ import kotlinx.coroutines.withContext
 sealed class CoverFor(val key: String, val title: String, val original: String?) {
     /** Every cover this one change makes (a whole album's is one; several songs are one each). */
     open val keys: List<String> get() = listOf(key)
+    /** The same picture under more keys without making this a several-songs change (a file album's edited songs). */
+    open val alsoKeys: List<String> get() = emptyList()
     class OfSong(val song: Song, key: String) : CoverFor(key, song.title, song.thumbnail)
-    class OfAlbum(val id: String, title: String, thumbnail: String?, key: String) : CoverFor(key, title, thumbnail)
+    /** [shows] tells which playing songs are on this album: its own id, or a file album's MediaStore id. */
+    class OfAlbum(
+        val id: String, title: String, thumbnail: String?, key: String, val shows: (Song) -> Boolean = { it.album?.id == id },
+        override val alsoKeys: List<String> = emptyList(),
+    ) : CoverFor(key, title, thumbnail)
     /** [songs], with each one's cover [keys] (episodes and live songs are left out by the caller). */
     class OfSongs(val songs: List<Song>, val songKeys: List<String>) :
         CoverFor(songKeys.firstOrNull().orEmpty(), trp(R.plurals.n_songs, songs.size), songs.firstOrNull()?.thumbnail) {
@@ -78,12 +84,12 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val many = target.keys.size > 1
     val own = if (many) null else c.covers.custom(target.key)
-    val anyOwn = if (many) target.keys.any { c.covers.custom(it) != null } else own != null
+    val anyOwn = if (many) target.keys.any { c.covers.custom(it) != null } else own != null || target.alsoKeys.any { c.covers.custom(it) != null }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     fun refresh() {
         when (target) {
             is CoverFor.OfSong -> c.player.refreshCovers { it.id == target.song.id }
-            is CoverFor.OfAlbum -> c.player.refreshCovers { it.album?.id == target.id }
+            is CoverFor.OfAlbum -> c.player.refreshCovers(target.shows)
             is CoverFor.OfSongs -> {
                 val ids = target.songs.map { it.id }.toSet()
                 c.player.refreshCovers { it.id in ids }
@@ -93,7 +99,7 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val ok = c.covers.usePhoto(target.keys, uri)
+            val ok = c.covers.usePhoto(target.keys + target.alsoKeys, uri)
             if (ok) refresh()
             toast(if (ok) tr(R.string.cover_changed) else tr(R.string.couldn_t_use_that_picture))
             onDismiss()
@@ -157,7 +163,7 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
                 }
             }
             if (anyOwn) SheetAction(PrismIcons.Undo, tr(R.string.use_the_original)) {
-                target.keys.forEach { c.covers.reset(it) }
+                (target.keys + target.alsoKeys).forEach { c.covers.reset(it) }
                 refresh()
                 toast(tr(R.string.its_own_cover_again))
                 close {}
