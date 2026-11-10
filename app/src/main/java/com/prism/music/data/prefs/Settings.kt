@@ -1349,6 +1349,8 @@ data class AppSettings(
     val preferSynced: Boolean = true,
     /** Pass over sources whose lyrics star out swear words when another has them in full. */
     val skipCensored: Boolean = true,
+    /** Japanese lyrics' kanji: read by Kuromoji's IPADIC, or by Sudachi with the full SudachiDict (Settings → Lyrics). */
+    val japaneseEngine: com.prism.music.data.lyrics.roman.JapaneseEngine = com.prism.music.data.lyrics.roman.JapaneseEngine.IPADIC,
     /** A translation under each lyric line (machine translation, asked of Google Translate), when the song isn't in it. */
     val lyricsTranslate: Boolean = false,
     /** Language code to translate lyrics into; blank means the phone's language. */
@@ -1844,6 +1846,8 @@ class SettingsRepository(
         val lyricsOff = stringPreferencesKey("lyrics_off")
         val preferSynced = booleanPreferencesKey("prefer_synced")
         val skipCensored = booleanPreferencesKey("skip_censored")
+        /** Which Japanese dictionary reads lyrics' kanji (IPADIC or Sudachi's full SudachiDict). */
+        val japaneseEngine = stringPreferencesKey("japanese_engine")
         val lyricsTranslate = booleanPreferencesKey("lyrics_translate")
         val lyricsTranslateTo = stringPreferencesKey("lyrics_translate_to")
         val lyricsFileWords = booleanPreferencesKey("lyrics_file_words")
@@ -2300,6 +2304,8 @@ class SettingsRepository(
                 "kept_playlists",
                 // 1.8.1 (#296, #263): what Prism keeps of your listening.
                 "history_paused_until", "play_count_seconds", "play_count_account",
+                // Which Japanese dictionary reads lyrics' kanji (Settings → Lyrics): how Prism reads, not a look.
+                "japanese_engine",
             )
         }
     }
@@ -2412,6 +2418,7 @@ class SettingsRepository(
             lyricsOff = p[K.lyricsOff]?.split(",")?.mapNotNull { n -> LyricsSource.entries.firstOrNull { it.name == n } }?.toSet() ?: d.lyricsOff,
             preferSynced = p[K.preferSynced] ?: d.preferSynced,
             skipCensored = p[K.skipCensored] ?: d.skipCensored,
+            japaneseEngine = p.enum(K.japaneseEngine, d.japaneseEngine),
             lyricsTranslate = p[K.lyricsTranslate] ?: d.lyricsTranslate,
             lyricsTranslateTo = p[K.lyricsTranslateTo] ?: d.lyricsTranslateTo,
             lyricsFileWords = p[K.lyricsFileWords] ?: d.lyricsFileWords,
@@ -3051,6 +3058,7 @@ class SettingsRepository(
     fun setPreferSynced(v: Boolean) = edit { it[K.preferSynced] = v }
     fun setLyricsOff(v: Set<LyricsSource>) = edit { it[K.lyricsOff] = v.joinToString(",") { s -> s.name } }
     fun setSkipCensored(v: Boolean) = edit { it[K.skipCensored] = v }
+    fun setJapaneseEngine(v: com.prism.music.data.lyrics.roman.JapaneseEngine) = edit { it[K.japaneseEngine] = v.name }
     fun setLyricsTranslate(v: Boolean) = edit { it[K.lyricsTranslate] = v }
     fun setLyricsTranslateTo(v: String) = edit { it[K.lyricsTranslateTo] = v }
     fun setLyricsFileWords(v: Boolean) = edit { it[K.lyricsFileWords] = v }
