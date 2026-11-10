@@ -1,5 +1,7 @@
 package com.prism.music.data.lyrics.roman
 
+import com.prism.music.data.lyrics.RubySpan
+import com.prism.music.data.lyrics.isKanji
 import com.worksap.nlp.sudachi.Config
 import com.worksap.nlp.sudachi.Dictionary
 import com.worksap.nlp.sudachi.Morpheme
@@ -18,7 +20,7 @@ import java.io.File
 class SudachiJapanese private constructor(
     private val dictionary: Dictionary,
     private val tokenizer: Tokenizer,
-) : JapaneseReader {
+) : JapaneseReader, RubyReader {
     private val lock = Any()
     private var closed = false
 
@@ -60,6 +62,58 @@ class SudachiJapanese private constructor(
 
     override fun romanize(text: String): String = pieces(text).joinToString("")
 
+    /**
+     * Each run of kanji in [text] with the hiragana it's read as: 君の名は → きみ above 君, な above 名. Okurigana and
+     * other kana shared by the word and its reading are left out of the reading, so only the kanji is annotated.
+     */
+    override fun furigana(text: String): List<RubySpan> {
+        if (text.isEmpty()) return emptyList()
+        val out = ArrayList<RubySpan>()
+        // As [pieces]: read the digits as Japanese numerals, so a counter keeps its reading (2人 is ふたり).
+        val tokens = synchronized(lock) {
+            runCatching { tokenizer.tokenize(Tokenizer.SplitMode.C, numbersAsKanji(text)) }.getOrElse {
+                android.util.Log.w("PrismRoman", "Sudachi couldn't read a line for furigana: $it")
+                return emptyList()
+            }
+        }
+        for (t in tokens) {
+            val at = t.begin()
+            val surface = t.surface()
+            if (at < 0 || at + surface.length > text.length) continue
+            if (surface.none(::isKanji)) continue
+            val reading = t.readingForm()
+            if (reading.isBlank() || reading == "*") continue
+            val surfaceKana = Kana.toKatakana(surface)
+            var readingKana = Kana.toKatakana(reading)
+            var start = 0
+            var end = surface.length
+            // Kana the word shares with its reading at either end (お茶 → オチャ, 食べる → タベル) belongs to those
+            // characters, not to the kanji between them.
+            while (start < end && surfaceKana[start].let(Kana::isKana) && readingKana.firstOrNull() == surfaceKana[start]) {
+                start++
+                readingKana = readingKana.drop(1)
+            }
+            while (end > start && surfaceKana[end - 1].let(Kana::isKana) && readingKana.lastOrNull() == surfaceKana[end - 1]) {
+                end--
+                readingKana = readingKana.dropLast(1)
+            }
+            if (readingKana.isBlank()) continue
+            // A number on screen stays a number: its furigana goes above the kanji the line actually has (2人's ふたり
+            // above 人), not above the digit.
+            var firstKanji = -1
+            var lastKanji = -1
+            for (i in at + start until at + end) {
+                if (isKanji(text[i])) {
+                    if (firstKanji < 0) firstKanji = i
+                    lastKanji = i
+                }
+            }
+            if (firstKanji < 0) continue
+            out += RubySpan(firstKanji, lastKanji + 1, toHiragana(readingKana))
+        }
+        return out
+    }
+
     /** The word's reading spelled out, or null when it isn't Japanese. */
     private fun romaji(t: Morpheme): String? {
         val surface = t.surface()
@@ -76,6 +130,35 @@ class SudachiJapanese private constructor(
     private fun reading(t: Morpheme): String {
         val reading = t.readingForm()
         return Kana.toKatakana(if (reading.isNotBlank() && reading != "*") reading else t.surface())
+    }
+
+    private fun isNumber(c: Char) = c in '0'..'9' || c in '０'..'９'
+
+    /** [text] with each Arabic or full-width digit as a kanji numeral: the same length, one character for one. */
+    private fun numbersAsKanji(text: String): String {
+        if (text.none(::isNumber)) return text
+        return buildString(text.length) {
+            for (c in text) append(
+                when (c) {
+                    '0', '０' -> '〇'
+                    '1', '１' -> '一'
+                    '2', '２' -> '二'
+                    '3', '３' -> '三'
+                    '4', '４' -> '四'
+                    '5', '５' -> '五'
+                    '6', '６' -> '六'
+                    '7', '７' -> '七'
+                    '8', '８' -> '八'
+                    '9', '９' -> '九'
+                    else -> c
+                },
+            )
+        }
+    }
+
+    /** [s] in hiragana (the dictionary's readings are katakana). */
+    private fun toHiragana(s: String): String = buildString {
+        for (c in s) append(if (c.code in 0x30A1..0x30F6) (c.code - 0x60).toChar() else c)
     }
 
     /** Words that are said joined to the one before (verb endings, auxiliaries, suffixes): "mite", "aishiteru". */
