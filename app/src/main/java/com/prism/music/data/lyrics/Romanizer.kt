@@ -12,6 +12,7 @@ import com.prism.music.data.lyrics.roman.Hangul
 import com.prism.music.data.lyrics.roman.Japanese
 import com.prism.music.data.lyrics.roman.JapaneseKanji
 import com.prism.music.data.lyrics.roman.Kana
+import com.prism.music.data.lyrics.roman.RubyReader
 import com.prism.music.data.lyrics.roman.Script
 import com.prism.music.data.lyrics.roman.plainLatin
 import com.prism.music.data.lyrics.RubySpan
@@ -190,13 +191,19 @@ class Romanizer(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<RubySpan>>?) = size > 128
     }
 
+    // Kuromoji's IPADIC also gives the kana over the kanji. It's reused when it's the reader already loaded; otherwise it's
+    // loaded only if the active reader can't give furigana, and let go a few minutes after the last line.
+    private val furiganaLock = Mutex()
+    @Volatile private var furiganaJapanese: Japanese? = null
+    private var furiganaReleaseJob: Job? = null
+
     /**
      * Each line's kanji with the hiragana above it ([RubySpan]), line for line; null while the Japanese reading data
      * isn't on the phone. Lines that need none come back empty.
      */
     suspend fun furigana(lines: List<LyricLine>): List<List<RubySpan>>? {
         if (lines.none { hasKanji(it.text) }) return emptyList()
-        val reader = japaneseReader() ?: return null
+        val reader = furiganaReader() ?: return null
         return withContext(Dispatchers.Default) {
             lines.map { line ->
                 synchronized(rubyMemory) { rubyMemory[line.text] } ?: reader.furigana(JapaneseKanji.fromChinese(line.text)).also { spans ->
@@ -204,6 +211,27 @@ class Romanizer(
                 }
             }
         }
+    }
+
+    /**
+     * The reader that gives the kana above the kanji: one that offers [RubyReader] itself (Sudachi), Kuromoji's
+     * [Japanese] wrapped, or the IPADIC reader loaded here when another reader is in use. Null while no Japanese
+     * dictionary that can give kana is on the phone.
+     */
+    private suspend fun furiganaReader(): RubyReader? {
+        japaneseForTests?.let { japanese -> return RubyReader { text -> japanese.furigana(text) } }
+        val reader = japaneseReader()
+        if (reader is Japanese) return RubyReader { text -> reader.furigana(text) }
+        (reader as? RubyReader)?.let { return it }
+        if (!models.ready(ModelStore.Model.JAPANESE)) return null
+        val japanese = furiganaLock.withLock {
+            furiganaJapanese ?: runCatching { withContext(Dispatchers.Default) { Japanese.load(models.dir(ModelStore.Model.JAPANESE)) } }
+                .onFailure { android.util.Log.w("PrismRoman", "Couldn't load the Japanese dictionary for furigana: $it") }
+                .getOrNull()?.also { furiganaJapanese = it }
+        } ?: return null
+        furiganaReleaseJob?.cancel()
+        furiganaReleaseJob = scope.launch { delay(RELEASE_AFTER_MS); furiganaLock.withLock { furiganaJapanese = null } }
+        return RubyReader { text -> japanese.furigana(text) }
     }
 
     /**

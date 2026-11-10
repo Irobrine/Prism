@@ -33,7 +33,6 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
-import com.prism.music.data.ModelStore
 import com.prism.music.data.lyrics.LyricLine
 import com.prism.music.data.lyrics.RubySpan
 import com.prism.music.data.lyrics.hasKanji
@@ -66,9 +65,9 @@ fun rememberFurigana(state: LyricsState): List<List<RubySpan>>? {
         Script.KANA in Script.foreignIn(state.song.title) || lines.any { Script.KANA in Script.foreignIn(it.text) }
     }
     if (!japanese || !lines.any { hasKanji(it.text) }) return null
-    val models by c.models.states.collectAsState()
-    val ready = models[ModelStore.Model.JAPANESE] == ModelStore.State.Ready
-    val ruby by produceState<List<List<RubySpan>>?>(null, state.song.id, lines, ready) {
+    val modelStates by c.models.states.collectAsState()
+    val ready = remember(modelStates, settings) { c.romanizer.japaneseReady }
+    val ruby by produceState<List<List<RubySpan>>?>(null, state.song.id, lines, ready, settings) {
         value = if (!ready) null else runCatching { c.romanizer.furigana(lines) }
             .onFailure { android.util.Log.w("PrismFurigana", "Couldn't read the kanji: $it") }
             .getOrNull()
