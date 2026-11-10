@@ -45,6 +45,10 @@ import kotlin.math.roundToInt
 /** How big a reading is against the line it sits over, and how tall its row is. */
 private const val RUBY_SCALE = 0.45f
 private const val RUBY_LINE = 0.85f
+/** How far above the line's baseline a reading sits, as a share of the line's size (its kanji nearly touch it). */
+private const val RUBY_GAP = 0.82f
+/** How much of its kanji's width a reading may use, leaving room between it and the readings beside it. */
+private const val RUBY_FIT = 0.92f
 
 /**
  * Each line's kanji and its hiragana reading, line for line, when furigana is on and this is a Japanese song with the
@@ -140,22 +144,31 @@ internal fun RubyOverlay(
     if (ruby.isNullOrEmpty() || room == null) { content(modifier); return }
     val density = LocalDensity.current
     val rubySize = style.fontSize * RUBY_SCALE
+    val fontPx = with(density) { if (style.fontSize.isSp) style.fontSize.toPx() else 0f }
     val pad = with(density) { room.sp.toDp() }
     val measurer = rememberTextMeasurer()
     val rubyStyle = remember(style, rubySize) { style.rubyStyle(rubySize) }
-    // Each reading, split where its kanji wrap onto another row. A growing line's reading is measured at each weight step
-    // too, so it thickens with the word it's over.
+    // Each reading, split where its kanji wrap onto another row. One that's long for the kanji under it (a single kanji
+    // read as こころ, say) shrinks to fit their width, so the readings of consecutive kanji don't run into each other.
+    // A growing line's reading is measured at each weight step too, so it thickens with the word it's over.
     val pieces = remember(layout, ruby) { layout?.let { rubyPieces(it, ruby) }.orEmpty() }
     val growSteps = if (motion?.kind == SungKind.GROW) ((motion.sungWeight - motion.lightWeight) / WEIGHT_STEP).coerceAtLeast(0) else 0
-    val measured = remember(pieces, rubyStyle, motion?.kind, motion?.lightWeight, motion?.sungWeight, growSteps) {
-        pieces.map { piece ->
-            val readings = if (growSteps == 0) listOf(measurer.measure(AnnotatedString(piece.reading), rubyStyle, maxLines = 1))
-            else (0..growSteps).map { k ->
-                val weight = FontWeight((motion?.lightWeight ?: 0) + k * WEIGHT_STEP)
-                measurer.measure(AnnotatedString(piece.reading), rubyStyle.copy(fontWeight = weight), maxLines = 1)
+    val measured = remember(pieces, rubyStyle, layout, motion?.kind, motion?.lightWeight, motion?.sungWeight, growSteps) {
+        layout?.let { l ->
+            pieces.map { piece ->
+                val span = (l.getBoundingBox(piece.end).right - l.getBoundingBox(piece.start).left).coerceAtLeast(0f)
+                val probeWeight = if (growSteps > 0) FontWeight(motion?.sungWeight ?: 0) else FontWeight.Normal
+                val probe = measurer.measure(AnnotatedString(piece.reading), rubyStyle.copy(fontWeight = probeWeight), maxLines = 1)
+                val fit = if (span > 0f && probe.size.width > 0f) (span * RUBY_FIT / probe.size.width).coerceIn(0f, 1f) else 1f
+                val fitted = rubyStyle.copy(fontSize = rubySize * fit, lineHeight = rubySize * fit * RUBY_LINE)
+                val readings = if (growSteps == 0) listOf(measurer.measure(AnnotatedString(piece.reading), fitted, maxLines = 1))
+                else (0..growSteps).map { k ->
+                    val weight = FontWeight((motion?.lightWeight ?: 0) + k * WEIGHT_STEP)
+                    measurer.measure(AnnotatedString(piece.reading), fitted.copy(fontWeight = weight), maxLines = 1)
+                }
+                piece to readings
             }
-            piece to readings
-        }
+        }.orEmpty()
     }
     // Each word's span in the line, for timing a reading to the word it's over.
     val offsets = remember(motion?.line) { motion?.line?.wordOffsets().orEmpty() }
@@ -168,7 +181,7 @@ internal fun RubyOverlay(
             val sung = if (motion != null && (motion.kind == SungKind.SWEEP || motion.kind == SungKind.GROW)) {
                 sungChars(motion.line, offsets, now)
             } else 0f
-            for ((piece, readings) in measured) drawRuby(l, piece, readings, roomPx, color, fill, l.size.width.toFloat(), motion, offsets, now, sung)
+            for ((piece, readings) in measured) drawRuby(l, piece, readings, roomPx, fontPx, color, fill, l.size.width.toFloat(), motion, offsets, now, sung)
         }
     }
 }
@@ -267,7 +280,7 @@ private class LineFill(
 }
 
 private fun DrawScope.drawRuby(
-    layout: TextLayoutResult, piece: RubyPiece, readings: List<TextLayoutResult>, room: Float, color: Color,
+    layout: TextLayoutResult, piece: RubyPiece, readings: List<TextLayoutResult>, room: Float, fontPx: Float, color: Color,
     fill: Brush?, lineWidth: Float, motion: RubyMotion?, offsets: List<Pair<Int, Int>>, now: Long, sung: Float,
 ) {
     val first = layout.getBoundingBox(piece.start)
@@ -280,8 +293,9 @@ private fun DrawScope.drawRuby(
     val center = (first.left + last.right) / 2f
     val w = reading.size.width
     val x = (center - w / 2f).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
-    // Above the row's letters; [room] is the padding kept above the text for it.
-    val y = (room + first.top - reading.size.height).coerceAtLeast(0f)
+    // Above the row's letters, by the reading's baseline so it sits close to the kanji (and still clear of the row above).
+    val baseline = layout.getLineBaseline(layout.getLineForOffset(piece.start))
+    val y = (room + baseline - fontPx * RUBY_GAP - reading.firstBaseline).coerceAtLeast(0f)
     val at = Offset(x, y)
     // The sung part in the look's fill: a Color fills' gradient runs across the whole line, as it does under the kanji.
     fun drawLit(alpha: Float = 1f, fadeFrom: Float = Float.NEGATIVE_INFINITY, fadeTo: Float = Float.POSITIVE_INFINITY) {
