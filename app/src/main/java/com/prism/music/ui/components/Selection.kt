@@ -1,10 +1,12 @@
 package com.prism.music.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +44,7 @@ import com.prism.music.R
 import com.prism.music.data.model.Song
 import com.prism.music.tr
 import com.prism.music.trp
+import com.prism.music.ui.theme.GlassSurface
 import com.prism.music.ui.theme.LocalAppSettings
 import com.prism.music.ui.theme.LocalContainer
 import com.prism.music.ui.theme.PrismIcons
@@ -179,8 +182,11 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     }
 
     val glass = LocalAppSettings.current.glassEverywhere
-    val (ink, action) = barInk(glass)
-    BarSurface(glass, RoundedCornerShape(24.dp), modifier.widthIn(max = 720.dp).fillMaxWidth().testTag("selectionBar")) {
+    // The bar takes the theme's accent (and glass follows it), rather than the inverse colors of a passing note.
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+    val (ink, action) = if (glass) MaterialTheme.colorScheme.onSurface to accent else onAccent to onAccent
+    SelectionBarSurface(glass, RoundedCornerShape(24.dp), modifier.widthIn(max = 720.dp).fillMaxWidth().testTag("selectionBar")) {
         Column(
             // Every touch on the bar stays on it (the list under it mustn't get one).
             Modifier.pointerInput(Unit) {
@@ -198,9 +204,11 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
                 )
                 if (selection.scope?.songs.orEmpty().size > 1) PrismTextButton({ selection.all() }) { Text(tr(R.string.all), color = action) }
             }
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+            // Every action stays on screen: wrapping onto more lines instead of scrolling off the edge of a phone.
+            FlowRow(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 val none = songs.isEmpty()
                 BarButton(PrismIcons.PlaylistPlay, tr(R.string.play_next), ink, enabled = !none) {
@@ -248,6 +256,14 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** The Select many bar's surface: the theme's accent, in glass tinted with it when "Glass everywhere" is on. */
+@Composable
+private fun SelectionBarSurface(glass: Boolean, shape: RoundedCornerShape, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    if (glass) GlassSurface(modifier, shape = shape, tint = accent.copy(alpha = 0.40f), elevation = 6.dp) { content() }
+    else Box(modifier.clip(shape).background(accent)) { content() }
 }
 
 @Composable
