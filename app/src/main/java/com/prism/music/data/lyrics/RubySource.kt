@@ -2,12 +2,12 @@ package com.prism.music.data.lyrics
 
 /**
  * A line whose source writes furigana in parentheses right after the kanji it belongs to, as KuGou does:
- * 君(きみ)の名前(なまえ). [clean] is the line with those readings taken out, so the dictionary reads the words without
- * them; [spans] are the source's readings at the line's own offsets. [merge] keeps those readings and fills the rest of
- * the line with the dictionary's.
+ * 君(きみ)の名前(なまえ) — with either kind of parentheses, and spaces before them allowed. [clean] is the line with
+ * those readings taken out, so the dictionary reads the words without them; [spans] are the source's readings at the
+ * line's own offsets. [merge] keeps those readings and fills the rest of the line with the dictionary's.
  *
- * Only hiragana directly after a run of kanji is taken for a reading: parentheses elsewhere (after kana, after a space,
- * or holding anything but hiragana, like (笑) or (PV)) are not furigana and stay in the line for the dictionary.
+ * Only hiragana after a run of kanji is taken for a reading: parentheses elsewhere (after kana, after a line break, or
+ * holding anything but hiragana, like (笑) or (PV)) are not furigana and stay in the line for the dictionary.
  */
 internal class SourceFurigana private constructor(
     val clean: String,
@@ -26,7 +26,7 @@ internal class SourceFurigana private constructor(
         return (spans + fromDictionary).sortedBy { it.start }
     }
 
-    private class Found(val start: Int, val end: Int, val open: Int, val close: Int, val reading: String)
+    private class Found(val start: Int, val end: Int, val from: Int, val close: Int, val reading: String)
 
     companion object {
         /** The line's source furigana and its text without it; null when the line has none. */
@@ -38,18 +38,20 @@ internal class SourceFurigana private constructor(
                 val start = i
                 while (i < text.length && isKanji(text[i])) i++
                 val end = i
-                val close = when (text.getOrNull(i)) {
+                var open = i
+                while (open < text.length && text[open].isWhitespace()) open++
+                val close = when (text.getOrNull(open)) {
                     '(' -> ')'
                     '（' -> '）'
                     else -> null
                 } ?: continue
-                var j = i + 1
+                var j = open + 1
                 while (j < text.length && isReading(text[j])) j++
-                if (j == i + 1 || j >= text.length || text[j] != close) continue
-                val reading = text.substring(i + 1, j)
+                if (j == open + 1 || j >= text.length || text[j] != close) continue
+                val reading = text.substring(open + 1, j)
                 // A reading can be longer than its kanji (今日 → きょう, 志 → こころざし), but not a whole phrase.
                 if (reading.length > (end - start) * 6) continue
-                found += Found(start, end, i, j + 1, reading)
+                found += Found(start, end, end, j + 1, reading)
                 i = j + 1
             }
             if (found.isEmpty()) return null
@@ -59,7 +61,7 @@ internal class SourceFurigana private constructor(
             var next = 0
             while (at < text.length) {
                 val annotation = found.getOrNull(next)
-                if (annotation != null && at == annotation.open) {
+                if (annotation != null && at == annotation.from) {
                     at = annotation.close
                     next++
                     continue
