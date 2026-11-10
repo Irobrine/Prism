@@ -117,6 +117,7 @@ import com.prism.music.data.lyrics.LyricsRepository
 import com.prism.music.data.lyrics.RubySpan
 import com.prism.music.data.model.Song
 import com.prism.music.data.prefs.LyricsSource
+import com.prism.music.data.shown
 import com.prism.music.ui.theme.LocalContainer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -1558,9 +1559,14 @@ private fun SearchAsPane(state: LyricsState, sources: List<LyricsSource>, onSear
     val scheme = MaterialTheme.colorScheme
     val ui = com.prism.music.ui.theme.LocalUi.current
     val current = state.searchAs
+    // A picked version is what plays (and what the song shows, #328): its own title and artist are the ones its
+    // lyrics are likely under, so they fill the fields unless the listener already chose another name.
+    val searchSong = state.song.shown
     var open by remember(state.song.id) { mutableStateOf(false) }
-    var title by remember(state.song.id) { mutableStateOf(current?.first ?: state.song.title) }
-    var artist by remember(state.song.id) { mutableStateOf(current?.second?.ifBlank { null } ?: state.song.primaryArtist) }
+    var title by remember(state.song.id, searchSong.title) { mutableStateOf(current?.first ?: searchSong.title) }
+    var artist by remember(state.song.id, searchSong.primaryArtist) {
+        mutableStateOf(current?.second?.ifBlank { null } ?: searchSong.primaryArtist)
+    }
     Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp).fillMaxWidth().pane(ui.card, scheme.surfaceContainerHigh)) {
         Row(
             Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 16.dp, vertical = 11.dp),
