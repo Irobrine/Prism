@@ -1344,19 +1344,23 @@ fun LyricsPanel(
             // Japanese kanji were spelled out by Google (no reading data yet): offer the proper readings.
             val needsJapanese by c.romanizer.needsJapanese.collectAsState()
             val models by c.models.states.collectAsState()
-            val ja = models[com.prism.music.data.ModelStore.Model.JAPANESE]
+            // The dictionary the listener chose in Settings → Lyrics: Kuromoji's IPADIC, or Sudachi's full SudachiDict.
+            val jaModel = com.prism.music.ui.theme.LocalAppSettings.current.japaneseEngine.model
+            val ja = models[jaModel]
             if (roman != null && needsJapanese && ja != com.prism.music.data.ModelStore.State.Ready) {
                 val scope = rememberCoroutineScope()
                 Text(
                     when (ja) {
                         is com.prism.music.data.ModelStore.State.Downloading -> tr(R.string.downloading_japanese_kanji_readings, (ja.fraction * 100).toInt())
                         is com.prism.music.data.ModelStore.State.Failed -> tr(R.string.couldn_t_download_the_japanese_kanji)
-                        else -> tr(R.string.better_romaji_for_japanese_tap_to)
+                        else -> if (jaModel == com.prism.music.data.ModelStore.Model.SUDACHI)
+                            tr(R.string.only_for_japanese_songs, com.prism.music.data.ModelStore.Model.sizeText(jaModel))
+                        else tr(R.string.better_romaji_for_japanese_tap_to)
                     },
                     style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(8.dp))
                         .clickable(enabled = ja !is com.prism.music.data.ModelStore.State.Downloading) {
-                            scope.launch { c.models.download(com.prism.music.data.ModelStore.Model.JAPANESE) }
+                            scope.launch { c.models.download(jaModel) }
                         }.padding(vertical = 6.dp),
                 )
             }

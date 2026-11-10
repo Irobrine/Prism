@@ -230,6 +230,10 @@ dependencies {
     // Japanese lyrics' kanji readings for romanization (Apache-2.0). Its 13 MB dictionary isn't packed into the APK
     // (see packaging below): it's downloaded on first use (ModelStore). Tests read it from the jar.
     implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
+    // Sudachi (Apache-2.0), the other reader for Japanese lyrics' kanji (Settings → Lyrics): a fuller dictionary, the
+    // full SudachiDict, downloaded on first use from its own release (ModelStore.Model.SUDACHI), with its LEGAL notices.
+    // Its settings JSON and double-array trie come with it (javax.json, jdartsclone; both in licenses).
+    implementation("com.worksap.nlp:sudachi:0.8.2")
     // Sing's vocal separation (Spleeter) runs on ONNX Runtime (MIT). Its native libraries (13+ MB per CPU type) aren't
     // packed into the APK (see packaging below): they're downloaded with Sing's model on first use (ModelStore).
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.31.0")

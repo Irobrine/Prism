@@ -956,6 +956,14 @@
     <string name="ipadic_downloaded_with_japanese_reading_data">IPADIC (downloaded with Japanese reading data)</string>
     <string name="nara_institute_of_science_and_technology">Nara Institute of Science and Technology</string>
     <string name="ipadic_license">IPADIC license</string>
+    <!-- Sudachi, the other Japanese reader (Settings → Lyrics): names as they are in every language. -->
+    <string name="sudachi_japanese_analyzer" translatable="false">Sudachi (Japanese analyzer)</string>
+    <string name="sudachi_dict_full" translatable="false">SudachiDict full</string>
+    <string name="works_applications" translatable="false">Works Applications Co., Ltd.</string>
+    <string name="oracle" translatable="false">Oracle</string>
+    <string name="javax_json_sudachi_s_settings" translatable="false">javax.json (Sudachi\'s settings)</string>
+    <string name="darts_clone_sudachi_s_trie" translatable="false">Darts-clone (jdartsclone)</string>
+    <string name="cddl_1_1_or_gpl_2_classpath" translatable="false">CDDL 1.1 or GPL 2 with Classpath Exception</string>
     <string name="material_3_adaptive_androidx_window">Material 3 adaptive, AndroidX Window</string>
     <string name="songrec_song_recognition_s_audio_fingerprint">SongRec (song recognition\'s audio fingerprint, ported to Kotlin)</string>
     <string name="marin_m">Marin M.</string>
@@ -1854,6 +1862,7 @@
     <string name="romanize_my_own_language_too">Romanize my own language too</string>
     <string name="romanization_native_script">romanization native script</string>
     <string name="japanese_kanji_readings">Japanese kanji readings</string>
+    <string name="ipadic" translatable="false">IPADIC</string>
     <string name="romaji_kanji_dictionary_download_kuromoji_japane">romaji kanji dictionary download kuromoji japanese reading data</string>
     <string name="sing">Sing</string>
     <string name="sing_s_voice_separation">Sing\'s voice separation</string>

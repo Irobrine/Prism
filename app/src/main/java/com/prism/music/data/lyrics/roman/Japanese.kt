@@ -17,12 +17,12 @@ import java.io.InputStream
  * which [Kana] then spells out in Hepburn, with the particles said as they're said (は "wa", へ "e", を "o") and a space
  * between words ("君の名は" → "kimi no na wa").
  */
-class Japanese private constructor(private val tokenizer: Tokenizer) {
+class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseReader {
     /**
      * Each character of [text] spelled out: a word's whole reading on its first character (with a space before it when
      * it starts a new word), nothing on the rest.
      */
-    fun pieces(text: String): List<String> {
+    override fun pieces(text: String): List<String> {
         val out = MutableList(text.length) { text[it].toString() }
         val tokens = tokenizer.tokenize(text)
         var first = true
@@ -50,7 +50,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
         return out
     }
 
-    fun romanize(text: String): String = pieces(text).joinToString("")
+    override fun romanize(text: String): String = pieces(text).joinToString("")
 
     /** The word's reading spelled out, or null when it isn't Japanese. */
     private fun romaji(t: Token): String? {

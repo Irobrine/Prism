@@ -2116,13 +2116,21 @@ private val TRANSLATE_LANGUAGES = listOf(
     "tl" to tr(R.string.filipino), "ja" to tr(R.string.japanese), "ko" to tr(R.string.korean), tr(R.string.zh_cn) to tr(R.string.chinese_simplified), tr(R.string.zh_tw) to tr(R.string.chinese_traditional),
 )
 
-/** Kuromoji's dictionary, for Japanese lyrics' kanji: download, progress, or remove. */
+/**
+ * Japanese lyrics' kanji: which on-phone dictionary reads them — Kuromoji's IPADIC (13 MB) or Sudachi with the full
+ * SudachiDict (137 MB) — then that dictionary's download, progress, or removal.
+ */
 @Composable
 private fun JapaneseReadingData() {
     val c = LocalContainer.current
+    val s = LocalAppSettings.current
+    val prefs = c.settings
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val states by c.models.states.collectAsState()
-    val m = com.prism.music.data.ModelStore.Model.JAPANESE
+    val engine = s.japaneseEngine
+    fun label(e: com.prism.music.data.lyrics.roman.JapaneseEngine) =
+        if (e == com.prism.music.data.lyrics.roman.JapaneseEngine.SUDACHI) tr(R.string.sudachi_dict_full) else tr(R.string.ipadic)
+    val m = engine.model
     val state = states[m]
     val subtitle = when (state) {
         com.prism.music.data.ModelStore.State.Ready -> tr(R.string.on_this_phone_tap_to_remove, formatMb(c.models.sizeOnPhone(m)))
@@ -2130,7 +2138,9 @@ private fun JapaneseReadingData() {
         is com.prism.music.data.ModelStore.State.Failed -> tr(R.string.couldn_t_download_it_tap_to)
         else -> tr(R.string.only_for_japanese_songs, com.prism.music.data.ModelStore.Model.sizeText(m))
     }
-    Item(tr(R.string.japanese_kanji_readings), subtitle, info = tr(R.string.only_japanese_needs_this_its_kanji), onClick = {
+    Label(tr(R.string.japanese_kanji_readings), info = tr(R.string.only_japanese_needs_this_its_kanji))
+    Chips(com.prism.music.data.lyrics.roman.JapaneseEngine.entries, engine, ::label) { prefs.setJapaneseEngine(it) }
+    Item(label(engine), subtitle, onClick = {
         when (state) {
             com.prism.music.data.ModelStore.State.Ready -> c.models.delete(m)
             is com.prism.music.data.ModelStore.State.Downloading -> {}
