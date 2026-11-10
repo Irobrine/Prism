@@ -417,6 +417,7 @@ object SettingsIndex {
         SettingEntry(D, tr(R.string.downloads), tr(R.string.download_liked_songs_automatically), tr(R.string.offline_likes)),
         SettingEntry(D, tr(R.string.downloads), tr(R.string.download_songs_when_you_play_them), tr(R.string.download_on_stream_keywords)),
         SettingEntry(D, tr(R.string.downloads), tr(R.string.download_videos_when_you_play_them), tr(R.string.download_on_stream_keywords)),
+        SettingEntry(D, tr(R.string.downloads), tr(R.string.download_songs_ahead), tr(R.string.download_ahead_keywords)),
         SettingEntry(D, tr(R.string.downloads), tr(R.string.keep_playlists_downloaded), tr(R.string.keep_playlists_keywords)),
         // #314 (1.8.1).
         SettingEntry(D, tr(R.string.your_own_song_files), tr(R.string.use_your_own_song_files), tr(R.string.own_files_keywords)),

@@ -292,6 +292,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         scope.launch { c.settings.flow.map { it.autoplay }.distinctUntilChanged().drop(1).collect { onAutoplayChanged(it) } }
         // "Keep playing videos" switched off: songs already lined up as their videos go back to songs.
         scope.launch { c.settings.flow.map { it.videoContinues }.distinctUntilChanged().drop(1).collect { if (it) armNextVideo() else disarmVideos() } }
+        // Download songs ahead: a new number takes effect for the queue playing now.
+        scope.launch { c.settings.flow.map { it.downloadQueueAhead }.distinctUntilChanged().drop(1).collect { downloadUpcoming() } }
         // #281: videos off on mobile data. Nothing happens here for anyone who hasn't chosen it: it never changes.
         scope.launch {
             kotlinx.coroutines.flow.combine(
@@ -1631,6 +1633,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 for (id in ids) withContext(Dispatchers.IO) { c.warmUp(id, whole = true, cellular = c.settings.current.preloadCellular) }
             }
         }
+        // Settings → Downloads → Download songs ahead: the next few in the queue saved for offline too.
+        downloadUpcoming()
         if (next.startsWith(Song.LOCAL_PREFIX) || next.startsWith(Song.RSS_PREFIX)) return
         // Its "Most replayed" curve (for the best part), ready before it plays, and the one after's (a double skip).
         val coming = listOfNotNull(player.getMediaItemAt(i).toSong(), upcoming(2).getOrNull(1)?.toSong())
@@ -1653,6 +1657,21 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             }
         }
         armNextVideo()
+    }
+
+    /**
+     * Settings → Downloads → Download songs ahead: the songs after the one playing are kept downloaded too
+     * ([com.prism.music.data.prefs.AppSettings.downloadQueueAhead], 1 to 5; 0 is off). Live streams and episodes
+     * have no download, and one already here or queued is left as it is.
+     */
+    private fun downloadUpcoming() {
+        val ahead = c.settings.current.downloadQueueAhead
+        if (ahead <= 0) return
+        for (item in upcoming(ahead)) {
+            val song = item.toSong() ?: continue
+            if (song.isLive || song.isEpisode || song.isLocal || song.isRss) continue
+            c.downloads.download(song)
+        }
     }
 
     /** Music videos whose song is being looked up for [songForNextVideo]. */

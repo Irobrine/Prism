@@ -2502,6 +2502,12 @@ private fun DownloadSettings() {
             Toggle(tr(R.string.download_videos_when_you_play_them), tr(R.string.download_videos_on_stream_detail), s.downloadVideoOnStream) {
                 prefs.setDownloadVideoOnStream(it)
             }
+            // This branch: the next songs in the queue, kept downloaded too (0 is off; 1 to 5 after the one playing).
+            Label(tr(R.string.download_songs_ahead), info = tr(R.string.download_songs_ahead_info))
+            val aheadChoices = listOf(0, 1, 2, 3, 4, 5)
+            Chips(aheadChoices, s.downloadQueueAhead.coerceIn(0, 5), { if (it == 0) tr(R.string.off) else it.toString() }) {
+                prefs.setDownloadQueueAhead(it)
+            }
             // #298 (1.8.2).
             var choosingKept by remember { mutableStateOf(false) }
             val keptCount = s.behavior.keptPlaylists.size

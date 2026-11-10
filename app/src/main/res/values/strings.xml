@@ -1938,6 +1938,9 @@
     <string name="download_videos_when_you_play_them">Download videos when you play them</string>
     <string name="download_videos_on_stream_detail">Music videos start downloading as they start streaming</string>
     <string name="download_on_stream_keywords">download automatically stream streaming save offline play watch song video</string>
+    <string name="download_songs_ahead">Download songs ahead</string>
+    <string name="download_songs_ahead_info">How many songs after the one playing are downloaded too, up to 5.</string>
+    <string name="download_ahead_keywords">download ahead next upcoming queue songs offline preload</string>
     <string name="offline_cache_storage_space">offline cache storage space</string>
     <string name="space_to_use">Space to use</string>
     <string name="storage_cache_size_gb">storage cache size gb</string>
