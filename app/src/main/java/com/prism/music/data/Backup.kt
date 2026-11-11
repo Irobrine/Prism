@@ -313,8 +313,10 @@ class Backup(private val c: AppContainer) {
         /** Saved preferences by part; anything not named here counts as Settings. Some never go in a backup (null). */
         private val PREFS_PARTS: Map<String, BackupPart?> = buildMap {
             // playlist_covers (with files/covers below) holds songs' and albums' own covers too (#305, 1.8.1).
-            listOf("artist_prefs", "artist_thumbs", "playlist_covers", "library_order", "blend", "liked_playlist", "recent_collections", "song_versions")
-                .forEach { put(it, BackupPart.LIBRARY) }
+            listOf(
+                "artist_prefs", "artist_thumbs", "playlist_covers", "library_order", "blend", "liked_playlist", "recent_collections",
+                "song_versions", "song_metadata",
+            ).forEach { put(it, BackupPart.LIBRARY) }
             listOf(
                 "dislikes", "exclusions", "for_you", "for_you_feedback", com.prism.music.data.foryou.Discover.PREFS, "release_radar", "search", "episode_progress", "episode_played", "best_part_mine",
                 "mix_tempo", "song_loudness", "song_peak", "song_key", "dj_quick", "loudness", "lyric_offsets", "lyrics_choice", "lyrics_search_as",

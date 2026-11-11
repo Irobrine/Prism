@@ -1,6 +1,7 @@
 package com.prism.music.ui.screens
 
 import com.prism.music.R
+import com.prism.music.data.SongMetadata
 import com.prism.music.tr
 import com.prism.music.trp
 import com.prism.music.ui.components.PrismButton
@@ -126,25 +127,33 @@ private data class LocalOrders(val songs: Order<SongKey>, val albums: Order<Albu
 
 private fun <T> Comparator<T>.way(reversed: Boolean): Comparator<T> = if (reversed) this.reversed() else this
 
-/** One album among the files (by Android's album id), its songs in track order. */
-private class LocalAlbum(val id: Long, val title: String, val artist: String, val year: Int, val tracks: List<LocalMusic.Track>) {
+/** One album among the files (an Android album id, or a name the listener gave one), its songs in track order. */
+internal class LocalAlbum(val id: String, val title: String, val artist: String, val year: Int, val tracks: List<LocalMusic.Track>) {
     val art: String? get() = tracks.firstNotNullOfOrNull { it.song.thumbnail }
     /** When its newest file arrived on the phone. */
     val addedAt: Long get() = tracks.maxOf { it.addedAt }
 }
 
+/** The songs as Prism shows them, with the listener's metadata edits (1.8.3), by song id. */
+private fun shownSongs(tracks: List<LocalMusic.Track>) =
+    tracks.associate { it.song.id to SongMetadata.shownOf(it.song) }
+
 private fun sorted(tracks: List<LocalMusic.Track>, o: Order<SongKey>): List<LocalMusic.Track> {
     val r = o.reversed
-    val byTitle = compareBy<LocalMusic.Track> { it.song.title.lowercase() }
-    val inAlbum = compareBy<LocalMusic.Track> { it.albumId }.thenBy { it.trackNumber }.thenBy { it.song.title.lowercase() }
+    val shown = shownSongs(tracks)
+    fun title(t: LocalMusic.Track) = shown.getValue(t.song.id).title.lowercase()
+    fun album(t: LocalMusic.Track) = shown.getValue(t.song.id).album?.title?.lowercase().orEmpty()
+    val byTitle = compareBy<LocalMusic.Track> { title(it) }
+    val inAlbum = compareBy<LocalMusic.Track> { album(it) }
+        .thenBy { it.trackNumber.takeIf { n -> n > 0 } ?: Int.MAX_VALUE }.thenBy { title(it) }
     return tracks.sortedWith(
         when (o.key) {
             SongKey.TITLE -> byTitle.way(r)
-            SongKey.ARTIST -> compareBy<LocalMusic.Track> { artistKey(it.song.primaryArtist) }.way(r).thenBy { it.song.album?.title?.lowercase() ?: "" }.then(inAlbum)
-            SongKey.ALBUM -> compareBy<LocalMusic.Track> { it.song.album?.title?.lowercase() ?: "￿" }.way(r).then(inAlbum)
+            SongKey.ARTIST -> compareBy<LocalMusic.Track> { artistKey(shown.getValue(it.song.id).primaryArtist) }.way(r).thenBy { album(it) }.then(inAlbum)
+            SongKey.ALBUM -> compareBy<LocalMusic.Track> { album(it).ifBlank { "\uFFFF" } }.way(r).then(inAlbum)
             SongKey.ADDED -> compareByDescending<LocalMusic.Track> { it.addedAt }.way(r).then(byTitle)
             SongKey.YEAR -> compareByDescending<LocalMusic.Track> { it.year }.way(r).then(inAlbum)
-            SongKey.DURATION -> compareByDescending<LocalMusic.Track> { it.song.durationSec }.way(r).then(byTitle)
+            SongKey.DURATION -> compareByDescending<LocalMusic.Track> { shown.getValue(it.song.id).durationSec }.way(r).then(byTitle)
             SongKey.SIZE -> compareByDescending<LocalMusic.Track> { it.size }.way(r).then(byTitle)
         }
     )
@@ -168,10 +177,10 @@ private fun sortedAlbums(albums: List<LocalAlbum>, o: Order<AlbumKey>): List<Loc
 
 private fun sortedArtists(artists: List<LocalArtist>, o: Order<ArtistKey>): List<LocalArtist> {
     val r = o.reversed
-    val byName = compareBy<LocalArtist> { it.key == "￿" }.thenBy { it.name.lowercase().removePrefix("the ") }
+    val byName = compareBy<LocalArtist> { it.key == "\uFFFF" }.thenBy { it.name.lowercase().removePrefix("the ") }
     return artists.sortedWith(
         when (o.key) {
-            ArtistKey.NAME -> compareBy<LocalArtist> { it.key == "￿" }.then(compareBy<LocalArtist> { it.name.lowercase().removePrefix("the ") }.way(r))
+            ArtistKey.NAME -> compareBy<LocalArtist> { it.key == "\uFFFF" }.then(compareBy<LocalArtist> { it.name.lowercase().removePrefix("the ") }.way(r))
             ArtistKey.SONGS -> compareByDescending<LocalArtist> { it.tracks.size }.way(r).then(byName)
             ArtistKey.ALBUMS -> compareByDescending<LocalArtist> { it.albums.size }.way(r).then(byName)
         }
@@ -187,16 +196,43 @@ private class LocalArtist(val key: String, val name: String, val tracks: List<Lo
     val art: String? get() = albums.firstNotNullOfOrNull { it.art }
 }
 
-private fun artistKey(name: String) = name.trim().lowercase().ifBlank { "￿" }
-private fun inTrackOrder(tracks: List<LocalMusic.Track>) =
-    tracks.sortedWith(compareBy<LocalMusic.Track> { it.trackNumber.takeIf { n -> n > 0 } ?: Int.MAX_VALUE }.thenBy { it.song.title.lowercase() })
+private fun artistKey(name: String) = name.trim().lowercase().ifBlank { "\uFFFF" }
+private fun inTrackOrder(tracks: List<LocalMusic.Track>): List<LocalMusic.Track> {
+    val shown = shownSongs(tracks)
+    return tracks.sortedWith(
+        compareBy<LocalMusic.Track> { it.trackNumber.takeIf { n -> n > 0 } ?: Int.MAX_VALUE }
+            .thenBy { shown.getValue(it.song.id).title.lowercase() },
+    )
+}
 
-private fun albumsOf(tracks: List<LocalMusic.Track>): List<LocalAlbum> = tracks.groupBy { it.albumId }.map { (id, t) ->
-    val artist = t.groupingBy { it.song.primaryArtist }.eachCount().maxByOrNull { it.value }?.key.orEmpty()
-    LocalAlbum(id, t.firstNotNullOfOrNull { it.song.album?.title?.takeIf(String::isNotBlank) } ?: tr(R.string.unknown_album), artist, t.maxOf { it.year }, inTrackOrder(t))
-}.let { albums ->
-    val unknown = tr(R.string.unknown_album)
-    albums.sortedWith(compareBy<LocalAlbum> { it.title == unknown }.thenBy { it.title.lowercase() })
+internal fun albumsOf(tracks: List<LocalMusic.Track>): List<LocalAlbum> {
+    val shown = shownSongs(tracks)
+    fun editedAlbum(t: LocalMusic.Track) = SongMetadata.shared?.of(t.song.id)?.album
+    fun albumTitle(t: LocalMusic.Track) = shown.getValue(t.song.id).album?.title?.takeIf { it.isNotBlank() }
+
+    // The files' own albums by title: an edited song joins one when its new title names just that one.
+    val ownByTitle = tracks.filter { editedAlbum(it) == null }
+        .groupBy { albumTitle(it).orEmpty().trim().lowercase() }
+        .mapValues { (_, ts) -> ts.map { it.albumId }.distinct() }
+
+    fun keyOf(t: LocalMusic.Track): String {
+        val edit = editedAlbum(t) ?: return "id:${t.albumId}"
+        val title = edit.trim().lowercase()
+        return ownByTitle[title]?.singleOrNull()?.let { "id:$it" } ?: "edited:$title"
+    }
+
+    return tracks.groupBy { keyOf(it) }.map { (key, t) ->
+        // A group joined to a file's own album keeps that album's name; one only edited songs made keeps theirs.
+        val title = t.firstNotNullOfOrNull { track -> if (editedAlbum(track) == null) albumTitle(track) else null }
+            ?: t.firstNotNullOfOrNull { albumTitle(it) }
+            ?: tr(R.string.unknown_album)
+        val artist = t.map { shown.getValue(it.song.id).primaryArtist }.groupingBy { it }.eachCount()
+            .maxByOrNull { it.value }?.key.orEmpty()
+        LocalAlbum(key, title, artist, t.maxOf { it.year }, inTrackOrder(t))
+    }.let { albums ->
+        val unknown = tr(R.string.unknown_album)
+        albums.sortedWith(compareBy<LocalAlbum> { it.title == unknown }.thenBy { it.title.lowercase() })
+    }
 }
 
 /**
@@ -237,7 +273,7 @@ fun LocalMusicScreen(bottomPadding: Dp) {
     val sections = settings.localSections
     val pager = rememberPagerState { sections.size }
     var openArtist by rememberSaveable { mutableStateOf<String?>(null) }
-    var openAlbum by rememberSaveable { mutableStateOf<Long?>(null) }
+    var openAlbum by rememberSaveable { mutableStateOf<String?>(null) }
     var openRecent by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var choosingFolders by remember { mutableStateOf(false) }
@@ -257,10 +293,12 @@ fun LocalMusicScreen(bottomPadding: Dp) {
 
     val albums = remember(tracks) { albumsOf(tracks) }
     val artists = remember(tracks, albums) {
-        tracks.groupBy { artistKey(it.song.primaryArtist) }.map { (key, t) ->
-            val ids = t.map { it.albumId }.toSet()
-            LocalArtist(key, t.first().song.primaryArtist.ifBlank { tr(R.string.unknown_artist) }, t, albums.filter { it.id in ids })
-        }.sortedWith(compareBy<LocalArtist> { it.key == "￿" }.thenBy { it.name.lowercase().removePrefix("the ") })
+        val albumOf = albums.flatMap { a -> a.tracks.map { it.song.id to a.id } }.toMap()
+        tracks.groupBy { artistKey(SongMetadata.shownOf(it.song).primaryArtist) }.map { (key, t) ->
+            val ids = t.mapNotNull { albumOf[it.song.id] }.toSet()
+            val name = SongMetadata.shownOf(t.first().song).primaryArtist
+            LocalArtist(key, name.ifBlank { tr(R.string.unknown_artist) }, t, albums.filter { it.id in ids })
+        }.sortedWith(compareBy<LocalArtist> { it.key == "\uFFFF" }.thenBy { it.name.lowercase().removePrefix("the ") })
     }
     val album = openAlbum?.let { id -> albums.firstOrNull { it.id == id } }
     val artist = openArtist?.let { k -> artists.firstOrNull { it.key == k } }
@@ -280,7 +318,16 @@ fun LocalMusicScreen(bottomPadding: Dp) {
     val found = remember(tracks, sort, query) {
         val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (words.isEmpty()) emptyList()
-        else sorted(tracks, sort).map { it.song }.filter { s -> "${s.title} ${s.artistText} ${s.album?.title.orEmpty()}".lowercase().let { hay -> words.all { it in hay } } }
+        else {
+            val joined = words.joinToString("")
+            sorted(tracks, sort).filter { t ->
+                // What Prism shows for it, with the listener's metadata edits; an edited field's spellings are read now.
+                val text = com.prism.music.data.local.SearchTags.textFor(t.song, t.searchTags, t.artistTags, t.albumTags)
+                val hay = "${text.title} ${text.artist} ${text.album} " +
+                    "${text.titleTags.joinToString(" ")} ${text.artistTags.joinToString(" ")} ${text.albumTags.joinToString(" ")}".lowercase()
+                words.all { it in hay } || joined in hay.replace(" ", "")
+            }.map { it.song }
+        }
     }
     val section = sections.getOrNull(pager.currentPage)
     // "Go to the playing song" (D54) for whichever list of songs is showing.
@@ -528,10 +575,13 @@ private fun TrackList(songs: List<Song>, title: String, bottomPadding: Dp, locat
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
     val playingAt = remember(songs, current?.id) { LocatePlaying.indexIn(songs, current?.id) }
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
-            itemsIndexed(songs, key = { i, s -> "t" + s.id + ":" + i }) { i, s ->
-                SwipeToQueue(s, Modifier.locatePulse(locate, s.id)) {
-                    SongRow(s, index = if (numbered) i + 1 else null, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+        // Select many: hold a row to pick it, tap more, and All for this list (an album's tracks, the files shown).
+        com.prism.music.ui.components.SelectableSongs(songs) {
+            LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
+                itemsIndexed(songs, key = { i, s -> "t" + s.id + ":" + i }) { i, s ->
+                    SwipeToQueue(s, Modifier.locatePulse(locate, s.id)) {
+                        SongRow(s, index = if (numbered) i + 1 else null, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+                    }
                 }
             }
         }
@@ -548,13 +598,16 @@ private fun SongsPage(songs: List<Song>, sort: Order<SongKey>, onSort: (Order<So
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
     val playingAt = remember(songs, current?.id) { LocatePlaying.indexIn(songs, current?.id) }
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(top = 0.dp, bottom = bottomPadding + 16.dp)) {
-            item {
-                SortRow(songCount(songs.size), tr(R.string.sort_songs), SongKey.entries, sort, { it.label }, { it.dirs }, onSort)
-            }
-            itemsIndexed(songs, key = { _, s -> "l" + s.id }) { i, s ->
-                SwipeToQueue(s, Modifier.locatePulse(locate, s.id)) {
-                    SongRow(s, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+        // Select many, as on Local files' other song lists.
+        com.prism.music.ui.components.SelectableSongs(songs) {
+            LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(top = 0.dp, bottom = bottomPadding + 16.dp)) {
+                item {
+                    SortRow(songCount(songs.size), tr(R.string.sort_songs), SongKey.entries, sort, { it.label }, { it.dirs }, onSort)
+                }
+                itemsIndexed(songs, key = { _, s -> "l" + s.id }) { i, s ->
+                    SwipeToQueue(s, Modifier.locatePulse(locate, s.id)) {
+                        SongRow(s, playing = current?.id == s.id) { c.player.playQueue(songs, i, source(title)) }
+                    }
                 }
             }
         }
@@ -713,25 +766,28 @@ private fun ArtistPage(artist: LocalArtist, bottomPadding: Dp, onOpenAlbum: (Loc
         artist.albums.map { a -> a to a.tracks.filter { it.song.id in mine }.map { it.song } }.filter { it.second.isNotEmpty() }
     }
     val all = remember(byAlbum) { byAlbum.flatMap { it.second } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
-        byAlbum.forEach { (album, songs) ->
-            item(key = "h" + album.id) {
-                Row(
-                    Modifier.fillMaxWidth().clickable { onOpenAlbum(album) }.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Artwork(album.art, Modifier.size(44.dp), LocalUi.current.albumArt, size = 226, placeholderIcon = PrismIcons.Album)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(album.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        album.year.takeIf { it > 0 }?.let { Text("$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    // Select many: every song of theirs on this page, for All.
+    com.prism.music.ui.components.SelectableSongs(all) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding + 16.dp)) {
+            byAlbum.forEach { (album, songs) ->
+                item(key = "h" + album.id) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onOpenAlbum(album) }.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Artwork(album.art, Modifier.size(44.dp), LocalUi.current.albumArt, size = 226, placeholderIcon = PrismIcons.Album)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(album.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            album.year.takeIf { it > 0 }?.let { Text("$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                        androidx.compose.material3.Icon(PrismIcons.ChevronRight, tr(R.string.open_album), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    androidx.compose.material3.Icon(PrismIcons.ChevronRight, tr(R.string.open_album), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-            itemsIndexed(songs, key = { i, s -> "s" + album.id + ":" + s.id + ":" + i }) { _, s ->
-                SwipeToQueue(s) {
-                    SongRow(s, playing = current?.id == s.id) { c.player.playQueue(all, all.indexOf(s), source(artist.name)) }
+                itemsIndexed(songs, key = { i, s -> "s" + album.id + ":" + s.id + ":" + i }) { _, s ->
+                    SwipeToQueue(s) {
+                        SongRow(s, playing = current?.id == s.id) { c.player.playQueue(all, all.indexOf(s), source(artist.name)) }
+                    }
                 }
             }
         }

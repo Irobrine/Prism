@@ -368,7 +368,9 @@ class AppContainer(val app: Application) {
     }
     /** Search by a line of the lyrics, from the box itself (1.7.6). */
     val lyricSearch = com.prism.music.data.lyrics.LyricSearch(http, ytm, db.lyricsSearch(), db.songs(), lyrics::textLines)
-    val meta = MetaRepository(http, db.meta())
+    /** The listener's own artist, album and genre on songs (1.8.3), shown everywhere without changing the file. */
+    val metadata = com.prism.music.data.SongMetadata(app)
+    val meta = MetaRepository(http, db.meta(), metadata::genreOf)
     val canvas = com.prism.music.data.canvas.CanvasRepository(http).apply {
         hiddenPrefs = app.getSharedPreferences("canvas_hidden", android.content.Context.MODE_PRIVATE)
         savedPrefs = app.getSharedPreferences("canvas_saved", android.content.Context.MODE_PRIVATE)
@@ -464,8 +466,12 @@ class AppContainer(val app: Application) {
     /** Liked songs mirrored into a real YouTube Music playlist, when the listener turns that on. */
     val likedPlaylist = com.prism.music.data.LikedPlaylist(this)
     val localLossless = com.prism.music.data.local.LocalLossless(app)
+    /** Big data files downloaded on first use (the Japanese reading dictionary, Sing's model). */
+    val models = com.prism.music.data.ModelStore(app, http)
     /** Library → Local music: the phone's own music files. */
     val localMusic = com.prism.music.data.local.LocalMusic(app, scope) { settings.current.behavior.localSkipFolders }.also { music ->
+        // Before the first scan, so its titles' Japanese kanji can be read if the dictionary is already here (#363).
+        com.prism.music.data.local.SearchTags.watch(models)
         music.start()
         // #207, #249: folders ticked or unticked (or brought back by a restored backup).
         scope.launch { settings.flow.map { it.behavior.localSkipFolders }.distinctUntilChanged().drop(1).collect { music.rescan() } }
@@ -475,8 +481,6 @@ class AppContainer(val app: Application) {
     // background thread before this property is assigned.
     init { losslessSync.start() }
     val taste = com.prism.music.data.TasteRepository(this)
-    /** Big data files downloaded on first use (the Japanese reading dictionary, Sing's model). */
-    val models = com.prism.music.data.ModelStore(app, http)
     /** Playlists and saved albums kept on the phone (no account needed). */
     val prismLibrary = com.prism.music.data.PrismLibrary(java.io.File(app.filesDir, "library"))
     /** The listener's own tags on songs (1.8.3). */

@@ -5,6 +5,7 @@ import com.prism.music.R
 import com.prism.music.tr
 import com.prism.music.ui.theme.PrismIcons
 import com.prism.music.data.friendlyMessage
+import com.prism.music.data.local.SearchTags
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -251,7 +252,8 @@ fun SearchScreen(bottomPadding: Dp) {
     val phoneTracks by c.localMusic.tracks.collectAsState()
     val onPhoneHits by androidx.compose.runtime.produceState(emptyList<com.prism.music.data.model.Song>(), live, onPhone, phoneTracks) {
         value = if (live.isBlank() || onPhone) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            (phoneMatches(live, phoneTracks.map { it.song }) + phoneMatches(live, c.downloads.completedSongs())).distinctBy { it.id }.take(3)
+            (phoneMatches(live, phoneTracks.map { it.song }) + phoneMatches(live, c.downloads.completedSongs()))
+                .distinctBy { it.id }.take(3)
         }
     }
 
@@ -441,21 +443,34 @@ private fun PhoneResults(query: String, bottomPadding: Dp, onPlay: () -> Unit) {
 
 /**
  * [songs] (music files or downloads) with every typed word in their title, artist or album, the best first: titles
- * that start with it, then titles, artists and albums that have it.
+ * that start with it, then titles, artists and albums that have it. What Prism shows for a song is what it reads, with
+ * the listener's metadata edits (1.8.3); local files' indexed Latin spellings (#363) are used, and an edited field's
+ * are read now.
  */
-private fun phoneMatches(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> {
+internal fun phoneMatches(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> {
     val q = phoneNorm(query)
     val words = q.split(' ').filter { it.isNotBlank() }
     if (words.isEmpty()) return emptyList()
+    val joined = q.replace(" ", "")
+    fun withRoman(normal: String, roman: List<String>): String =
+        if (roman.isEmpty()) normal else "$normal ${roman.joinToString(" ") { phoneNorm(it) }}"
+    fun matches(hay: String) = words.all { it in hay } || joined in hay.replace(" ", "")
     fun rank(s: com.prism.music.data.model.Song): Int? {
-        val title = phoneNorm(s.title)
-        val artist = phoneNorm(s.artistText)
-        val hay = "$title $artist ${phoneNorm(s.album?.title.orEmpty())}"
-        if (!words.all { it in hay }) return null
+        // What Prism shows for it, with the listener's metadata edits; an edited field's spellings are read now.
+        val text = SearchTags.textFor(s)
+        val title = withRoman(phoneNorm(text.title), text.titleTags)
+        val artist = withRoman(phoneNorm(text.artist), text.artistTags)
+        val album = withRoman(phoneNorm(text.album), text.albumTags)
+        val titleMatch = matches(title)
+        val artistMatch = matches(artist)
+        val albumMatch = matches(album)
+        // The words can be split across the title, artist and album ("night drive" + "The Band"), as Search always
+        // has; a single field's match still ranks the result above a match across fields.
+        if (!titleMatch && !artistMatch && !albumMatch && !matches("$title $artist $album")) return null
         return when {
-            title.startsWith(q) -> 0
-            words.all { it in title } -> 1
-            words.all { it in artist } -> 2
+            titleMatch && (title.startsWith(q) || title.replace(" ", "").startsWith(joined)) -> 0
+            titleMatch -> 1
+            artistMatch -> 2
             else -> 3
         }
     }

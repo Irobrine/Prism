@@ -121,24 +121,27 @@ fun LibrarySearchScreen(initial: String, bottomPadding: androidx.compose.ui.unit
         }
         val songs = remember(found) { found.mapNotNull { (it.item as? SongItem)?.song } }
         val source = QueueSource(QueueKind.OTHER, tr(R.string.your_library))
-        LazyColumn(Modifier.fillMaxSize().testTag("libraryResults"), contentPadding = PaddingValues(bottom = bottomPadding + 16.dp)) {
-            if (entries != null && found.isEmpty() && (query.isNotBlank() || filter != LibFilter())) item("none") {
-                EmptyState(PrismIcons.Search, tr(R.string.nothing_in_your_library_matches), tr(R.string.try_fewer_words_or_another_filter))
-            }
-            var last: LibKind? = null
-            found.forEach { e ->
-                if (e.kind != last && kind == null) {
-                    val k = e.kind
-                    item("h:${k.name}") {
-                        Text(kindLabel(k), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 14.dp, bottom = 4.dp))
-                    }
+        // Select many: the songs among the results; playlists, tags, artists and albums keep their own taps.
+        com.prism.music.ui.components.SelectableSongs(songs) {
+            LazyColumn(Modifier.fillMaxSize().testTag("libraryResults"), contentPadding = PaddingValues(bottom = bottomPadding + 16.dp)) {
+                if (entries != null && found.isEmpty() && (query.isNotBlank() || filter != LibFilter())) item("none") {
+                    EmptyState(PrismIcons.Search, tr(R.string.nothing_in_your_library_matches), tr(R.string.try_fewer_words_or_another_filter))
                 }
-                last = e.kind
-                item("${e.kind.name}:${e.item.id}") {
-                    val s = (e.item as? SongItem)?.song
-                    if (s != null) SongRow(s) { c.player.playQueue(songs, songs.indexOfFirst { it.id == s.id }.coerceAtLeast(0), source) }
-                    else ResultRow(e.item) { nav.open(e.item) { c.player.playSingle(it.song) } }
+                var last: LibKind? = null
+                found.forEach { e ->
+                    if (e.kind != last && kind == null) {
+                        val k = e.kind
+                        item("h:${k.name}") {
+                            Text(kindLabel(k), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 14.dp, bottom = 4.dp))
+                        }
+                    }
+                    last = e.kind
+                    item("${e.kind.name}:${e.item.id}") {
+                        val s = (e.item as? SongItem)?.song
+                        if (s != null) SongRow(s) { c.player.playQueue(songs, songs.indexOfFirst { it.id == s.id }.coerceAtLeast(0), source) }
+                        else ResultRow(e.item) { nav.open(e.item) { c.player.playSingle(it.song) } }
+                    }
                 }
             }
         }

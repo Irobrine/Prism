@@ -1,10 +1,12 @@
 package com.prism.music.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -25,13 +26,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +46,7 @@ import com.prism.music.R
 import com.prism.music.data.model.Song
 import com.prism.music.tr
 import com.prism.music.trp
+import com.prism.music.ui.theme.GlassSurface
 import com.prism.music.ui.theme.LocalAppSettings
 import com.prism.music.ui.theme.LocalContainer
 import com.prism.music.ui.theme.PrismIcons
@@ -49,8 +54,8 @@ import com.prism.music.ui.theme.PrismIcons
 /**
  * Select many (1.8.3, G141 / #381): long-press a song in a list to start picking, tap more, "All" for the whole list, and
  * act on them together from one bar. One selection for the app (MainActivity's, [LocalSongSelection]); a list takes part
- * by wrapping itself in [SelectableSongs], so lists that don't (Home's shelves, an artist's top songs) keep long-press as
- * the song's menu.
+ * by wrapping itself in [SelectableSongs], so lists that don't (Home's card shelves, a podcast's episodes) keep long-press
+ * as the song's menu.
  */
 @Stable
 class SongSelection {
@@ -104,6 +109,46 @@ val LocalSongSelection = staticCompositionLocalOf<SongSelection?> { null }
 
 /** The list a row is in, when that list takes part in Select many. */
 val LocalSelectScope = staticCompositionLocalOf<SelectScope?> { null }
+
+/**
+ * A song in a list taking part in Select many, for rows that aren't a [com.prism.music.ui.components.SongRow] (an
+ * artist's top songs): [tap] picks while picking and plays otherwise, [hold] starts picking or picks / unpicks, and
+ * [picked] is what a row marks with a check (null while not picking).
+ */
+@Stable
+class SongPick internal constructor(
+    val picked: Boolean?,
+    private val toggle: () -> Unit,
+    private val start: () -> Unit,
+    private val play: () -> Unit,
+) {
+    fun tap() { if (picked != null) toggle() else play() }
+    fun hold() { if (picked != null) toggle() else start() }
+}
+
+/**
+ * [song]'s tap and hold in a list taking part in Select many; null when it doesn't (a row that keeps its own menu).
+ * [onPlay] is what a tap does while not picking.
+ */
+@Composable
+fun rememberSongPick(song: Song, onPlay: () -> Unit): SongPick? {
+    val selection = LocalSongSelection.current ?: return null
+    val scope = LocalSelectScope.current ?: return null
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val play = rememberUpdatedState(onPlay)
+    val picked by remember(song.id, selection) { derivedStateOf { selection.picked?.let { song.id in it } } }
+    return remember(song, selection, scope, picked) {
+        SongPick(
+            picked,
+            toggle = { selection.toggle(song) },
+            start = {
+                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                selection.start(song, scope)
+            },
+            play = { play.value() },
+        )
+    }
+}
 
 /**
  * Makes the song rows in [content] pickable: long-press picks, and [songs] is what "All" picks. A change of [resetKey]
@@ -161,6 +206,7 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     val guest = together as? com.prism.music.playback.together.TogetherState.Guest
     var addingTo by remember { mutableStateOf<List<Song>?>(null) }
     var asking by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    var changingCover by remember { mutableStateOf<List<Song>?>(null) }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     fun downloaded(s: Song) = com.prism.music.download.rowDownloaded(s, downloads, standIns) { c.downloads.playsFromPhone(it) }
 
@@ -169,6 +215,12 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     }
     var tagging by remember { mutableStateOf<List<Song>?>(null) }
     tagging?.let { list -> TagPicker(list, null) { tagging = null; selection.clear() } }
+    // 1.8.3: artist, album and genre on every picked song at once.
+    var editingMetadata by remember { mutableStateOf<List<Song>?>(null) }
+    editingMetadata?.let { list -> MetadataEditorSheet(list) { editingMetadata = null; selection.clear() } }
+    changingCover?.let { list ->
+        CoverPickSheet(CoverFor.OfSongs(list, list.map { c.covers.songKey(it.id) })) { changingCover = null; selection.clear() }
+    }
     asking?.let { (text, go) ->
         AlertDialog(
             onDismissRequest = { asking = null },
@@ -179,8 +231,11 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     }
 
     val glass = LocalAppSettings.current.glassEverywhere
-    val (ink, action) = barInk(glass)
-    BarSurface(glass, RoundedCornerShape(24.dp), modifier.widthIn(max = 720.dp).fillMaxWidth().testTag("selectionBar")) {
+    // The bar takes the theme's accent (and glass follows it), rather than the inverse colors of a passing note.
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+    val (ink, action) = if (glass) MaterialTheme.colorScheme.onSurface to accent else onAccent to onAccent
+    SelectionBarSurface(glass, RoundedCornerShape(24.dp), modifier.widthIn(max = 720.dp).fillMaxWidth().testTag("selectionBar")) {
         Column(
             // Every touch on the bar stays on it (the list under it mustn't get one).
             Modifier.pointerInput(Unit) {
@@ -198,9 +253,11 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
                 )
                 if (selection.scope?.songs.orEmpty().size > 1) PrismTextButton({ selection.all() }) { Text(tr(R.string.all), color = action) }
             }
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+            // Every action stays on screen: wrapping onto more lines instead of scrolling off the edge of a phone.
+            FlowRow(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 val none = songs.isEmpty()
                 BarButton(PrismIcons.PlaylistPlay, tr(R.string.play_next), ink, enabled = !none) {
@@ -217,6 +274,11 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
                 BarButton(PrismIcons.PlaylistAdd, tr(R.string.add_to_playlist), ink, enabled = forList.isNotEmpty()) { addingTo = forList }
                 val forTags = songs.filter(com.prism.music.data.TagStore::taggable)
                 BarButton(PrismIcons.Tag, tr(R.string.add_a_tag), ink, enabled = forTags.isNotEmpty()) { tagging = forTags }
+                BarButton(PrismIcons.Edit, tr(R.string.edit_metadata), ink, enabled = !none) { editingMetadata = songs }
+                // Change cover (1.8.3): one photo for every picked song that can have one (a live song's or an episode's
+                // own picture isn't its cover). Each song keeps its own, so an album's others aren't changed with it.
+                val forCover = songs.filter { !it.isEpisode && !it.isLive }
+                BarButton(PrismIcons.Photo, tr(R.string.change_cover), ink, enabled = forCover.isNotEmpty()) { changingCover = forCover }
                 val (likeThem, likeWhich) = SelectionPlan.like(songs, liked)
                 BarButton(
                     if (likeThem) PrismIcons.Heart else PrismIcons.HeartFilled, if (likeThem) tr(R.string.like) else tr(R.string.unlike), ink,
@@ -248,6 +310,14 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** The Select many bar's surface: the theme's accent, in glass tinted with it when "Glass everywhere" is on. */
+@Composable
+private fun SelectionBarSurface(glass: Boolean, shape: RoundedCornerShape, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    if (glass) GlassSurface(modifier, shape = shape, tint = accent.copy(alpha = 0.40f), elevation = 6.dp) { content() }
+    else Box(modifier.clip(shape).background(accent)) { content() }
 }
 
 @Composable
