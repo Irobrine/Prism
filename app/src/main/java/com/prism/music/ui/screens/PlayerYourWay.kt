@@ -68,6 +68,7 @@ import com.prism.music.data.prefs.PlayerTimes
 import com.prism.music.data.prefs.PlayerTitleAlign
 import com.prism.music.data.prefs.ScrubberColor
 import com.prism.music.data.prefs.SessionButton
+import com.prism.music.data.prefs.SongSwipeAction
 import com.prism.music.ui.theme.LocalAppSettings
 import com.prism.music.ui.theme.LocalContainer
 import com.prism.music.ui.theme.PrismIcons
@@ -1080,12 +1081,33 @@ fun PlayerGesturesGroup() {
         GestureRow(tr(R.string.swipe_right), s.miniSwipeRight, PlayerGesture.choices(mini = true)) { prefs.setGesture("mini_swipe_right", it) }
         GestureRow(tr(R.string.swipe_up), s.miniSwipeUp, PlayerGesture.choices(mini = true)) { prefs.setGesture("mini_swipe_up", it) }
         GestureRow(tr(R.string.pull_down), s.miniSwipeDown, PlayerGesture.choices(mini = true)) { prefs.setGesture("mini_swipe_down", it) }
+        // 1.8.3.2: the songs in every list, under the mini player's gestures.
+        Label(tr(R.string.songs))
+        GestureRow(
+            tr(R.string.swipe_left), s.behavior.songSwipeLeft, s.behavior.songSwipeLeft.label,
+            SongSwipeAction.entries, { it.label },
+        ) { prefs.setSongSwipeLeft(it) }
+        GestureRow(
+            tr(R.string.swipe_right), s.behavior.songSwipeRight, s.behavior.songSwipeRight.label,
+            SongSwipeAction.entries, { it.label },
+        ) { prefs.setSongSwipeRight(it) }
+        // Library's pages change by swiping sideways, so its rows only take the gesture when asked for.
+        Toggle(
+            tr(R.string.gestures) + " · " + tr(R.string.library),
+            tr(R.string.swipe_left) + " / " + tr(R.string.swipe_right),
+            s.behavior.songSwipeLibrary,
+        ) { prefs.setSongSwipeLibrary(it) }
     }
 }
 
 /** A gesture and what it does; tapping it lists the choices. */
 @Composable
-private fun GestureRow(title: String, value: PlayerGesture, choices: List<PlayerGesture>, onPick: (PlayerGesture) -> Unit) {
+private fun GestureRow(title: String, value: PlayerGesture, choices: List<PlayerGesture>, onPick: (PlayerGesture) -> Unit) =
+    GestureRow(title, value, value.label, choices, { it.label }, onPick)
+
+/** A gesture of any kind: its value's [valueLabel], and the [choices] with their labels. */
+@Composable
+private fun <T> GestureRow(title: String, value: T, valueLabel: String, choices: List<T>, label: (T) -> String, onPick: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
@@ -1093,13 +1115,13 @@ private fun GestureRow(title: String, value: PlayerGesture, choices: List<Player
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            Text(value.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(valueLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(PrismIcons.ChevronDown, null, Modifier.padding(start = 4.dp).size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         DropdownMenu(open, { open = false }, Modifier.align(Alignment.TopEnd)) {
             choices.forEach { g ->
                 DropdownMenuItem(
-                    { Text(g.label) }, { open = false; onPick(g) },
+                    { Text(label(g)) }, { open = false; onPick(g) },
                     trailingIcon = if (g == value) ({ Icon(PrismIcons.Check, null) }) else null,
                 )
             }

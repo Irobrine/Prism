@@ -227,9 +227,17 @@ internal fun shelfKind(shelf: Shelf): String? {
     return if (videos * 2 > n) HomeSections.KIND_VIDEOS else null
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
+    // Home's song rows scroll sideways (Quick picks and the like): a row's swipe would fight that, so none here.
+    androidx.compose.runtime.CompositionLocalProvider(com.prism.music.ui.components.LocalSongSwipeAllowed provides false) {
+        HomeContent(bottomPadding)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeContent(bottomPadding: androidx.compose.ui.unit.Dp) {
     val c = LocalContainer.current
     val nav = LocalNavigator.current
     val settings = LocalAppSettings.current
