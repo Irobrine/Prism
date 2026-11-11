@@ -640,7 +640,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                 if (c.sing.engineReady() && !c.sing.on.value) openLyrics()
                 toggleSing(c) { showSing = true }
             }
-            com.prism.music.data.prefs.PlayerButton.EQUALIZER -> { onCollapse(); nav.go(Routes.settings(com.prism.music.ui.screens.SettingsSection.SOUND.key)) }
+            com.prism.music.data.prefs.PlayerButton.EQUALIZER -> { onCollapse(); nav.go(Routes.settings(com.prism.music.ui.screens.settings.SettingsPageId.SOUND_QUALITY.key, com.prism.music.tr(com.prism.music.R.string.sound))) }
             else -> {}
         }
     }
@@ -1399,7 +1399,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
 
 /** The "Theme" player background: a deep wash of the accent color, lighter at the top. */
 @Composable
-private fun ThemeBackdrop() {
+internal fun ThemeBackdrop() {
     val scheme = MaterialTheme.colorScheme
     fun Color.deep(f: Float) = Color(red * f, green * f, blue * f, 1f)
     Box(
@@ -1415,7 +1415,7 @@ private fun ThemeBackdrop() {
  * strength [show] sets, heavier toward the controls at the bottom.
  */
 @Composable
-private fun AppearanceBackdrop(show: Float) {
+internal fun AppearanceBackdrop(show: Float) {
     val s = com.prism.music.ui.theme.LocalAppSettings.current
     // The player's own pick (1.7.4), else Home's.
     val (style, photo) = com.prism.music.ui.theme.Backdrop.parse(

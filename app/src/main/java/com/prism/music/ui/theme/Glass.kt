@@ -25,6 +25,8 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.glass.GlassDefaults
+import dev.chrisbanes.haze.glass.GlassOptics
+import dev.chrisbanes.haze.glass.RefractionProfile
 import dev.chrisbanes.haze.glass.GlassStyle
 import dev.chrisbanes.haze.glass.OpticalSizePoint
 import dev.chrisbanes.haze.glass.OpticalSizeValue
@@ -68,10 +70,10 @@ internal fun hiddenByKeyboard(keyboardPx: Int, heightPx: Float): Boolean = keybo
  * brighter rim. Haze chooses between its dark and light values from the phone's dark mode, not from Prism's theme, so
  * [glassValues] gives it Prism's when the two differ.
  *
- * And what they look like (#252, on a Galaxy A16 with Android 16 and an Android 13 emulator): behind Regular colors spread
- * further the higher the radius, but small things like text stay a faint sharp outline at every radius from 6 to 40 dp. Behind
- * Clear colors keep their edges and small things soften. Why Regular keeps that outline isn't known: Haze's refraction detail
- * (already 0) and an opaque background made no difference.
+ * And what they looked like (#252, on a Galaxy A16 with Android 16 and an Android 13 emulator): behind Regular colors spread
+ * further the higher the radius, but small things like text stayed a faint sharp outline at every radius from 6 to 40 dp.
+ * Behind Clear colors kept their edges and small things softened. Both let a title be read through a bar (#429): since 1.8.4
+ * a bar's body is [liquidOptics], which says why Regular kept that outline.
  */
 internal data class GlassValues(
     val specular: Float, val edgeShadow: Float, val ambient: Float, val contrast: Float, val whitePoint: Float, val chroma: Float,
@@ -84,8 +86,11 @@ internal fun glassValues(dark: Boolean, clear: Boolean): GlassValues = when {
     else -> GlassValues(0.48f, 0.14f, 0.15f, 0f, 0.55f, 1.5f)
 }
 
-/** Frosted Glass's blur, in dp; [thin] is Liquid Glass · Clear on a flat bar, which keeps what's behind it nearly sharp. */
-internal fun frostedBlurDp(blur: Float, thin: Boolean): Float = if (thin) 6f else 28f * blur
+/**
+ * Frosted Glass's blur, in dp; [thin] is Liquid Glass · Clear on a flat bar: shapes and colors keep their places, text
+ * can't be read (6 dp until #429).
+ */
+internal fun frostedBlurDp(blur: Float, thin: Boolean): Float = if (thin) LEGIBLE_BLUR_DP else 28f * blur
 
 /**
  * What's behind Frosted Glass is sampled at half size (Haze's own default is 0.79) on its usual blur: at 28 dp the two look the
@@ -113,12 +118,35 @@ internal fun clearTint(dark: Boolean, frost: Float): Color =
 /** A slider's value, landing on Prism's own 100% when it's let go close to it. */
 internal fun glassSnap(v: Float): Float = if (kotlin.math.abs(v - 1f) < 0.04f) 1f else v
 
-/** Haze's Regular optics, its blur [scale] times as strong. */
-private fun regularOptics(scale: Float) = GlassDefaults.optics.copy(
-    blurRadius = OpticalSizeValue.Responsive(
-        OpticalSizePoint(64.dp, 20.dp * scale), OpticalSizePoint(176.dp, 24.dp * scale), OpticalSizePoint(220.dp, 25.dp * scale),
-    ),
-)
+/**
+ * #429: the least a bar's body blurs what's behind it, in dp. From here on a row's title under the bar is a soft smudge:
+ * nothing of its letters is left (Glass429Test has the sum). Liquid Glass · Clear sits on it.
+ */
+internal const val LEGIBLE_BLUR_DP = 8f
+
+/**
+ * A Liquid Glass bar's lens (#429). The bending at the rim is Haze's own for each kind; its body is Prism's:
+ * - `depth` is 1. It is the share of the glass's picture that is the blur; the rest is the page laid over it sharp. Haze's
+ *   Regular gives anything up to 64 dp thick (every bar here) 0.65, so 35% of a title under the tab bar or the mini player
+ *   stayed sharp whatever the blur. That was the "faint sharp outline at every radius" of #252.
+ * - Clear blurs [LEGIBLE_BLUR_DP], not Haze's 1.25 dp (which softens a title and leaves it readable). Regular keeps its
+ *   20 to 25 dp times the Blur slider ([scale]), never under the same floor.
+ * One blur and no blend with the sharp page: nothing more to draw than before.
+ */
+internal fun liquidOptics(clear: Boolean, scale: Float): GlassOptics {
+    fun regular(dp: Float) = (dp * scale).coerceAtLeast(LEGIBLE_BLUR_DP).dp
+    // Haze's own Clear lens (its GlassStyle.clear, which it keeps to itself), read from its code.
+    return if (clear) GlassOptics(
+        refractionStrength = 0.85f, refractionHeightFraction = 0.35f, refractionDisplacement = 56.dp,
+        depth = OpticalSizeValue.Fixed(1f), blurRadius = OpticalSizeValue.Fixed(LEGIBLE_BLUR_DP.dp),
+        refractionDetailIntensity = 0.76f, refractionProfile = RefractionProfile.Edge(28.dp),
+    ) else GlassDefaults.optics.copy(
+        depth = OpticalSizeValue.Fixed(1f),
+        blurRadius = OpticalSizeValue.Responsive(
+            OpticalSizePoint(64.dp, regular(20f)), OpticalSizePoint(176.dp, regular(24f)), OpticalSizePoint(220.dp, regular(25f)),
+        ),
+    )
+}
 
 /**
  * A surface that renders as refractive Liquid Glass when enabled in
@@ -182,7 +210,8 @@ fun GlassSurface(
                     // #252: the Frost slider. The bar's own Background (Light, Solid) and glass over a picture keep theirs.
                     if (look.frost != 1f) whitePoint(liquidWhitePoint(dark, clear, look.frost))
                 }
-                if (!clear && look.blur != 1f) optics(regularOptics(look.blur))
+                // #429: no text shows through a bar's body. Glass over a picture (the player's) keeps Haze's own Clear.
+                if (!onMedia) optics(liquidOptics(clear, look.blur))
             }
         }
         Box(

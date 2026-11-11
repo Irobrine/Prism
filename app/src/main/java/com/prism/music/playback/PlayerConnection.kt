@@ -24,7 +24,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -36,6 +38,71 @@ fun nextRepeatMode(mode: Int): Int = when (mode) {
     Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
     else -> Player.REPEAT_MODE_OFF
 }
+
+/** Shuffle as the listener has it: off, on, or Smart Shuffle (on, with recommendations mixed in). */
+enum class ShuffleMode { OFF, SHUFFLE, SMART }
+
+/**
+ * Shuffle's button (the player's, the TV's, the browser remote's): off → shuffle → Smart Shuffle (where the queue
+ * allows it) → off. With Settings → Playback → Shuffle button set to "Shuffle only" (1.8.4, D57) it's off → on → off,
+ * and someone still in Smart Shuffle goes to off with the next tap.
+ */
+fun nextShuffle(now: ShuffleMode, button: com.prism.music.data.prefs.ShuffleButton, smartAllowed: Boolean): ShuffleMode = when (now) {
+    ShuffleMode.OFF -> ShuffleMode.SHUFFLE
+    ShuffleMode.SHUFFLE -> if (button == com.prism.music.data.prefs.ShuffleButton.SHUFFLE_AND_SMART && smartAllowed) ShuffleMode.SMART else ShuffleMode.OFF
+    ShuffleMode.SMART -> ShuffleMode.OFF
+}
+
+/** What a new queue is, for [carryShuffle]. */
+enum class StartKind {
+    /** A list a song was tapped in, or played from the top: a playlist, an album, the library, Replay, a shelf. */
+    LIST,
+    /** One song (Search, a card): Autoplay follows it. */
+    SINGLE,
+    RADIO,
+    /** "Play as a DJ set": DJ mode decides the order. */
+    DJ_SET,
+    /** Started as its music video. */
+    VIDEO,
+    /** A podcast episode or a live stream. */
+    SPOKEN,
+}
+
+/** [StartKind] of the queue [songs] starting at [start]; [asVideo]: the first one plays as its video; [dj]: as a DJ set. */
+fun startKind(source: QueueSource, songs: List<Song>, start: Int, asVideo: Boolean, dj: Boolean): StartKind {
+    val first = songs.getOrNull(start)
+    return when {
+        dj -> StartKind.DJ_SET
+        source.kind == QueueKind.RADIO -> StartKind.RADIO
+        asVideo -> StartKind.VIDEO
+        first?.isEpisode == true || first?.isLive == true -> StartKind.SPOKEN
+        source.kind == QueueKind.SINGLE || songs.size < 2 -> StartKind.SINGLE
+        else -> StartKind.LIST
+    }
+}
+
+/**
+ * The shuffle a new queue starts with. As always: on when its own Shuffle was pressed ([asked]), else off. With
+ * Settings → Playback → "Keep shuffle on for the next list" ([keep]; 1.8.4, #416) a [StartKind.LIST] keeps what the
+ * last queue had ([was]): the song it starts on plays first and the rest is shuffled. Smart Shuffle stays Smart Shuffle
+ * where the new queue allows it ([smartAllowed]) and the button still offers it ([button]), plain shuffle otherwise.
+ * Radios, single songs, DJ sets, videos and episodes are left alone.
+ */
+fun carryShuffle(
+    was: ShuffleMode, keep: Boolean, kind: StartKind, asked: Boolean,
+    button: com.prism.music.data.prefs.ShuffleButton, smartAllowed: Boolean,
+): ShuffleMode = when {
+    !keep || kind != StartKind.LIST -> if (asked) ShuffleMode.SHUFFLE else ShuffleMode.OFF
+    !asked && was == ShuffleMode.OFF -> ShuffleMode.OFF
+    was == ShuffleMode.SMART && button == com.prism.music.data.prefs.ShuffleButton.SHUFFLE_AND_SMART && smartAllowed -> ShuffleMode.SMART
+    else -> ShuffleMode.SHUFFLE
+}
+
+/**
+ * Added to the playhead to get the lyrics' time: the listener's nudge for this song, plus Settings → Lyrics → timing
+ * for every song (1.8.4, #404; both positive = lyrics earlier), minus how far a music video runs behind its song.
+ */
+fun lyricShiftOf(songOffsetMs: Long, settingMs: Int, videoLagMs: Long): Long = songOffsetMs + settingMs - videoLagMs
 
 /** A long list's later pages join the queue this many songs at a time (#356). */
 private const val FILL_BATCH = 400
@@ -69,7 +136,11 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val pending = mutableListOf<(ExoPlayer) -> Unit>()
 
-    val player: ExoPlayer? get() = service?.player
+    val player: ExoPlayer? get() = service?.player ?: testPlayer
+
+    /** Tests only: a player to drive when the playback service isn't running (it has no notification, autoplay or effects). */
+    @androidx.annotation.VisibleForTesting
+    internal var testPlayer: ExoPlayer? = null
 
     private val _current = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _current
@@ -140,8 +211,17 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
     /** The listener's own nudge for this song (and mode), in ms; positive shows lyrics earlier. */
     val lyricOffset: StateFlow<Long> = _lyricOffset
     private val _lyricShift = MutableStateFlow(0L)
-    /** Added to the playhead to get the lyrics' time (the offset, minus any video lag). */
+    /** Added to the playhead to get the lyrics' time ([lyricShiftOf]: this song's offset, Settings' for all, less any video lag). */
     val lyricShift: StateFlow<Long> = _lyricShift
+    /** Settings → Lyrics → timing (#404), as last read: for every song, on top of [lyricOffset]. */
+    private var lyricsSettingMs = 0
+
+    init {
+        // A change applies at once, while the song plays: every reader of the lyrics' time goes through [lyricShift].
+        scope.launch {
+            c.settings.flow.map { it.behavior.lyricsOffsetMs }.distinctUntilChanged().collect { lyricsSettingMs = it; updateShift() }
+        }
+    }
     private var syncKey: String? = null
     private var syncJob: kotlinx.coroutines.Job? = null
 
@@ -200,7 +280,7 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
 
     private fun updateShift() {
         val lag = (_videoSync.value as? VideoSyncState.Synced)?.lagMs ?: 0L
-        _lyricShift.value = _lyricOffset.value - lag
+        _lyricShift.value = lyricShiftOf(_lyricOffset.value, lyricsSettingMs, lag)
     }
 
     private val _episodeSpeed = MutableStateFlow(1f)
@@ -487,7 +567,9 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
         val dj = djNext && !shuffle
         djNext = false
         c.dj.setOn(false)
-        // A new queue starts as plain shuffle (or none); Smart Shuffle is turned on per queue.
+        // A new queue starts as plain shuffle (or none); Smart Shuffle is turned on per queue. With "Keep shuffle on for
+        // the next list" (#416) a list takes over what the queue before it had, Smart Shuffle too ([carryShuffle], below).
+        val wasSmart = c.queue.smartShuffle.value
         c.queue.smartShuffle.value = false
         c.queue.smartPicks.value = emptySet()
         c.queue.source.value = source
@@ -498,12 +580,25 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
         withPlayer { p ->
             // Whatever Autoplay was still finding was for the queue going now: this one asks for its own, below.
             service?.dropAutoplay()
-            p.shuffleModeEnabled = shuffle
             val start = startIndex.coerceIn(0, songs.lastIndex)
+            val was = when { !p.shuffleModeEnabled -> ShuffleMode.OFF; wasSmart -> ShuffleMode.SMART; else -> ShuffleMode.SHUFFLE }
+            val prefs = c.settings.current.behavior
+            val mode = carryShuffle(
+                was, prefs.keepShuffle, startKind(source, songs, start, asVideo = startVideo != null, dj = dj), asked = shuffle,
+                prefs.shuffleButton, c.queue.smartAllowed(),
+            )
+            val shuffled = mode != ShuffleMode.OFF
+            p.shuffleModeEnabled = shuffled
             p.setMediaItems(songs.mapIndexed { i, s -> s.toMediaItem(if (i == start) startVideo else null) }, start, startMs.coerceAtLeast(0))
-            if (shuffle) reshuffle(p)
+            // The song it starts on first, the rest in a new order.
+            if (shuffled) reshuffle(p)
             p.prepare()
             p.play()
+            if (mode == ShuffleMode.SMART) {
+                c.queue.smartShuffle.value = true
+                // Its picks now: the service's Smart Shuffle collector never saw it go off and on again above.
+                c.queue.smartStarted.value++
+            }
             service?.maybeAutoplay()
             if (dj) c.dj.setOn(true)
             if (rest != null && token == playToken) fillQueue(rest, source, songs)
@@ -907,12 +1002,16 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
         }
         return out
     }
-    /** Shuffle's button: off → shuffle → Smart Shuffle (where the queue allows it) → off. */
+    /**
+     * Shuffle's button (the player's, the TV's and the browser remote's all come here): off → shuffle → Smart Shuffle
+     * (where the queue allows it) → off, or off → on → off with "Shuffle only" (D57): [nextShuffle].
+     */
     fun toggleShuffle() = withPlayer {
-        when {
-            !it.shuffleModeEnabled -> { reshuffle(it); it.shuffleModeEnabled = true }
-            !c.queue.smartShuffle.value && c.queue.smartAllowed() -> c.queue.smartShuffle.value = true
-            else -> { c.queue.smartShuffle.value = false; it.shuffleModeEnabled = false }
+        val now = when { !it.shuffleModeEnabled -> ShuffleMode.OFF; c.queue.smartShuffle.value -> ShuffleMode.SMART; else -> ShuffleMode.SHUFFLE }
+        when (nextShuffle(now, c.settings.current.behavior.shuffleButton, c.queue.smartAllowed())) {
+            ShuffleMode.SHUFFLE -> { reshuffle(it); it.shuffleModeEnabled = true }
+            ShuffleMode.SMART -> c.queue.smartShuffle.value = true
+            ShuffleMode.OFF -> { c.queue.smartShuffle.value = false; it.shuffleModeEnabled = false }
         }
     }
 
