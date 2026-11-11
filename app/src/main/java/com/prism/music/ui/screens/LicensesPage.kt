@@ -47,6 +47,12 @@ private val libraries = listOf(
     Library(tr(R.string.checker_framework_qualifiers), tr(R.string.checker_framework_developers), "MIT", "checker-qual", "https://checkerframework.org"),
     Library(tr(R.string.kuromoji_japanese_readings_for_romanized_lyrics), tr(R.string.atilika), tr(R.string.apache_2_0), "apache-2.0", "https://github.com/atilika/kuromoji"),
     Library(tr(R.string.ipadic_downloaded_with_japanese_reading_data), tr(R.string.nara_institute_of_science_and_technology), tr(R.string.ipadic_license), "ipadic", "https://github.com/atilika/kuromoji"),
+    // Sudachi, the other Japanese reader (Settings → Lyrics). Its dictionary's LEGAL text also carries UniDic's and
+    // NEologd's copyright and attribution notices, which the dictionary is built from.
+    Library(tr(R.string.sudachi_japanese_analyzer), tr(R.string.works_applications), tr(R.string.apache_2_0), "sudachi", "https://github.com/WorksApplications/Sudachi"),
+    Library(tr(R.string.sudachi_dict_full), tr(R.string.works_applications), tr(R.string.apache_2_0), "sudachidict-legal", "https://github.com/WorksApplications/SudachiDict"),
+    Library(tr(R.string.darts_clone_sudachi_s_trie), tr(R.string.works_applications), tr(R.string.apache_2_0), "apache-2.0", "https://github.com/WorksApplications/jdartsclone"),
+    Library(tr(R.string.javax_json_sudachi_s_settings), tr(R.string.oracle), tr(R.string.cddl_1_1_or_gpl_2_classpath), "javax.json-1.1", "https://javaee.github.io/jsonp/"),
     Library(tr(R.string.material_3_adaptive_androidx_window), tr(R.string.the_android_open_source_project), tr(R.string.apache_2_0), "apache-2.0", "https://developer.android.com/jetpack/androidx"),
     // Prism TV (1.8.0): the name is the library's own, the same in every language.
     Library(tr(R.string.compose_for_tv),tr(R.string.the_android_open_source_project), tr(R.string.apache_2_0), "apache-2.0", "https://developer.android.com/jetpack/androidx/releases/tv"),

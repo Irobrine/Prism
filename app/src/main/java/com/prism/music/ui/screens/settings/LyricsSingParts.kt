@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.prism.music.R
 import com.prism.music.data.ModelStore
+import com.prism.music.data.lyrics.roman.JapaneseEngine
 import com.prism.music.data.prefs.AppSettings
 import com.prism.music.data.prefs.FontChoice
 import com.prism.music.data.prefs.LyricsAhead
@@ -384,7 +385,7 @@ internal fun LsLanguageRows(d: AppSettings) {
         changed = romanizeLabel(romanize) != romanizeLabel(romanizeToMerged(d.romanize, d.romanizeAll)), searchable = false,
         onPick = { romanizeToStored(it).let { (mode, all) -> prefs.setRomanize(mode); prefs.setRomanizeAll(all) } },
     )
-    LsKanjiRow()
+    LsKanjiRow(d)
     ChoiceRow(
         tr(R.string.translation_place), LyricsExtraPlace.entries, s.lyricsExtraPlace, { it.label }, info = tr(R.string.how_a_translation_or_a_line),
         changed = s.lyricsExtraPlace != d.lyricsExtraPlace,
@@ -404,13 +405,27 @@ internal fun LsLanguageRows(d: AppSettings) {
 // In the same (decimal) megabytes as the download sizes, so "74 MB on the phone" and the installed size agree.
 private fun formatMb(bytes: Long) = "${bytes / 1_000_000} MB"
 
-/** Kuromoji's dictionary, for Japanese lyrics' kanji: download, progress, or remove. */
+private fun japaneseEngineLabel(e: JapaneseEngine) = if (e == JapaneseEngine.SUDACHI) tr(R.string.sudachi_dict_full) else tr(R.string.ipadic)
+
+/** Japanese lyrics' kanji: which on-phone dictionary reads them. Its download is in Sources and timing. */
 @Composable
-private fun LsKanjiRow() {
+private fun LsKanjiRow(d: AppSettings) {
+    val s = LocalAppSettings.current
+    val prefs = LocalContainer.current.settings
+    ChoiceRow(
+        tr(R.string.japanese_kanji_readings), JapaneseEngine.entries, s.japaneseEngine, ::japaneseEngineLabel,
+        info = tr(R.string.only_japanese_needs_this_its_kanji), changed = s.japaneseEngine != d.japaneseEngine,
+    ) { prefs.setJapaneseEngine(it) }
+}
+
+/** The dictionary the chosen Japanese engine reads with: download, progress, or removal. */
+@Composable
+private fun LsKanjiDictionaryRow() {
     val c = LocalContainer.current
+    val s = LocalAppSettings.current
     val scope = rememberCoroutineScope()
     val states by c.models.states.collectAsState()
-    val m = ModelStore.Model.JAPANESE
+    val m = s.japaneseEngine.model
     val state = states[m]
     val value = when (state) {
         ModelStore.State.Ready -> tr(R.string.on_this_phone_tap_to_remove, formatMb(c.models.sizeOnPhone(m)))
@@ -418,7 +433,7 @@ private fun LsKanjiRow() {
         is ModelStore.State.Failed -> tr(R.string.couldn_t_download_it_tap_to)
         else -> tr(R.string.only_for_japanese_songs, ModelStore.Model.sizeText(m))
     }
-    LinkRow(tr(R.string.japanese_kanji_readings), value = value, info = tr(R.string.only_japanese_needs_this_its_kanji), action = true) {
+    LinkRow(japaneseEngineLabel(s.japaneseEngine), value = value, action = true) {
         when (state) {
             ModelStore.State.Ready -> c.models.delete(m)
             is ModelStore.State.Downloading -> {}
@@ -436,6 +451,8 @@ internal fun LsSourceRows(d: AppSettings) {
     SwitchRow(tr(R.string.prefer_karaoke_synced_lyrics), s.preferSynced, info = tr(R.string.karaoke_lyrics_lit_up_word_by), changed = s.preferSynced != d.preferSynced) { prefs.setPreferSynced(it) }
     SwitchRow(tr(R.string.uncensor_lyrics), s.skipCensored, info = tr(R.string.swear_words_starred_out_f_k), changed = s.skipCensored != d.skipCensored) { prefs.setSkipCensored(it) }
     LsSourceOrder(d)
+    // Japanese reading data (the engine is picked in Language and translations): its dictionary.
+    LsKanjiDictionaryRow()
     // Its only control anywhere (plan §2.6): kept.
     SwitchRow(tr(R.string.lyrics_source_button), s.lyricsSourceButton, info = tr(R.string.lyrics_source_button_info), changed = s.lyricsSourceButton != d.lyricsSourceButton) { prefs.setLyricsSourceButton(it) }
     // #404: every song's lyrics a little earlier or later; applied at once.

@@ -18,12 +18,12 @@ import java.io.InputStream
  * which [Kana] then spells out in Hepburn, with the particles said as they're said (は "wa", へ "e", を "o") and a space
  * between words ("君の名は" → "kimi no na wa").
  */
-class Japanese private constructor(private val tokenizer: Tokenizer) {
+class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseReader {
     /**
      * Each character of [text] spelled out: a word's whole reading on its first Japanese character (with a space before
      * it when it starts a new word), nothing on the rest. Numbers stay as they were written, with the reading after them.
      */
-    fun pieces(text: String): List<String> {
+    override fun pieces(text: String): List<String> {
         val out = MutableList(text.length) { text[it].toString() }
         // Numbers are fed to Kuromoji as Japanese numerals (2人 → 二人), so counters, dates and times get the reading
         // Japanese gives them; the line itself keeps the numbers as they were written.
@@ -63,7 +63,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
         return out
     }
 
-    fun romanize(text: String): String = pieces(text).joinToString("")
+    override fun romanize(text: String): String = pieces(text).joinToString("")
 
     /**
      * Each run of kanji in [text] with the hiragana it's read as: 君の名は → きみ above 君, な above 名. Okurigana and
