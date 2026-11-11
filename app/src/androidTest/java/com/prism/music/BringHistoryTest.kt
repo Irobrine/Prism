@@ -3,7 +3,10 @@ package com.prism.music
 import android.net.Uri
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import com.prism.music.ui.screens.settings.SettingsPageId
+import com.prism.music.ui.screens.settings.SettingsTags
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -82,18 +85,25 @@ class BringHistoryTest {
         val prismOnly = runBlocking { c.imports.replay().totalMs(0, Long.MAX_VALUE) }
 
         Fixture.launch()
-        compose.openSettings()
-        compose.clickWhenFound(hasText("Recommendations & Replay") and hasClickAction())
-        compose.clickWhenFound(hasText("Bring your history") and hasClickAction())
+        // 1.8.4: Settings → Recommendations & history → History → Bring your history (a row, its own screen).
+        compose.openSettingsPage(SettingsPageId.RECOMMENDATIONS_HISTORY)
+        compose.clickWhenFound(settingsRow("Bring your history"))
         seeText("Your imports")
         seeText("2 plays")
 
-        // Back on Recommendations & Replay: count Spotify.
-        androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()).pressBack()
+        // Back on Recommendations & history: count Spotify. "Count history from" is one row of Replay's group now; its
+        // sheet lists every source, the ones with plays here as switches.
+        val device = androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
+        device.pressBack()
         seeText("Count history from")
-        compose.clickWhenFound(hasText("Spotify") and hasClickAction())
+        compose.openSettingsSheet("Count history from")
+        compose.clickWhenFound(hasText("Spotify") and hasClickAction() and hasTestTag(SettingsTags.ROW_SWITCH))
         compose.waitUntil(5_000) { ImportSource.SPOTIFY in c.imports.counted.value }
         assertEquals(prismOnly + 200_040 + 268_000, runBlocking { c.imports.replay().totalMs(0, Long.MAX_VALUE) })
+        // The sheet stays for the other sources: Back closes it, and the row says what counts now.
+        device.pressBack()
+        compose.waitUntil(5_000) { !compose.settingsSheetOpen() }
+        seeText("Plays in Prism · Spotify")
 
         // Replay says what it counts.
         // The Replay tab (its name may be hidden by the tab bar's label style; the tab still carries it).
@@ -101,13 +111,11 @@ class BringHistoryTest {
         seeText("Includes Spotify")
 
         // Removed from its page. Replay is a tab: Back from it goes Home, and the Settings tab then reopens where it was
-        // (tabs keep their pages), Recommendations & Replay.
-        androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()).pressBack()
+        // (tabs keep their pages), Recommendations & history; if it opens on the root instead, the page is one tap away.
+        device.pressBack()
         compose.clickWhenFound(hasContentDescription("Settings") and hasClickAction())
-        if (compose.onAllNodes(hasText("Bring your history") and hasClickAction()).fetchSemanticsNodes().isEmpty()) {
-            compose.clickWhenFound(hasText("Recommendations & Replay") and hasClickAction())
-        }
-        compose.clickWhenFound(hasText("Bring your history") and hasClickAction())
+        compose.backOnSettingsPage(SettingsPageId.RECOMMENDATIONS_HISTORY)
+        compose.clickWhenFound(settingsRow("Bring your history"))
         compose.clickWhenFound(hasContentDescription("Remove") and hasClickAction())
         compose.clickWhenFound(hasText("Remove") and hasClickAction() and !hasContentDescription("Remove"))
         compose.waitUntil(10_000) { runBlocking { c.db.imports().summaries().isEmpty() } }
@@ -130,9 +138,8 @@ class BringHistoryTest {
         assertTrue("the import is dated", ImportSource.SPOTIFY in c.imports.lastImports.value)
 
         Fixture.launch()
-        compose.openSettings()
-        compose.clickWhenFound(hasText("Recommendations & Replay") and hasClickAction())
-        compose.clickWhenFound(hasText("Bring your history") and hasClickAction())
+        compose.openSettingsPage(SettingsPageId.RECOMMENDATIONS_HISTORY)
+        compose.clickWhenFound(settingsRow("Bring your history"))
         seeText("Last Spotify import")
         seeText("(today)")
         seeText("Request a fresh download")

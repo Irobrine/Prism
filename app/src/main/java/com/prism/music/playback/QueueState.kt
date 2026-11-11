@@ -1,6 +1,10 @@
 package com.prism.music.playback
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import java.util.concurrent.ConcurrentHashMap
 
 enum class QueueKind { SINGLE, ALBUM, PLAYLIST, RADIO, LIBRARY, REPLAY, OTHER }
@@ -57,6 +61,13 @@ class QueueState {
     val smartShuffle = MutableStateFlow(false)
     /** The songs Smart Shuffle added (marked ✦ in the queue, counted as "smart" plays). */
     val smartPicks = MutableStateFlow<Set<String>>(emptySet())
+    /**
+     * Counts the queues that started in Smart Shuffle. A list taking Smart Shuffle over from the queue before it (#416)
+     * turns [smartShuffle] off and on again inside one call, which its collectors never see (same value as before).
+     */
+    val smartStarted = MutableStateFlow(0)
+    /** What the playback service follows: true when Smart Shuffle's picks should go in (turned on, or a new queue in it), false when they leave. */
+    val smartOn: Flow<Boolean> = merge(smartShuffle.drop(1), smartStarted.drop(1).map { true })
 
     /** Queues Smart Shuffle can add to: the listener's own lists, not radios (already all recommendations). */
     fun smartAllowed(): Boolean = !followingHost && source.value.kind in setOf(QueueKind.PLAYLIST, QueueKind.ALBUM, QueueKind.LIBRARY)

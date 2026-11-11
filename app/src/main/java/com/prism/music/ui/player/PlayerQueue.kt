@@ -8,6 +8,8 @@ import com.prism.music.ui.theme.PrismIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -172,7 +174,7 @@ fun InlineQueue(onRevealPlayer: () -> Unit, onHidePlayer: () -> Unit, modifier: 
         if (selecting) {
             val n = selected.orEmpty().size
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(trp(R.plurals.n_songs_picked, n), style = MaterialTheme.typography.titleLarge, color = Color.White, modifier = Modifier.weight(1f))
+                Text(trp(R.plurals.n_songs_picked, n), style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 QueueChip(tr(R.string.done), selected = true) { selected = null }
             }
             Spacer(Modifier.height(10.dp))
@@ -183,28 +185,17 @@ fun InlineQueue(onRevealPlayer: () -> Unit, onHidePlayer: () -> Unit, modifier: 
                 QueueChip(tr(R.string.add_to_playlist)) { if (enabled) adding = pc.songsAt(picked()).filter { !it.isLive && !it.isEpisode } }
                 QueueChip(tr(R.string.remove)) { if (enabled) { pc.removeMany(picked()); selected = null } }
             }
-        } else Row(pullToClose, verticalAlignment = Alignment.CenterVertically) {
-            Text(tr(R.string.queue), style = MaterialTheme.typography.titleLarge, color = Color.White, modifier = Modifier.weight(1f))
-            if (order.size > 1 && settings.view.queueDjChip) {
-                QueueChip("DJ", selected = dj) { pc.setDjMode(!dj) }
-                Spacer(Modifier.width(8.dp))
-            }
-            if (queue.size > 1) QueueChip(tr(R.string.save)) { saving = true }
-            if (order.isNotEmpty()) {
-                Spacer(Modifier.width(8.dp))
-                QueueChip(tr(R.string.clear)) { pc.clearUpcoming() }
-            }
-            Spacer(Modifier.width(8.dp))
-            // The lock: the order stays put while you scroll (#159).
-            Box(
-                Modifier.size(34.dp).clip(CircleShape).background(if (locked) Color.White else Color.White.copy(alpha = 0.12f))
-                    .clickable(onClickLabel = if (locked) tr(R.string.unlock_the_order) else tr(R.string.lock_the_order)) { c.settings.setQueueLocked(!locked) },
-                contentAlignment = Alignment.Center,
-            ) { Icon(PrismIcons.Lock, if (locked) tr(R.string.order_locked) else tr(R.string.lock_the_order), tint = if (locked) Color.Black else Color.White, modifier = Modifier.size(17.dp)) }
-        }
+        } else QueueHeader(
+            title = tr(R.string.queue),
+            dj = if (order.size > 1 && settings.view.queueDjChip) dj else null, onDj = { pc.setDjMode(!dj) },
+            onSave = if (queue.size > 1) ({ saving = true }) else null,
+            onClear = if (order.isNotEmpty()) ({ pc.clearUpcoming() }) else null,
+            locked = locked, onLock = { c.settings.setQueueLocked(!locked) },
+            modifier = pullToClose,
+        )
         if (dj) {
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 for (flow in com.prism.music.playback.DjFlow.entries) {
                     QueueChip(flow.label, selected = settings.djFlow == flow) { c.settings.setDjFlow(flow) }
                     Spacer(Modifier.width(8.dp))
@@ -390,11 +381,76 @@ private fun LazyListScope.queueSection(
     }
 }
 
+/**
+ * The queue's top row: its title, then DJ ([dj] null: no button), Save and Clear (null: not offered) and the lock.
+ */
+@Composable
+internal fun QueueHeader(
+    title: String,
+    dj: Boolean?, onDj: () -> Unit,
+    onSave: (() -> Unit)?,
+    onClear: (() -> Unit)?,
+    locked: Boolean, onLock: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // #427 (1.8.4): a plain Row gave the buttons their width first and the title what was left, so with a large display
+    // size and big text "Queue" was cut to a letter per line and the last button wrapped. Now the title keeps its one
+    // line (up to half the row when the buttons want more; "…" past that), the buttons scroll sideways in the rest, and
+    // the lock stays at the end. When everything fits, it's laid out as before.
+    androidx.compose.ui.layout.Layout(
+        content = {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (dj != null) QueueChip("DJ", selected = dj, onClick = onDj)
+                if (onSave != null) QueueChip(tr(R.string.save), onClick = onSave)
+                if (onClear != null) QueueChip(tr(R.string.clear), onClick = onClear)
+            }
+            // The lock: the order stays put while you scroll (#159).
+            Box(
+                Modifier.padding(start = 8.dp).size(34.dp).clip(CircleShape).background(if (locked) Color.White else Color.White.copy(alpha = 0.12f))
+                    .clickable(onClickLabel = if (locked) tr(R.string.unlock_the_order) else tr(R.string.lock_the_order), onClick = onLock),
+                contentAlignment = Alignment.Center,
+            ) { Icon(PrismIcons.Lock, if (locked) tr(R.string.order_locked) else tr(R.string.lock_the_order), tint = if (locked) Color.Black else Color.White, modifier = Modifier.size(17.dp)) }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val lock = measurables[2].measure(loose)
+        val chipsWant = measurables[1].maxIntrinsicWidth(constraints.maxHeight)
+        val gap = if (chipsWant > 0) 8.dp.roundToPx() else 0
+        if (!constraints.hasBoundedWidth) {
+            val titleP = measurables[0].measure(loose)
+            val chips = measurables[1].measure(loose)
+            val height = maxOf(titleP.height, chips.height, lock.height)
+            return@Layout layout(titleP.width + gap + chips.width + lock.width, height) {
+                titleP.placeRelative(0, (height - titleP.height) / 2)
+                chips.placeRelative(titleP.width + gap, (height - chips.height) / 2)
+                lock.placeRelative(titleP.width + gap + chips.width, (height - lock.height) / 2)
+            }
+        }
+        val width = constraints.maxWidth
+        val room = (width - lock.width).coerceAtLeast(0)
+        val titleP = measurables[0].measure(loose.copy(maxWidth = maxOf(room - chipsWant - gap, room / 2)))
+        val chips = measurables[1].measure(loose.copy(maxWidth = (room - titleP.width - gap).coerceAtLeast(0)))
+        val height = maxOf(titleP.height, chips.height, lock.height).coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            titleP.placeRelative(0, (height - titleP.height) / 2)
+            chips.placeRelative(width - lock.width - chips.width, (height - chips.height) / 2)
+            lock.placeRelative(width - lock.width, (height - lock.height) / 2)
+        }
+    }
+}
+
 /** A small action at the top of the queue ("Save", "Clear"; [selected] for a switch like "DJ"). */
 @Composable
 private fun QueueChip(label: String, selected: Boolean = false, onClick: () -> Unit) {
     Text(
         label, style = MaterialTheme.typography.labelLarge, color = if (selected) Color.Black else Color.White,
+        // Never on two lines (#427): in a row too narrow for it, it ends in "…".
+        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
         modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) Color.White else Color.White.copy(alpha = 0.12f))
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 7.dp),
     )

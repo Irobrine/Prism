@@ -49,24 +49,23 @@ The optional lock screen player needs a permission called "Display over other ap
 
 Prism walks you through this on the setting's page. It uses the permission only to bring its player up on your lock screen, and never draws over other apps.
 
-## New in 1.8.3
+## New in 1.8.4
 
-Your library, smarter.
+Settings, made simple.
 
-- **Smart playlists** fill themselves from rules you set: tempo, key and energy, what you like, play, download or tag.
-- **Tags:** your own labels on songs, each with its own page in Library.
-- **Select many:** hold a song in a list to pick more, then add, tag, like or download them all at once.
-- **Search your library** as you type, with filters. Japanese, Korean, Russian and Greek titles can be found in Latin letters.
-- **Also new:** find duplicates in a playlist, a file on your phone as a song's version, Repeat and Up next on the lock screen, upload and delete in Uploads.
-- **Fixes** for mixes that stuttered, songs starting over after Prism was closed, casting in the background, and more.
+- **A new Settings:** search, your account and Performance mode at the top, then 17 pages in five groups. Each one says how it's set.
+- **Choices with examples:** choices open in a sheet with an example of each. Nothing you've set changes, and every setting is still there.
+- **Reset this page** puts one page back the way it came.
+- **Also new:** lyrics earlier or later for every song, lyrics in the notification without a car, the lock screen in the player's look, Go to the playing song, Replay for yesterday, last week and last month, and a solid color as a background.
+- **Fixes** for crossfades lost after a seek, text showing through Liquid Glass, and more.
 
 See every change in the [changelog](CHANGELOG.md).
 
 <p align="center">
-<img src="docs/screenshots/smart-playlist.jpg" width="24%" alt="A new smart playlist: starters to pick from, a Tag rule, sorted by most played, up to 50 songs">
-<img src="docs/screenshots/tags.jpg" width="24%" alt="A tag's page in Library, with Play and Shuffle and its songs">
-<img src="docs/screenshots/select-many.jpg" width="24%" alt="Two songs picked in a playlist, with Play next, Add to queue and Add to playlist in the bar at the bottom">
-<img src="docs/screenshots/lock-up-next.jpg" width="24%" alt="The lock screen player with a Repeat button and the next two songs under Up next">
+<img src="docs/screenshots/settings-root.jpg" width="24%" alt="The new Settings: search, your account and Performance mode at the top, then the pages in groups, each with a line that says how it's set">
+<img src="docs/screenshots/settings-pick-sheet.jpg" width="24%" alt="The player's Background choice opened in a sheet, with an example of each option under the player's live preview">
+<img src="docs/screenshots/lyrics-timing.jpg" width="24%" alt="Lyrics & Sing, Sources and timing: the lyrics sources in order and Lyrics earlier / later">
+<img src="docs/screenshots/locate-playing.jpg" width="24%" alt="A long mix with the playing song's row lit up after Go to the playing song">
 </p>
 
 ## What Prism does

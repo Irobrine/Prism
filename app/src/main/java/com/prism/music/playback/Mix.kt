@@ -99,7 +99,13 @@ class MixEngine(
     private var blendStartedAt = 0L
     private var settleFrom = 1f
     private var settleStartedAt = 0L
-    private var noPlanFor: String? = null
+    /**
+     * No blend after [songId], as things stood: [atMs] into it, with [nextId] next. #432: not for the rest of the song
+     * whatever happens (it was, so a seek that ended one blend, or came too near the end for one, left the song without a
+     * crossfade and without its mark even once it was taken back, and so did a next song that joined the queue late).
+     */
+    private class Refusal(val songId: String, val nextId: String?, val atMs: Long)
+    private var refusal: Refusal? = null
     private var lastSyncLog = 0L
     private var syncActionAt = 0L
     /** While the next song plays a little off tempo to bring its beats in line: when to stop (0 when it isn't). */
@@ -207,7 +213,8 @@ class MixEngine(
         val planAhead = length + LEAD_MS + PREPARE_MS + 5_000
         // The player's crossfade mark: where the blend should start, as far as it's known yet (once it's being planned,
         // the plan's own, below: set once a step, so the bar doesn't flick between the two).
-        if (left > planAhead || noPlanFor == item.mediaId) state.mark.value = if (noPlanFor == item.mediaId) null else predict(item, dur, chosen)
+        val refused = refused(item)
+        if (left > planAhead || refused) state.mark.value = if (refused) null else predict(item, dur, chosen)
         // Not scanned yet (on mobile data, say): by now the rest of the song is usually buffered, so it's scanned from
         // the song cache, to know where its music really ends (a fade-out or a silent tail would otherwise be blended
         // over, and sound like the song stopping before the next one came in).
@@ -216,15 +223,23 @@ class MixEngine(
             scanFromPhone(item.mediaId)
         }
         if (left > planAhead) return minOf(2000, left - planAhead).coerceAtLeast(250)
-        if (noPlanFor == item.mediaId) return 1000
-        val p = makePlan(item, dur, length) ?: run { noPlanFor = item.mediaId; state.mark.value = null; return 1000 }
+        if (refused) return 1000
+        val p = makePlan(item, dur, length) ?: run { refuse(item.mediaId); return 1000 }
         // (The tail can still load while it waits to play along, see [prepared], so only the lead-in itself is needed.)
         if (main.currentPosition > p.startMs - LEAD_MS - 1000) {
-            // Too late to get the tail ready in time (a seek near the end): let this one end on its own.
-            note("no blend after ${item.mediaId}: too close to the end to get ready (at ${main.currentPosition} ms, blend at ${p.startMs} ms)")
-            noPlanFor = item.mediaId
-            state.mark.value = null
-            return 1000
+            // Too late to get the tail ready by then (a seek to just before the blend, or a scan that came late and moved
+            // it earlier). #432: the blend starts as soon as the tail can be ready and is that much shorter, ending where
+            // it would have; only with no room left for that does the song end on its own.
+            val pos = main.currentPosition
+            val late = lateStartMs(p.startMs, p.lengthMs, pos, if (p.beats) p.beatMs / p.ratio else 0.0)
+            if (late == null) {
+                note("no blend after ${item.mediaId}: too close to the end to get ready (at $pos ms, blend at ${p.startMs} ms)")
+                refuse(item.mediaId)
+                return 1000
+            }
+            note("too close to the blend after ${item.mediaId} to get ready (at $pos ms, blend at ${p.startMs} ms): it starts at $late ms instead")
+            p.lengthMs -= late - p.startMs
+            p.startMs = late
         }
         // Planned: the mark with the blend's length too (an automatic one is only known from here on).
         state.mark.value = BlendMark(p.fromId, p.startMs, p.lengthMs)
@@ -245,6 +260,23 @@ class MixEngine(
         note("planned ${p.fromId} -> ${p.toId}: blend at ${p.startMs} ms for ${p.lengthMs} ms, next from ${p.inMs} ms" +
             if (p.beats) ", tempo ×%.3f, on the beat".format(p.ratio) else "")
         return 50
+    }
+
+    /** The song up next, as the queue is now. */
+    private fun nextId(): String? = main.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { main.getMediaItemAt(it).mediaId }
+
+    /** No blend after [songId] as things stand ([Refusal]); its mark goes. */
+    private fun refuse(songId: String) {
+        refusal = Refusal(songId, nextId(), main.currentPosition)
+        state.mark.value = null
+    }
+
+    /** Whether the blend after [item] is still refused: until the song is taken back, or another song is next ([stillRefused]). */
+    private fun refused(item: MediaItem): Boolean {
+        val r = refusal ?: return false
+        if (r.songId == item.mediaId && stillRefused(r.atMs, r.nextId, main.currentPosition, nextId())) return true
+        refusal = null
+        return false
     }
 
     /**
@@ -360,7 +392,7 @@ class MixEngine(
         if (main.currentMediaItem?.mediaId != planned.fromId) return abort("song changed")
         val p = following(planned) ?: return abort("nothing next to blend into")
         val pos = main.currentPosition
-        if (pos > p.startMs + 200 || pos < p.startMs - LEAD_MS - PREPARE_MS - 15_000) return abort("seeked away")
+        if (pos > p.startMs + 200 || pos < p.startMs - LEAD_MS - PREPARE_MS - 15_000) return abort("seeked away", again = true)
         watchMain(pos, "while the tail got ready")
         if (pos < p.startMs - LEAD_MS) return if (p.startMs - LEAD_MS - pos > 400) 100 else 10
         if (t.playbackState != Player.STATE_READY) {
@@ -419,7 +451,7 @@ class MixEngine(
         val p = following(planned) ?: return abort("nothing next to blend into")
         t.playWhenReady = main.playWhenReady
         val pos = main.currentPosition
-        if (pos > p.startMs + 500 || pos < p.startMs - LEAD_MS - 2000) return abort("seeked away")
+        if (pos > p.startMs + 500 || pos < p.startMs - LEAD_MS - 2000) return abort("seeked away", again = true)
         val now = SystemClock.elapsedRealtime()
         if (now - syncActionAt > SETTLE_READINGS_MS) watchTail(t, now)
         watchMain(pos, "as the tail played along")
@@ -643,7 +675,7 @@ class MixEngine(
         catchUpUntil = 0L
         phase = Phase.IDLE
         plan = null
-        noPlanFor = null
+        refusal = null
         onSettled()
     }
 
@@ -655,7 +687,11 @@ class MixEngine(
         else -> "idle"
     }
 
-    private fun abort(why: String): Long {
+    /**
+     * Stops whatever is under way. [again]: the listener moved in the song (#432), so the blend is planned afresh from
+     * where the song is now, rather than refused after this song.
+     */
+    private fun abort(why: String, again: Boolean = false): Long {
         val wasOn = phase != Phase.IDLE
         if (wasOn) note("blend stopped: $why")
         state.blend.value = null
@@ -667,12 +703,12 @@ class MixEngine(
         shifter = null
         if (main.volume != 1f) main.volume = 1f
         if (main.playbackParameters.speed != 1f) main.playbackParameters = at(1f)
-        if (phase == Phase.PREPARED || phase == Phase.SYNCING) plan?.let { noPlanFor = it.fromId }
+        if (!again && (phase == Phase.PREPARED || phase == Phase.SYNCING)) plan?.let { refuse(it.fromId) }
         catchUpUntil = 0L
         phase = Phase.IDLE
         plan = null
         if (wasOn) onSettled()
-        return 500
+        return if (again) 100 else 500
     }
 
     companion object {
@@ -706,6 +742,32 @@ class MixEngine(
                 else -> AUTO_SHORT_MS
             }.coerceIn(AUTO_SHORT_MS, AUTO_MAX_MS)
         }
+
+        /**
+         * #432: whether a blend refused [atMs] into its song, with [wasNext] up next, is still refused at [positionMs] with
+         * [next] up next. Not once the song has been taken back (there may be time to get ready now), nor once another
+         * song is next (one that joined the queue late, or one that may be blended into where the last couldn't).
+         */
+        fun stillRefused(atMs: Long, wasNext: String?, positionMs: Long, next: String?): Boolean =
+            next == wasNext && positionMs >= atMs - WENT_BACK_SLACK_MS
+
+        /**
+         * #432: where a blend planned at [startMs] for [lengthMs] starts instead when the song is already at [positionMs],
+         * too near it for the tail to be made and brought in step: the lead-in and a moment to load on from here (in whole
+         * beats of the ending song with beat matching, [beatMs] apart, so it still starts on a beat), ending where it
+         * would have. [startMs] itself when there's time as it is; null when under [LATE_MIN_MS] of blend would be left.
+         */
+        fun lateStartMs(startMs: Long, lengthMs: Long, positionMs: Long, beatMs: Double): Long? {
+            val least = positionMs + LEAD_MS + LATE_SPARE_MS - startMs
+            if (least <= 0) return startMs
+            val by = if (beatMs > 0) (kotlin.math.ceil(least / beatMs) * beatMs).toLong() else least
+            return if (lengthMs - by >= LATE_MIN_MS) startMs + by else null
+        }
+
+        /** Beyond the lead-in, what a blend started late leaves for the tail to be made and to load. */
+        private const val LATE_SPARE_MS = 1_500L
+        /** The shortest blend worth starting late (Auto's own shortest). */
+        private const val LATE_MIN_MS = 1_500L
 
         /**
          * How far to put a blend off when the tail isn't in step as it comes up ([POSTPONE_MS], in whole beats of the
