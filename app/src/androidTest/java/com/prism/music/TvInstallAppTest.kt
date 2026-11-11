@@ -31,9 +31,14 @@ class TvInstallAppTest {
         compose.onNode(hasSetTextAction()).performTextInput("fire tv")
         compose.clickWhenFound(hasText("Share Prism with a TV") and hasClickAction())
         compose.waitUntil(5_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
-        compose.clickWhenFound(hasText("Share Prism with a TV") and hasClickAction())
+        // Its page: Speakers, TVs & browser → Prism on a TV (1.8.4), the switch's own row.
+        compose.clickWhenFound(settingsRow("Share Prism with a TV"))
         val share = Fixture.container.tvInstall
         compose.waitUntil(5_000) { share.running }
+        // On, the address to type on the TV is the row under it; what to do on the TV is behind the switch's ⓘ since
+        // 1.8.4 (it was a note under the switch).
+        compose.waitUntil(5_000) { compose.onAllNodes(settingsRow(tr(R.string.address))).fetchSemanticsNodes().isNotEmpty() }
+        compose.openSettingsInfo("Share Prism with a TV")
         compose.waitForText("Downloader app")
 
         val apk = File(Fixture.context.applicationInfo.sourceDir)

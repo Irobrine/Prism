@@ -22,7 +22,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class BadReadsTest {
-    private val c by lazy { AppContainer(RuntimeEnvironment.getApplication()) }
+    private val made = lazy { AppContainer(RuntimeEnvironment.getApplication()) }
+    private val c by made
+    @org.junit.After fun close() = made.closeAfterTest()
     private val song = Song("abc", "Some song", listOf(ArtistRef("Someone")), durationSec = 200)
 
     private fun breakTheDatabase() {
