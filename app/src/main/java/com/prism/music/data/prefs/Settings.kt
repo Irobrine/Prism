@@ -374,6 +374,14 @@ data class BehaviorPrefs(
     val localSkipFolders: Set<String> = emptySet(),
     /** #298 (1.8.2): playlists whose new songs download by themselves, by [com.prism.music.download.PlaylistDownloads.keepKey]. */
     val keptPlaylists: Set<String> = emptySet(),
+    /** 1.8.3.2: what swiping a song's row left and right does (as it queued them before). */
+    val songSwipeLeft: SongSwipeAction = SongSwipeAction.ADD_TO_QUEUE,
+    val songSwipeRight: SongSwipeAction = SongSwipeAction.PLAY_NEXT,
+    /**
+     * 1.8.3.2: sideways swipes on Library's song rows too. Off, since swiping there turns its tabs' pages, as before;
+     * on, a row's swipe comes first and the pages change from the chips.
+     */
+    val songSwipeLibrary: Boolean = false,
 )
 
 /** The lock screen's layouts (1.8.2). */
@@ -990,6 +998,28 @@ enum class PlayerGesture(val label: String) {
         }
     }
 }
+/**
+ * What swiping a song's row sideways does (1.8.3.2). The like, download and "not for me" ones act both ways: the label,
+ * the icon and the color follow what the song is now.
+ */
+enum class SongSwipeAction {
+    PLAY_NEXT, ADD_TO_QUEUE, LIKE, DOWNLOAD, RADIO, ADD_TAG, BEST_PART, GO_TO_ARTIST, NOT_FOR_ME, NONE;
+
+    /** As Settings lists it; a two-way action says both. */
+    val label: String get() = when (this) {
+        PLAY_NEXT -> tr(R.string.play_next)
+        ADD_TO_QUEUE -> tr(R.string.add_to_queue)
+        LIKE -> tr(R.string.like) + " / " + tr(R.string.unlike)
+        DOWNLOAD -> tr(R.string.download) + " / " + tr(R.string.remove)
+        RADIO -> tr(R.string.radio_2)
+        ADD_TAG -> tr(R.string.add_a_tag)
+        BEST_PART -> tr(R.string.play_from_the_best_part)
+        GO_TO_ARTIST -> tr(R.string.go_to_artist)
+        NOT_FOR_ME -> tr(R.string.not_for_me) + " / " + tr(R.string.remove)
+        NONE -> tr(R.string.nothing)
+    }
+}
+
 enum class LyricsAlign(val label: String) { START(tr(R.string.left)), CENTER(tr(R.string.center)) }
 /** Lyrics in a script the listener can't read, in Latin letters too: under each line, or in its place. */
 enum class RomanizeMode(val label: String) { OFF(tr(R.string.off)), UNDER(tr(R.string.under_each_line)), INSTEAD(tr(R.string.instead)) }
@@ -2056,6 +2086,10 @@ class SettingsRepository(
         val miniSwipeRight = stringPreferencesKey("mini_swipe_right")
         val miniSwipeDown = stringPreferencesKey("mini_swipe_down")
         val miniSwipeUp = stringPreferencesKey("mini_swipe_up")
+        // 1.8.3.2: gestures on a song's row.
+        val songSwipeLeft = stringPreferencesKey("song_swipe_left")
+        val songSwipeRight = stringPreferencesKey("song_swipe_right")
+        val songSwipeLibrary = booleanPreferencesKey("song_swipe_library")
         val libraryView = stringPreferencesKey("library_view")
         val libraryViews = stringPreferencesKey("library_views")
         val libraryColumns = stringPreferencesKey("library_columns")
@@ -2259,6 +2293,8 @@ class SettingsRepository(
                 // 1.7.4: what buttons and gestures do is how you use Prism, not how it looks.
                 "session_buttons", "cover_swipe_left", "cover_swipe_right", "cover_swipe_up", "cover_double_tap", "cover_long_press",
                 "mini_swipe_left", "mini_swipe_right", "mini_swipe_down", "mini_swipe_up",
+                // 1.8.3.2: what a song row's swipe does, and whether Library's rows swipe.
+                "song_swipe_left", "song_swipe_right", "song_swipe_library",
                 // 1.7.8 ([BehaviorPrefs]).
                 "lock_screen_player", "lock_screen_layout", "lock_screen_volume", "lock_screen_like", "lock_screen_output", "lock_screen_paused", "lock_screen_hide_song",
                 "lock_screen_repeat", "lock_screen_up_next",
@@ -2614,6 +2650,9 @@ class SettingsRepository(
                 embeddedLyrics = p[K.embeddedLyrics] ?: d.behavior.embeddedLyrics,
                 localSkipFolders = p[K.localSkipFolders]?.split('\n')?.filter { it.isNotBlank() }?.toSet() ?: d.behavior.localSkipFolders,
                 keptPlaylists = p[K.keptPlaylists]?.split('\n')?.filter { it.isNotBlank() }?.toSet() ?: d.behavior.keptPlaylists,
+                songSwipeLeft = p.enum(K.songSwipeLeft, d.behavior.songSwipeLeft),
+                songSwipeRight = p.enum(K.songSwipeRight, d.behavior.songSwipeRight),
+                songSwipeLibrary = p[K.songSwipeLibrary] ?: d.behavior.songSwipeLibrary,
             ),
             tv = TvPrefs(
                 ambientMinutes = (p[K.tvAmbientMinutes] ?: d.tv.ambientMinutes).coerceIn(0, 60),
@@ -3407,6 +3446,10 @@ class SettingsRepository(
     private val gestureKeys = listOf(
         K.coverSwipeLeft, K.coverSwipeRight, K.coverSwipeUp, K.coverDoubleTap, K.coverLongPress, K.miniSwipeLeft, K.miniSwipeRight, K.miniSwipeDown, K.miniSwipeUp,
     ).associateBy { it.name }
+    /** 1.8.3.2: what a song row's swipe left or right does. */
+    fun setSongSwipeLeft(v: SongSwipeAction) = edit { it[K.songSwipeLeft] = v.name }
+    fun setSongSwipeRight(v: SongSwipeAction) = edit { it[K.songSwipeRight] = v.name }
+    fun setSongSwipeLibrary(v: Boolean) = edit { it[K.songSwipeLibrary] = v }
     fun setArtShrinkOnPause(v: Boolean) = edit { it[K.artShrinkOnPause] = v }
     fun setShowOutputDevice(v: Boolean) = edit { it[K.showOutputDevice] = v }
     fun setLyricsAlign(v: LyricsAlign) = edit { it[K.lyricsAlign] = v.name }

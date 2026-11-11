@@ -35,6 +35,8 @@ import com.prism.music.data.prefs.ThemeMode
 
 val LocalAppSettings = staticCompositionLocalOf { AppSettings() }
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No container") }
+/** True around the app's own screens: a song row's swipe needs the app (a preview or a test has none). */
+val LocalAppRunning = staticCompositionLocalOf { false }
 val LocalIsDark = staticCompositionLocalOf { true }
 
 val PrismViolet = Color(0xFF7C5CFF)
