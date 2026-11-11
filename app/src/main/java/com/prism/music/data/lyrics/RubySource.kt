@@ -37,7 +37,6 @@ internal class SourceFurigana private constructor(
 
     private fun List<LyricWord>.clean(removed: BooleanArray): List<LyricWord> {
         var at = 0
-        var shift = 0.0
         val out = ArrayList<LyricWord>(size)
         for (word in this) {
             val length = word.text.length
@@ -46,19 +45,14 @@ internal class SourceFurigana private constructor(
             val duration = (word.endMs - word.startMs).coerceAtLeast(0)
             var i = 0
             while (i < length) {
-                if (at + i < removed.size && removed[at + i]) {
-                    // The annotation's time leaves the line's word timings with it: the words after it don't wait for
-                    // characters that are no longer drawn.
-                    shift += duration.toDouble() / length
-                    i++
-                    continue
-                }
+                if (at + i < removed.size && removed[at + i]) { i++; continue }
                 val from = i
-                val before = shift
                 while (i < length && (at + i >= removed.size || !removed[at + i])) i++
+                // A reading's characters take no sung time: each kept run keeps the part of the word's timing its
+                // characters had, and the next word keeps its own source start. The line still ends when it did.
                 out += word.copy(
-                    startMs = (start + duration.toDouble() * from / length - before).roundToLong().coerceAtLeast(0),
-                    endMs = (start + duration.toDouble() * i / length - before).roundToLong().coerceAtLeast(0),
+                    startMs = (start + duration.toDouble() * from / length).roundToLong(),
+                    endMs = (start + duration.toDouble() * i / length).roundToLong(),
                     text = word.text.substring(from, i),
                 )
             }
