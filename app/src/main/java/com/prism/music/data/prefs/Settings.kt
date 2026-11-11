@@ -357,6 +357,8 @@ data class BehaviorPrefs(
     val radioTune: com.prism.music.data.foryou.RadioTune = com.prism.music.data.foryou.RadioTune(),
     /** #299 (1.8.2): Autoplay leaves out songs longer than this many minutes (0: no limit, as before). */
     val autoplayMaxMinutes: Int = 0,
+    /** Japanese lyrics' kanji: read by Kuromoji's IPADIC, or Sudachi with its full dictionary ([AppSettings.japaneseEngine]). */
+    val japaneseEngine: com.prism.music.data.lyrics.roman.JapaneseEngine = com.prism.music.data.lyrics.roman.JapaneseEngine.IPADIC,
     /** #281 (1.8.2): with Data saver on, no music videos on mobile data ([com.prism.music.playback.VideoOnData]). */
     val noVideoOnData: Boolean = false,
     /** #282 (1.8.2): the cover's gestures work on the controls below the lyrics too, never on the lyrics themselves. */
@@ -1394,8 +1396,6 @@ data class AppSettings(
     val preferSynced: Boolean = true,
     /** Pass over sources whose lyrics star out swear words when another has them in full. */
     val skipCensored: Boolean = true,
-    /** Japanese lyrics' kanji: read by Kuromoji's IPADIC, or by Sudachi with the full SudachiDict (Settings → Lyrics). */
-    val japaneseEngine: com.prism.music.data.lyrics.roman.JapaneseEngine = com.prism.music.data.lyrics.roman.JapaneseEngine.IPADIC,
     /** A translation under each lyric line (machine translation, asked of Google Translate), when the song isn't in it. */
     val lyricsTranslate: Boolean = false,
     /** Language code to translate lyrics into; blank means the phone's language. */
@@ -1807,6 +1807,9 @@ data class AppSettings(
 
     /** Whether [src] is asked: every source until it's switched off, but a file's own lyrics only once they're switched on (#344). */
     fun lyricsSourceOn(src: LyricsSource) = if (src == LyricsSource.EMBEDDED) behavior.embeddedLyrics else src !in lyricsOff
+
+    // Which Japanese dictionary reads kanji lives in [behavior] (the constructor is near the JVM's limit); reads as before.
+    val japaneseEngine: com.prism.music.data.lyrics.roman.JapaneseEngine get() = behavior.japaneseEngine
 }
 
 /** [writer]: where the settings' writes run, one at a time (tests hold it back to line writes up). */
@@ -2467,7 +2470,6 @@ class SettingsRepository(
             lyricsOff = p[K.lyricsOff]?.split(",")?.mapNotNull { n -> LyricsSource.entries.firstOrNull { it.name == n } }?.toSet() ?: d.lyricsOff,
             preferSynced = p[K.preferSynced] ?: d.preferSynced,
             skipCensored = p[K.skipCensored] ?: d.skipCensored,
-            japaneseEngine = p.enum(K.japaneseEngine, d.japaneseEngine),
             lyricsTranslate = p[K.lyricsTranslate] ?: d.lyricsTranslate,
             lyricsTranslateTo = p[K.lyricsTranslateTo] ?: d.lyricsTranslateTo,
             lyricsFileWords = p[K.lyricsFileWords] ?: d.lyricsFileWords,
@@ -2679,6 +2681,7 @@ class SettingsRepository(
                     (p[K.radioNewness] ?: 0f).coerceIn(-1f, 1f), (p[K.radioDepth] ?: 0f).coerceIn(-1f, 1f), (p[K.radioEnergy] ?: 0f).coerceIn(-1f, 1f),
                 ),
                 autoplayMaxMinutes = (p[K.autoplayMaxMinutes] ?: d.behavior.autoplayMaxMinutes).coerceIn(0, com.prism.music.data.AutoplayLength.MAX_MINUTES),
+                japaneseEngine = p.enum(K.japaneseEngine, d.behavior.japaneseEngine),
                 noVideoOnData = p[K.noVideoOnData] ?: d.behavior.noVideoOnData,
                 gesturesUnderLyrics = p[K.gesturesUnderLyrics] ?: d.behavior.gesturesUnderLyrics,
                 playerRemembersPage = p[K.playerRemembersPage] ?: d.behavior.playerRemembersPage,
