@@ -83,7 +83,15 @@ class LibraryRepository(private val c: AppContainer) {
 
     private val keptLoad: kotlinx.coroutines.Job
 
+    /**
+     * When each library album was first seen here (1.8.4, D56: Albums by "Recently added"). Kept in "library_order"
+     * with the sorts; lazy, since the collector below can run before the rest of this class is set up.
+     */
+    val albumsSeen: AlbumFirstSeen by lazy { AlbumFirstSeen(c.app.getSharedPreferences("library_order", android.content.Context.MODE_PRIVATE)) }
+
     init {
+        // Every list of library albums that lands (the kept copy, a sync, after a save) marks its new ones as seen now.
+        c.scope.launch(Dispatchers.IO) { albums.collect { list -> if (list.isNotEmpty()) albumsSeen.note(list.map { it.id }) } }
         // The library as last synced, so it's all there offline (#55) and before the first sync of a launch finishes.
         // A restored copy signs out right after start ([forgetAccount] stops this, so the old account's lists don't
         // land after they were cleared).
@@ -440,6 +448,7 @@ class LibraryRepository(private val c: AppContainer) {
         if (!ok) return@withContext false
         val fresh = runCatching { c.ytm.libraryAlbums() }.getOrNull()
         if (fresh != null) { albums.value = fresh; persist() }
+        if (fresh?.none { it.id == albumId } != false) albumsSeen.forget(albumId) // saved again later, it's "recently added" again
         fresh?.none { it.id == albumId } ?: true
     }
 

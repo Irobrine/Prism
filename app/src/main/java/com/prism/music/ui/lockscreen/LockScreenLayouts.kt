@@ -150,6 +150,8 @@ internal class LockScreenContent(
     val repeat: Int? = null,
     /** The next songs as "Title · Artist", read only (1.8.3, D47); empty for none. */
     val upNext: List<String> = emptyList(),
+    /** The in-app player's look (1.8.4, D53): its background behind every layout and its progress bar. Null: as always. */
+    val look: LockPlayerLook? = null,
 )
 
 /** What a touch does: all that can be done while locked. Null on the settings' examples, which can't be touched. */
@@ -194,7 +196,7 @@ internal fun LockScreenLayout(layout: LockLayout, content: LockScreenContent, ac
 
 @Composable
 private fun CoverLayout(c: LockScreenContent, compact: Boolean) {
-    Ground(c.frost, 0.42f)
+    Ground(c, 0.42f)
     Page {
         Clock(c, Alignment.CenterHorizontally, if (compact) 68.sp else 92.sp, Modifier.padding(top = if (compact) 4.dp else 14.dp))
         CoverSpace(c, 300.dp, Modifier.weight(1f).fillMaxWidth().padding(vertical = if (compact) 10.dp else 16.dp))
@@ -222,7 +224,7 @@ private fun CoverLayout(c: LockScreenContent, compact: Boolean) {
 
 @Composable
 private fun FullCoverLayout(c: LockScreenContent, compact: Boolean, height: Dp) {
-    Ground(c.frost, 0.5f)
+    Ground(c, 0.5f)
     // The cover fills the top of the screen and dissolves into its own frost.
     CoverTap(Modifier.fillMaxWidth().height(min(450.dp, height * 0.56f))) { m ->
         c.cover(
@@ -263,7 +265,7 @@ private fun FullCoverLayout(c: LockScreenContent, compact: Boolean, height: Dp) 
 
 @Composable
 private fun LyricsLayout(c: LockScreenContent, compact: Boolean) {
-    Ground(c.frost, 0.5f)
+    Ground(c, 0.5f)
     Page {
         Clock(c, Alignment.Start, if (compact) 46.sp else 58.sp, Modifier.padding(start = 28.dp, end = 28.dp, top = if (compact) 2.dp else 8.dp))
         if (c.lyrics != null) c.lyrics.invoke(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp, vertical = if (compact) 10.dp else 16.dp))
@@ -284,10 +286,12 @@ private fun LyricsLayout(c: LockScreenContent, compact: Boolean) {
                     Glyph(PrismIcons.Next, tr(R.string.widget_next), 26.dp, 1f, LockTags.NEXT) { it.onNext() }
                 }
                 Spacer(Modifier.height(12.dp))
-                // Repeat sits at the line's end here, so the title keeps its room on a narrow phone.
-                if (c.repeat != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                // Repeat sits at the line's end here, so the title keeps its room on a narrow phone; so does the heart
+                // (1.8.4, D53), when Like is among what's shown.
+                if (c.repeat != null || c.showLike) Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Progress(c, 3.dp, times = false) }
                     Spacer(Modifier.width(6.dp))
+                    if (c.showLike) Heart(c, 20.dp)
                     RepeatGlyph(c, 20.dp)
                 } else Progress(c, 3.dp, times = false)
             }
@@ -302,7 +306,8 @@ private fun LyricsLayout(c: LockScreenContent, compact: Boolean) {
 
 @Composable
 private fun QuietLayout(c: LockScreenContent, compact: Boolean) {
-    // Plain black, nothing moving: what Performance mode always uses.
+    // Plain black, nothing moving: what Performance mode always uses. (With the player's look, its background held still.)
+    c.look?.ground?.invoke()
     Page {
         Clock(c, Alignment.CenterHorizontally, if (compact) 80.sp else 104.sp, Modifier.padding(top = if (compact) 40.dp else 96.dp))
         Spacer(Modifier.weight(1f))
@@ -346,7 +351,11 @@ private fun Page(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun Ground(frost: ImageBitmap?, veil: Float) {
+private fun Ground(c: LockScreenContent, veil: Float) {
+    // 1.8.4 (D53): the player's own background, which has its own darkening under the type.
+    val look = c.look
+    if (look != null) { look.ground(); return }
+    val frost = c.frost
     Box(Modifier.fillMaxSize()) {
         if (frost != null) Image(frost, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         Box(
@@ -410,12 +419,18 @@ private fun TitleRow(c: LockScreenContent, heart: Boolean) {
         }
         if (heart) {
             Spacer(Modifier.width(8.dp))
-            Glyph(
-                if (c.liked) PrismIcons.HeartFilled else PrismIcons.Heart,
-                tr(if (c.liked) R.string.lock_screen_unlike else R.string.widget_like), 26.dp, 0.9f, LockTags.LIKE,
-            ) { it.onLike() }
+            Heart(c, 26.dp)
         }
     }
+}
+
+/** The heart: every layout's is this one, so liking is the same action wherever it's tapped. */
+@Composable
+private fun Heart(c: LockScreenContent, size: Dp) {
+    Glyph(
+        if (c.liked) PrismIcons.HeartFilled else PrismIcons.Heart,
+        tr(if (c.liked) R.string.lock_screen_unlike else R.string.widget_like), size, 0.9f, LockTags.LIKE,
+    ) { it.onLike() }
 }
 
 @Composable
@@ -430,6 +445,7 @@ private fun Progress(c: LockScreenContent, thickness: Dp, times: Boolean) {
         description = tr(R.string.lock_screen_position),
         onChange = null,
         onDone = if (actions != null && c.seekable) actions.onSeek else null,
+        look = c.look?.bar,
     )
     if (times) {
         val elapsed by remember(c) { derivedStateOf { c.position() / 1000 } }
@@ -461,14 +477,17 @@ private fun LockBar(
     onChange: ((Float) -> Unit)?,
     onDone: ((Float) -> Unit)?,
     modifier: Modifier = Modifier,
+    /** The player's progress bar drawn in the line's place (1.8.4, D53); touched and read the same way. */
+    look: LockBarLook? = null,
 ) {
     var held by remember { mutableStateOf<Float?>(null) }
+    val strands = remember(look != null) { if (look != null) List(LOCK_RIBBON_STRANDS) { androidx.compose.ui.graphics.Path() } else emptyList() }
     val changed by rememberUpdatedState(onChange)
     val done by rememberUpdatedState(onDone)
     val touchable = onChange != null || onDone != null
     val haptics = rememberHaptics()
     Canvas(
-        modifier.fillMaxWidth().height(if (touchable) 28.dp else thickness + 6.dp).then(
+        modifier.fillMaxWidth().height(if (touchable || look != null) 28.dp else thickness + 6.dp).then(
             if (touchable) {
                 Modifier.testTag(tag)
                     .semantics {
@@ -501,6 +520,7 @@ private fun LockBar(
             } else Modifier,
         ),
     ) {
+        if (look != null) { drawPlayerBar(look, held ?: fraction(), strands); return@Canvas }
         val h = thickness.toPx()
         val top = (size.height - h) / 2
         val radius = CornerRadius(h / 2, h / 2)
@@ -726,7 +746,9 @@ internal fun LockScreenSample(layout: LockLayout, song: com.prism.music.data.mod
     val hide = s.behavior.lockScreenHideSong
     val shown = LockScreenRules.layoutFor(layout, false, hide)
     val hues = com.prism.music.ui.screens.standIns.first()
-    val frost = if (hide || shown == LockLayout.QUIET) null else com.prism.music.ui.components.rememberFrost(song?.thumbnail)?.image
+    // 1.8.4 (D53): the example shows the player's look when that's on (no waveform: the example has no song scanned).
+    val look = rememberLockPlayerLook(s, song?.thumbnail, hide)
+    val frost = if (hide || shown == LockLayout.QUIET || look != null) null else com.prism.music.ui.components.rememberFrost(song?.thumbnail)?.image
     val shape = lockCoverShape(s)
     val date = remember { java.text.SimpleDateFormat("EEEE, MMMM d", java.util.Locale.getDefault()).format(java.util.Date()).uppercase() }
     val lines = sampleLines()
@@ -752,6 +774,7 @@ internal fun LockScreenSample(layout: LockLayout, song: com.prism.music.data.mod
         upNext = if (s.behavior.lockScreenUpNext && !hide) {
             listOf(R.string.every_color_finds_its_way, R.string.we_follow_the_line_of_the, R.string.into_the_bright_of_the_day).map { tr(it) + " · " + tr(R.string.prism_sample) }
         } else emptyList(),
+        look = look,
     )
     com.prism.music.ui.screens.PreviewPhone(width, modifier.clearAndSetSemantics { }) {
         com.prism.music.ui.screens.LookTheme(s, true) { LockScreenLayout(shown, content, null) }

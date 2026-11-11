@@ -51,10 +51,19 @@ data class Look(
     }
 }
 
-/** The per-screen backgrounds a Look keeps, stored as one JSON map ("HOME" → "AURORA" or "PHOTO|…"). */
+/** The per-screen backgrounds a Look keeps, stored as one JSON map ("HOME" → "AURORA", "PHOTO|…" or "COLOR|#RRGGBB"). */
 object Backgrounds {
     private val json = Json { ignoreUnknownKeys = true }
     const val ASSET = "asset:"
+
+    /** #413 (1.8.4): a solid color, exactly "COLOR|#RRGGBB" (six hex digits, no see-through). */
+    private val solid = Regex("COLOR\\|#([0-9A-Fa-f]{6})")
+
+    /** The color (opaque ARGB) a background's saved value is, or null when it isn't a solid color written right. */
+    fun colorOf(v: String?): Int? = v?.let(solid::matchEntire)?.let { 0xFF000000.toInt() or it.groupValues[1].toInt(16) }
+
+    /** What's saved for the solid color [argb] (its see-through part is dropped). */
+    fun colorValue(argb: Int): String = "COLOR|#" + (argb and 0xFFFFFF).toString(16).uppercase(java.util.Locale.ROOT).padStart(6, '0')
 
     fun parse(tagged: String?): Map<String, String> =
         LookValue.text(tagged)?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() } ?: emptyMap()
@@ -132,15 +141,15 @@ object LookCode {
     }.getOrNull()
 
     /**
-     * [look] with only what a Look may hold: known settings with the right kind of value, backgrounds that are designs
-     * or kept photos (never a path on someone's phone), a name of a sensible length and a known icon style.
+     * [look] with only what a Look may hold: known settings with the right kind of value, backgrounds that are designs,
+     * solid colors or kept photos (never a path on someone's phone), a name of a sensible length and a known icon style.
      */
     fun sanitized(look: Look, kinds: Map<String, Char>): Look {
         val values = look.values.filter { (k, v) -> kinds[k]?.let { LookValue.untag(v, it) } != null }.toMutableMap()
         values[Look.BACKDROPS]?.let { b ->
             val kept = Backgrounds.parse(b).filter { (screen, v) ->
-                // "|" only ever comes with a photo, under any word (#378): a design's name never has one.
-                screen.length <= 16 && ('|' !in v && v.length <= 32 || Backgrounds.assetOf(v) != null)
+                // "|" only ever comes with a photo, under any word (#378), or a solid color (#413): a design's name never has one.
+                screen.length <= 16 && ('|' !in v && v.length <= 32 || Backgrounds.assetOf(v) != null || Backgrounds.colorOf(v) != null)
             }
             if (kept.isEmpty()) values.remove(Look.BACKDROPS) else values[Look.BACKDROPS] = Backgrounds.tag(kept)
         }
@@ -307,6 +316,8 @@ object LookLabels {
         // 1.8.1 requests (#310, #289, #283).
         "downloads_albums" to tr(R.string.album_names_in_downloads), "player_artist_links" to tr(R.string.each_artist_its_own_link),
         "backdrop_fade" to tr(R.string.now_playing_background_fades),
+        // 1.8.4 (D53, D55).
+        "lock_screen_player_look" to tr(R.string.look_lock_screen_like_player), "album_hero_cover" to tr(R.string.look_album_picture),
         "hide_status_bar" to tr(R.string.hide_the_status_bar),
         "hide_status_bar_player" to tr(R.string.hide_status_bar_on_the_player),
         "volume_matches_progress" to tr(R.string.volume_bar_like_the_progress_bar),
@@ -450,7 +461,7 @@ object LookLabels {
             "mini_player_style", "mini_skip_buttons", "mini_prev_button", "mini_play_button", "mini_progress", "mini_progress_color", "mini_fill_strength", "library_view", "library_views", "library_columns", "library_subtitles", "home_header", "home_header_height", "playlist_hero_cover", "replay_theme_colors", "replay_card",
             "replay_card_graph", "replay_story_font",
             "hide_status_bar", "hide_status_bar_player", "tab_names", "nav_bar_size", "nav_bar_fill", "mini_player_joined", "controls_classic",
-            "downloads_albums",
+            "downloads_albums", "album_hero_cover",
         ),
         "player" to setOf(
             "player_background", "player_backdrop_show", "player_art_corners", "transport_style", "cover_size", "scrubber_style", "art_shrink_on_pause",
@@ -461,6 +472,7 @@ object LookLabels {
             "panel_player", "queue_headings", "queue_dj_chip", "cast_mark", "immersive_video", "bleed_fit", "cover_flight", "video_controls_hide", "crossfade_mark", "blend_covers", "player_buttons_pill",
             "player_hidden_parts", "crossfade_shape", "player_artist_links", "player_gradient_depth",
             "cover_flight_back", "video_buttons_hide", "bleed_roomy", "queue_lengths", "queue_played_moves", "queue_tidy",
+            "lock_screen_player_look",
         ),
         "lyrics" to setOf(
             "lyrics_align", "lyrics_blur", "lyrics_progress_line", "lyrics_source_button", "lyrics_scale", "lyrics_style", "lyrics_blur_amount", "lyrics_spacing",
