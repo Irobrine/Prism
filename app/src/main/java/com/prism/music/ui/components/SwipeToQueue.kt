@@ -90,6 +90,8 @@ fun SongSwipe(
     val context = LocalContext.current
     val nav = LocalNavigator.current
     val settings = LocalAppSettings.current
+    // #406 (1.8.4): "Swipe song rows to queue" off leaves the row as it is, wherever rows swipe.
+    if (!settings.behavior.rowSwipes) { Box(modifier) { content() }; return }
     // In someone's Listen Together session, songs go into their queue. Read as it is, not collected: a row shouldn't
     // hold a collector of its own (the app keeps one for the rows' marks, not one each).
     val guest = (c.together.state.value as? com.prism.music.playback.together.TogetherState.Guest)?.takeIf { !song.isLocal && !song.isRss }
@@ -175,6 +177,9 @@ fun SwipeToQueue(item: com.prism.music.data.model.BrowseItem, modifier: Modifier
 /** The swipe itself: [onQueue] with true to the right (play next), false to the left (end of the queue). */
 @Composable
 fun SwipeToQueue(onQueue: (next: Boolean) -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    // #406 (1.8.4): "Swipe song rows to queue" off leaves the row as it is, wherever rows swipe (songs, and the albums
+    // and playlists that do), so a sideways drag is the page's again.
+    if (!LocalAppSettings.current.behavior.rowSwipes) { Box(modifier) { content() }; return }
     SwipeFrame(
         right = SwipeVisual(PrismIcons.PlaylistPlay, tr(R.string.play_next), SwipeNext),
         left = SwipeVisual(PrismIcons.QueueMusic, tr(R.string.add_to_queue), SwipeQueue),

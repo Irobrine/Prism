@@ -302,7 +302,7 @@ internal fun PrismMoodTile(mood: MoodItem, modifier: Modifier = Modifier, onClic
 /** Show, hide and order Search's sections. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun ArrangeSearchSheet(onDismiss: () -> Unit) {
+internal fun ArrangeSearchSheet(onDismiss: () -> Unit) {
     val c = LocalContainer.current
     val settings = LocalAppSettings.current
     val shown = settings.searchSections

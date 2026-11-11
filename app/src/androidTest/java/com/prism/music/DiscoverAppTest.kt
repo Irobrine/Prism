@@ -216,7 +216,8 @@ class DiscoverAppTest {
         compose.clickWhenFound(hasText(tr(R.string.no_repeats_title)) and hasClickAction())
         compose.waitUntil(5_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
         assertFalse("off until it's turned on", c.settings.current.behavior.autoplayNoRepeats)
-        compose.clickWhenFound(hasText(tr(R.string.no_repeats_title)) and hasClickAction())
+        // Its page: Playback → What plays next (1.8.4).
+        compose.clickWhenFound(settingsRow(tr(R.string.no_repeats_title)))
         compose.waitUntil(5_000) { c.settings.current.behavior.autoplayNoRepeats }
     }
 
@@ -230,6 +231,10 @@ class DiscoverAppTest {
         compose.waitForText(tr(R.string.tune_as_it_comes))
         compose.waitForText(tr(R.string.tune_hits_deep))
         c.settings.setRadioTune(RadioTune(energy = 1f))
+        // What the last slider goes by is a figure: since 1.8.4 it closes the slider's ⓘ (it was a line under it), and
+        // only while the slider is in use.
+        compose.waitUntil(5_000) { c.settings.current.behavior.radioTune.energy == 1f }
+        compose.openSettingsInfo(tr(R.string.tune_calm_energetic))
         compose.waitForText(tr(R.string.tune_measured_songs, c.mixTempo.measuredCount()))
         Fixture.screenshot("discover-sliders")
     }

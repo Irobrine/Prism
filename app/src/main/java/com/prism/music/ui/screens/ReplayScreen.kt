@@ -88,14 +88,17 @@ import java.util.Calendar
 /**
  * A stretch of Replay: today, this week, this month, the last 30 days, a calendar year (its Rewind), everything, or
  * (1.7.8, #149) any month ([year] + [month], 0–11) or any days ([fromDay]..[toDay], days since 1970 on the phone's clock).
+ * 1.8.4 (D58, D59): yesterday and last week too (last month is its month, [lastMonth]).
  */
 internal data class Period(val kind: Kind, val year: Int = 0, val month: Int = 0, val fromDay: Long = 0, val toDay: Long = 0) {
-    enum class Kind { TODAY, WEEK, MONTH, DAYS30, YEAR, ALL, MONTH_OF, DAYS }
+    enum class Kind { TODAY, WEEK, MONTH, DAYS30, YEAR, ALL, MONTH_OF, DAYS, YESTERDAY, LAST_WEEK }
 
     val isYear: Boolean get() = kind == Kind.YEAR
     val label: String get() = when (kind) {
         Kind.TODAY -> tr(R.string.today)
+        Kind.YESTERDAY -> tr(R.string.yesterday)
         Kind.WEEK -> tr(R.string.this_week)
+        Kind.LAST_WEEK -> tr(R.string.last_week)
         Kind.MONTH -> tr(R.string.this_month)
         Kind.DAYS30 -> tr(R.string.last_30_days)
         Kind.YEAR -> "$year"
@@ -120,12 +123,16 @@ internal data class Period(val kind: Kind, val year: Int = 0, val month: Int = 0
 
     companion object {
         val TODAY = Period(Kind.TODAY)
+        val YESTERDAY = Period(Kind.YESTERDAY)
         val WEEK = Period(Kind.WEEK)
+        val LAST_WEEK = Period(Kind.LAST_WEEK)
         val MONTH = Period(Kind.MONTH)
         val DAYS30 = Period(Kind.DAYS30)
         val ALL = Period(Kind.ALL)
         fun year(y: Int) = Period(Kind.YEAR, y)
         fun monthOf(y: Int, m: Int) = Period(Kind.MONTH_OF, y, m)
+        /** The month before [today]'s (December of the year before, in January). */
+        fun lastMonth(today: java.time.LocalDate = java.time.LocalDate.now()) = java.time.YearMonth.from(today).minusMonths(1).let { monthOf(it.year, it.monthValue - 1) }
         fun days(from: Long, to: Long) = Period(Kind.DAYS, fromDay = minOf(from, to), toDay = maxOf(from, to))
         fun thisYear() = year(Calendar.getInstance().get(Calendar.YEAR))
         fun of(key: String): Period {
@@ -159,16 +166,28 @@ internal fun SongPlays.toSong() = Song(
     album = albumTitle?.let { AlbumRef(it) }, durationSec = durationSec, thumbnail = thumbnail,
 )
 
-internal fun range(p: Period): Pair<Long, Long> {
-    val now = System.currentTimeMillis()
-    val zone = java.time.ZoneId.systemDefault()
+/**
+ * [p] from its first to its last millisecond, at [now] on the clock of [zone], the week starting on [firstDay] (the
+ * phone's own unless a test says otherwise).
+ */
+internal fun range(
+    p: Period,
+    now: Long = System.currentTimeMillis(),
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    firstDay: java.time.DayOfWeek = java.time.temporal.WeekFields.of(java.util.Locale.getDefault()).firstDayOfWeek,
+): Pair<Long, Long> {
     // Midnight of a day on the phone's clock (whatever daylight saving does).
     fun startOf(d: java.time.LocalDate) = d.atStartOfDay(zone).toInstant().toEpochMilli()
-    val today = java.time.LocalDate.now(zone)
+    val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    // The week as the phone's region starts it (Monday or Sunday).
+    val thisWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(firstDay))
     return when (p.kind) {
         Period.Kind.TODAY -> startOf(today) to now
-        // The week as the phone's region starts it (Monday or Sunday).
-        Period.Kind.WEEK -> startOf(today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.temporal.WeekFields.of(java.util.Locale.getDefault()).firstDayOfWeek))) to now
+        // Midnight to midnight: 23 or 25 hours on the days the clocks change.
+        Period.Kind.YESTERDAY -> startOf(today.minusDays(1)) to startOf(today) - 1
+        Period.Kind.WEEK -> startOf(thisWeek) to now
+        // The whole week before this one.
+        Period.Kind.LAST_WEEK -> startOf(thisWeek.minusWeeks(1)) to startOf(thisWeek) - 1
         Period.Kind.MONTH -> startOf(today.withDayOfMonth(1)) to now
         Period.Kind.DAYS30 -> now - 30L * 86_400_000 to now
         // Midnight to midnight on the phone's clock (whatever daylight saving does), up to now for this year.
@@ -178,6 +197,30 @@ internal fun range(p: Period): Pair<Long, Long> {
         Period.Kind.DAYS -> startOf(java.time.LocalDate.ofEpochDay(p.fromDay)) to minOf(startOf(java.time.LocalDate.ofEpochDay(p.toDay + 1)) - 1, now)
     }
 }
+
+/**
+ * What a whole day, week or month already over is compared with: the day, the week or the month just before it (the one
+ * that ends where [p] starts, at [from]), midnight to midnight on the clock of [zone]. Null for the other stretches (the
+ * story works theirs out itself).
+ */
+internal fun rangeBefore(p: Period, from: Long, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): Pair<Long, Long>? {
+    val first = java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate()
+    val before = when (p.kind) {
+        Period.Kind.YESTERDAY -> first.minusDays(1)
+        Period.Kind.LAST_WEEK -> first.minusWeeks(1)
+        Period.Kind.MONTH_OF -> first.minusMonths(1)
+        else -> return null
+    }
+    return before.atStartOfDay(zone).toInstant().toEpochMilli() to from - 1
+}
+
+/** Replay's chips, in order (1.8.4): each stretch beside the one before it, then the [years], then everything. */
+internal fun replayPresets(years: List<Int>, today: java.time.LocalDate = java.time.LocalDate.now()): List<Period> =
+    listOf(Period.TODAY, Period.YESTERDAY, Period.WEEK, Period.LAST_WEEK, Period.MONTH, Period.lastMonth(today), Period.DAYS30) +
+        years.map { Period.year(it) } + Period.ALL
+
+/** A chip's words: the month before this one is "Last month" (its page still names the month). */
+internal fun chipLabel(p: Period, lastMonth: Period): String = if (p == lastMonth) tr(R.string.last_month) else p.label
 
 /** The "Other dates…" chip (it opens [ReplayDatesSheet]; never a period itself). */
 private val PICK_DATES = Period(Period.Kind.DAYS, fromDay = -1, toDay = -1)
@@ -314,10 +357,12 @@ fun ReplayScreen(bottomPadding: Dp) {
         if (historyPaused) item { HistoryPausedNote() }
         item {
             // Any dates (#149): today, this week, any month, or the days you pick, beside the usual ones.
-            val presets = listOf(Period.TODAY, Period.WEEK, Period.MONTH, Period.DAYS30) + years.map { Period.year(it) } + Period.ALL
+            // 1.8.4 (D58, D59): yesterday, last week and last month sit beside today, this week and this month.
+            val lastMonth = Period.lastMonth()
+            val presets = replayPresets(years)
             val chips = presets + (if (period !in presets) listOf(period) else emptyList()) + PICK_DATES
             com.prism.music.ui.components.ChipRow(
-                chips, { it == period }, { if (it == PICK_DATES) tr(R.string.other_dates_2) else it.label },
+                chips, { it == period }, { if (it == PICK_DATES) tr(R.string.other_dates_2) else chipLabel(it, lastMonth) },
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
             ) { if (it == PICK_DATES) pickingDates = true else periodKey = it.key }
         }

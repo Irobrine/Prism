@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -147,7 +148,12 @@ class ReviewFixes182AppTest {
 
     // ------------------------------------------------------------ Settings
 
-    /** The last source on, here as in the Order row's own switch: with none left, every switch said off and all were asked. */
+    /**
+     * The last source on can't be switched off: with none left, every switch said off and all were asked. Before 1.8.4
+     * "Read lyrics from your music files" was a row of its own with the same guard as its switch in the sources' order;
+     * since 1.8.4 that switch ("Your music files", Lyrics & Sing → Sources) is its only one, and search still finds it
+     * by the old name.
+     */
     @Test fun readingYourFilesCantBeTheLastSourceSwitchedOff() {
         Fixture.ready()
         c.settings.setEmbeddedLyrics(true)
@@ -156,9 +162,9 @@ class ReviewFixes182AppTest {
         Fixture.launch()
         val title = tr(R.string.read_lyrics_from_your_music_files)
         openSetting(title, "read lyrics from your music")
-        val row = hasText(title) and isToggleable()
-        compose.waitUntil(5_000) { compose.onAllNodes(row).fetchSemanticsNodes().isNotEmpty() }
-        // Switched off, a tap has nothing to act on: it's the same guard as the Order row's switch.
+        val row = hasTestTag(EMBEDDED_SOURCE_SWITCH) and isToggleable()
+        compose.scrollSettingsTo(row)
+        // Switched off, a tap has nothing to act on.
         compose.onNode(row).assertIsNotEnabled()
         assertEquals(listOf(LyricsSource.EMBEDDED), c.settings.current.lyricsSources)
 
@@ -171,14 +177,17 @@ class ReviewFixes182AppTest {
         compose.waitUntil(5_000) { !c.settings.current.behavior.embeddedLyrics }
     }
 
-    /** The search result opens Home & Library's Home group: the setting has to be there. */
+    /**
+     * The search result opens the screen that holds the setting: it has to be there. (Customize Home since 1.8.4, the
+     * screen Home & Library's first row opens; it was Home & Library's Home group.)
+     */
     @Test fun quickPicksFromIsOnThePageItsResultOpens() {
         Fixture.ready()
         Fixture.launch()
         openSetting(tr(R.string.quick_picks_from), "quick picks from")
-        compose.waitForText(tr(R.string.quick_picks_from), 5_000)
         val other = QuickPicksSource.entries.first { it != c.settings.current.behavior.quickPicksSource }
-        compose.onAllNodes(hasText(other.label) and hasClickAction()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
+        // Its row's own chip (the screen is scrolled to it: it builds only what is on screen).
+        compose.clickWhenFound(settingsChip(other.label, row = tr(R.string.quick_picks_from)))
         compose.waitUntil(5_000) { c.settings.current.behavior.quickPicksSource == other }
     }
 }

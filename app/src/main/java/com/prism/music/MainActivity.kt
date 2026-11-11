@@ -741,11 +741,12 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                             ),
                         ) {
                             ScreenBackdrop(BackdropScreen.SETTINGS) {
-                                SettingsScreen(bottomPadding, com.prism.music.ui.screens.SettingsSection.of(it.arguments?.getString("section")), find = it.arguments?.getString("find"))
+                                // 1.8.4: a page of the map by its key, or an old page's key (an alias), resolved by Settings itself.
+                                SettingsScreen(bottomPadding, key = it.arguments?.getString("section"), find = it.arguments?.getString("find"))
                             }
                         }
                         composable(Routes.EQ) { ScreenBackdrop(BackdropScreen.SETTINGS) { EqualizerScreen(bottomPadding) } }
-                        composable(Routes.CATALOGUE) { ScreenBackdrop(BackdropScreen.HOME) { CatalogueScreen(bottomPadding) } }
+                        composable(Routes.CATALOGUE + "?find={find}", listOf(navArgument("find") { type = NavType.StringType; nullable = true; defaultValue = null })) { ScreenBackdrop(BackdropScreen.HOME) { CatalogueScreen(bottomPadding) } }
                         composable(Routes.MOODS) { ScreenBackdrop(BackdropScreen.SEARCH) { com.prism.music.ui.screens.MoodsScreen(bottomPadding) } }
                         composable(Routes.EXPLORE) { ScreenBackdrop(BackdropScreen.SEARCH) { com.prism.music.ui.screens.ExploreScreen(bottomPadding) } }
                         composable(Routes.IMPORT) { ScreenBackdrop(BackdropScreen.LIBRARY) { com.prism.music.ui.screens.ImportScreen(bottomPadding) } }
@@ -1220,7 +1221,7 @@ private fun TabItem(tab: Tab, selected: Boolean, labels: NavLabels, compact: Flo
                     Text(
                         tab.label, color = fg, style = style, maxLines = 1, softWrap = false,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp), maxFontSize = style.fontSize),
+                        autoSize = com.prism.music.ui.components.FitAutoSize(minFontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp), maxFontSize = style.fontSize),
                         modifier = Modifier.padding(horizontal = 6.dp).wrapContentHeight(unbounded = true),
                     )
                 }
@@ -1241,7 +1242,7 @@ private fun TabItem(tab: Tab, selected: Boolean, labels: NavLabels, compact: Flo
                 Text(
                     tab.label, color = fg, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp), maxFontSize = MaterialTheme.typography.labelSmall.fontSize),
+                    autoSize = com.prism.music.ui.components.FitAutoSize(minFontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp), maxFontSize = MaterialTheme.typography.labelSmall.fontSize),
                     modifier = Modifier.padding(top = 2.dp, start = 6.dp, end = 6.dp),
                 )
             }
@@ -1258,7 +1259,7 @@ private fun TabItem(tab: Tab, selected: Boolean, labels: NavLabels, compact: Flo
                 Text(
                     tab.label, color = fg, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp), maxFontSize = MaterialTheme.typography.labelLarge.fontSize),
+                    autoSize = com.prism.music.ui.components.FitAutoSize(minFontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp), maxFontSize = MaterialTheme.typography.labelLarge.fontSize),
                 )
             }
         }
