@@ -7,8 +7,10 @@ import com.prism.music.ui.components.PrismButton
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -58,6 +62,8 @@ import com.prism.music.playback.QueueKind
 import com.prism.music.playback.QueueSource
 import com.prism.music.ui.LocalNavigator
 import com.prism.music.ui.components.Artwork
+import com.prism.music.ui.components.CoverFor
+import com.prism.music.ui.components.CoverPickSheet
 import com.prism.music.ui.components.EmptyState
 import com.prism.music.ui.components.LocatePlaying
 import com.prism.music.ui.components.LocatePlayingRow
@@ -235,6 +241,8 @@ fun LocalMusicScreen(bottomPadding: Dp) {
     var openRecent by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var choosingFolders by remember { mutableStateOf(false) }
+    // The album whose cover is being changed, after a long press on it.
+    var coverAlbum by remember { mutableStateOf<LocalAlbum?>(null) }
     BackHandler(openArtist != null || openAlbum != null || openRecent) {
         // An album opened from an artist goes back to the artist.
         when {
@@ -386,9 +394,12 @@ fun LocalMusicScreen(bottomPadding: Dp) {
                             LocalSection.FAVOURITES -> if (favourites.isEmpty()) EmptyState(PrismIcons.Heart, tr(R.string.no_favorites_yet), tr(R.string.like_songs_from_your_phone_on))
                                 else SongsPage(favourites, sort, { saveOrders(orders.copy(songs = it)) }, tr(R.string.favorites), bottomPadding, locate)
                             LocalSection.ARTISTS -> ArtistsPage(sortedArtists(artists, orders.artists), bottomPadding, orders.artists, { saveOrders(orders.copy(artists = it)) }) { openArtist = it.key }
-                            LocalSection.ALBUMS -> AlbumsPage(sortedAlbums(albums, orders.albums), bottomPadding, orders.albums, { saveOrders(orders.copy(albums = it)) }) { openAlbum = it.id }
+                            LocalSection.ALBUMS -> AlbumsPage(
+                                sortedAlbums(albums, orders.albums), bottomPadding, orders.albums, { saveOrders(orders.copy(albums = it)) },
+                                onLongPress = { coverAlbum = it },
+                            ) { openAlbum = it.id }
                             LocalSection.ADDED_SONGS -> TrackList(addedSongs, tr(R.string.recently_added), bottomPadding, locate)
-                            LocalSection.ADDED_ALBUMS -> AlbumsPage(addedAlbums, bottomPadding) { openAlbum = it.id }
+                            LocalSection.ADDED_ALBUMS -> AlbumsPage(addedAlbums, bottomPadding, onLongPress = { coverAlbum = it }) { openAlbum = it.id }
                             LocalSection.DOWNLOADS -> if (downloads.isEmpty()) EmptyState(PrismIcons.DownloadDone, tr(R.string.no_downloads_yet), tr(R.string.songs_you_download_in_prism_show))
                                 else TrackList(downloads, tr(R.string.downloads), bottomPadding, locate)
                             null -> {}
@@ -400,6 +411,20 @@ fun LocalMusicScreen(bottomPadding: Dp) {
     }
     if (editing) SectionsEditor(sections, onFolders = { choosingFolders = true }) { editing = false }
     if (choosingFolders) LocalFoldersSheet { choosingFolders = false }
+    // A long press on an album changes its cover, kept on this phone like a playlist's (#305).
+    coverAlbum?.let { a ->
+        val albumId = a.tracks.firstOrNull()?.albumId ?: 0L
+        CoverPickSheet(
+            CoverFor.OfAlbum(
+                id = "local:$albumId", title = a.title, thumbnail = a.art, key = c.covers.localAlbumKey(albumId),
+            ),
+            onDismiss = {
+                // The queue's items take the new picture too, for the notification, lock screen and car.
+                c.player.refreshCovers { s -> s.isLocal && c.localMusic.track(s.id)?.albumId == albumId }
+                coverAlbum = null
+            },
+        )
+    }
 }
 
 /**
@@ -567,7 +592,8 @@ private fun ArtistsPage(artists: List<LocalArtist>, bottomPadding: Dp, sort: Ord
 /** Albums as tiles; with [sort], in the order chosen there (Added albums keeps its own, newest first). */
 @Composable
 private fun AlbumsPage(
-    albums: List<LocalAlbum>, bottomPadding: Dp, sort: Order<AlbumKey>? = null, onSort: (Order<AlbumKey>) -> Unit = {}, onOpen: (LocalAlbum) -> Unit,
+    albums: List<LocalAlbum>, bottomPadding: Dp, sort: Order<AlbumKey>? = null, onSort: (Order<AlbumKey>) -> Unit = {},
+    onLongPress: (LocalAlbum) -> Unit = {}, onOpen: (LocalAlbum) -> Unit,
 ) {
     LazyVerticalGrid(
         GridCells.Adaptive(150.dp), Modifier.fillMaxSize(),
@@ -576,7 +602,7 @@ private fun AlbumsPage(
         if (sort != null) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
             SortRow(trp(R.plurals.n_albums, albums.size), tr(R.string.sort_albums), AlbumKey.entries, sort, { it.label }, { it.dirs }, onSort, inset = 4.dp)
         }
-        items(albums, key = { "b" + it.id }) { a -> AlbumTile(a) { onOpen(a) } }
+        items(albums, key = { "b" + it.id }) { a -> AlbumTile(a, { onOpen(a) }) { onLongPress(a) } }
     }
 }
 
@@ -651,11 +677,22 @@ private fun <K> SortSheet(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumTile(a: LocalAlbum, onClick: () -> Unit) {
+private fun AlbumTile(a: LocalAlbum, onClick: () -> Unit, onLongClick: () -> Unit) {
     val ui = LocalUi.current
-    Column(Modifier.padding(4.dp).clip(ui.tile).clickable(onClick = onClick).padding(4.dp)) {
-        Artwork(a.art, Modifier.fillMaxWidth().aspectRatio(1f), ui.albumArt, size = 544, placeholderIcon = PrismIcons.Album)
+    val haptics = LocalHapticFeedback.current
+    // The picture picked for this file album (long press), else the files' own.
+    val art = com.prism.music.data.PlaylistCovers.shared?.localAlbumArt(a.tracks.firstOrNull()?.albumId ?: 0L, a.art) ?: a.art
+    Column(
+        Modifier.padding(4.dp).clip(ui.tile).combinedClickable(
+            onClickLabel = tr(R.string.open_album),
+            onLongClickLabel = tr(R.string.change_cover),
+            onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongClick() },
+            onClick = onClick,
+        ).padding(4.dp),
+    ) {
+        Artwork(art, Modifier.fillMaxWidth().aspectRatio(1f), ui.albumArt, size = 544, placeholderIcon = PrismIcons.Album)
         Spacer(Modifier.height(8.dp))
         Text(a.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
