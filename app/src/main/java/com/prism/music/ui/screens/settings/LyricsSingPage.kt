@@ -150,7 +150,7 @@ val lyricsSingIndex: List<SettingEntry> by lazy {
             SettingEntry(page, g.language, tr(R.string.translation_place), tr(R.string.translation_look) + " " + tr(R.string.translation_romanization_size_color_italic_above)),
             SettingEntry(page, g.language, tr(R.string.translation_size), tr(R.string.translation_romanization_size_color_italic_above)),
             SettingEntry(page, g.language, tr(R.string.translation_color), tr(R.string.translation_romanization_size_color_italic_above)),
-            SettingEntry(page, g.language, tr(R.string.translation_in_italics), tr(R.string.italics)),
+            SettingEntry(page, g.sources, tr(R.string.translation_in_italics), tr(R.string.italics)),
             // Sources and timing
             SettingEntry(page, g.sources, tr(R.string.prefer_karaoke_synced_lyrics), tr(R.string.word_by_word_time_synced)),
             SettingEntry(page, g.sources, tr(R.string.uncensor_lyrics), tr(R.string.explicit_swear_stars)),

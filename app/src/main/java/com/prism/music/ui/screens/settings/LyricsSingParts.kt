@@ -386,6 +386,8 @@ internal fun LsLanguageRows(d: AppSettings) {
         onPick = { romanizeToStored(it).let { (mode, all) -> prefs.setRomanize(mode); prefs.setRomanizeAll(all) } },
     )
     LsKanjiRow(d)
+    // The dictionary that reads the kanji, right under the engine that picks it.
+    LsKanjiDictionaryRow()
     ChoiceRow(
         tr(R.string.translation_place), LyricsExtraPlace.entries, s.lyricsExtraPlace, { it.label }, info = tr(R.string.how_a_translation_or_a_line),
         changed = s.lyricsExtraPlace != d.lyricsExtraPlace,
@@ -396,10 +398,6 @@ internal fun LsLanguageRows(d: AppSettings) {
         info = if (s.lyricsExtraColor == LyricsColor.CUSTOM) tr(R.string.your_color_here_is_the_one) else null,
         changed = s.lyricsExtraColor != d.lyricsExtraColor,
     ) { prefs.setLyricsExtraColor(it) }
-    SwitchRow(
-        tr(R.string.translation_in_italics), s.lyricsExtraItalic, info = tr(R.string.sets_them_apart_from_the_lyrics),
-        changed = s.lyricsExtraItalic != d.lyricsExtraItalic,
-    ) { prefs.setLyricsExtraItalic(it) }
 }
 
 // In the same (decimal) megabytes as the download sizes, so "74 MB on the phone" and the installed size agree.
@@ -451,8 +449,11 @@ internal fun LsSourceRows(d: AppSettings) {
     SwitchRow(tr(R.string.prefer_karaoke_synced_lyrics), s.preferSynced, info = tr(R.string.karaoke_lyrics_lit_up_word_by), changed = s.preferSynced != d.preferSynced) { prefs.setPreferSynced(it) }
     SwitchRow(tr(R.string.uncensor_lyrics), s.skipCensored, info = tr(R.string.swear_words_starred_out_f_k), changed = s.skipCensored != d.skipCensored) { prefs.setSkipCensored(it) }
     LsSourceOrder(d)
-    // Japanese reading data (the engine is picked in Language and translations): its dictionary.
-    LsKanjiDictionaryRow()
+    // Translation look (from Language and translations): it keeps that group within its row budget.
+    SwitchRow(
+        tr(R.string.translation_in_italics), s.lyricsExtraItalic, info = tr(R.string.sets_them_apart_from_the_lyrics),
+        changed = s.lyricsExtraItalic != d.lyricsExtraItalic,
+    ) { prefs.setLyricsExtraItalic(it) }
     // Its only control anywhere (plan §2.6): kept.
     SwitchRow(tr(R.string.lyrics_source_button), s.lyricsSourceButton, info = tr(R.string.lyrics_source_button_info), changed = s.lyricsSourceButton != d.lyricsSourceButton) { prefs.setLyricsSourceButton(it) }
     // #404: every song's lyrics a little earlier or later; applied at once.
