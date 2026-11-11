@@ -370,6 +370,8 @@ data class BehaviorPrefs(
     val lyricsSteady: Boolean = false,
     /** #344 (1.8.2): lyrics stored in the song's own file are a lyrics source, in its place in the listener's order. */
     val embeddedLyrics: Boolean = false,
+    /** Hiragana (furigana) above the kanji in Japanese lyrics ([AppSettings.lyricsFurigana]). */
+    val lyricsFurigana: Boolean = true,
     /** #207, #249 (1.8.2): folders Local files leaves out ([com.prism.music.data.local.LocalMusic.folderOf]). The files stay as they are. */
     val localSkipFolders: Set<String> = emptySet(),
     /** #298 (1.8.2): playlists whose new songs download by themselves, by [com.prism.music.download.PlaylistDownloads.keepKey]. */
@@ -1406,8 +1408,6 @@ data class AppSettings(
     val romanize: RomanizeMode = RomanizeMode.UNDER,
     /** Also scripts of the phone's own language (off: a Korean phone isn't shown Korean in Latin letters). */
     val romanizeAll: Boolean = false,
-    /** Hiragana (furigana) above the kanji in Japanese lyrics. */
-    val lyricsFurigana: Boolean = true,
     /** Sing gets songs ready (downloads them whole) on mobile data too. */
     val singOnCellular: Boolean = false,
     /** Settings → Lyrics → Sing: the playing and next songs are got ready even while Sing is off, so it starts at once. */
@@ -1760,6 +1760,8 @@ data class AppSettings(
     val lyricsBgColor2: Int get() = lyricsLook.bgColor2
     val lyricsEverywhere: Boolean get() = lyricsLook.everywhere
     val lyricsGapMark: LyricsGapMark get() = lyricsLook.gapMark
+    // The furigana switch lives in [behavior] (the constructor is near the JVM's limit); it reads as before.
+    val lyricsFurigana: Boolean get() = behavior.lyricsFurigana
 
     /**
      * What Prism draws with: these settings, or with [performanceMode] the lighter look. Blurred glass, frosted pages
@@ -2470,7 +2472,6 @@ class SettingsRepository(
             lyricsFileTranslation = p[K.lyricsFileTranslation] ?: d.lyricsFileTranslation,
             romanize = p.enum(K.romanize, d.romanize),
             romanizeAll = p[K.romanizeAll] ?: d.romanizeAll,
-            lyricsFurigana = p[K.lyricsFurigana] ?: d.lyricsFurigana,
             singOnCellular = p[K.singOnCellular] ?: d.singOnCellular,
             singAlwaysReady = p[K.singAlwaysReady] ?: d.singAlwaysReady,
             singCacheMb = p[K.singCacheMb] ?: d.singCacheMb,
@@ -2681,6 +2682,7 @@ class SettingsRepository(
                 playerRemembersPage = p[K.playerRemembersPage] ?: d.behavior.playerRemembersPage,
                 lyricsSteady = p[K.lyricsSteady] ?: d.behavior.lyricsSteady,
                 embeddedLyrics = p[K.embeddedLyrics] ?: d.behavior.embeddedLyrics,
+                lyricsFurigana = p[K.lyricsFurigana] ?: d.behavior.lyricsFurigana,
                 localSkipFolders = p[K.localSkipFolders]?.split('\n')?.filter { it.isNotBlank() }?.toSet() ?: d.behavior.localSkipFolders,
                 keptPlaylists = p[K.keptPlaylists]?.split('\n')?.filter { it.isNotBlank() }?.toSet() ?: d.behavior.keptPlaylists,
                 rowSwipes = p[K.rowSwipes] ?: d.behavior.rowSwipes,

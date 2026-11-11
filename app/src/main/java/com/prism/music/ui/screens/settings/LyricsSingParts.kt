@@ -399,11 +399,6 @@ internal fun LsLanguageRows(d: AppSettings) {
         tr(R.string.translation_in_italics), s.lyricsExtraItalic, info = tr(R.string.sets_them_apart_from_the_lyrics),
         changed = s.lyricsExtraItalic != d.lyricsExtraItalic,
     ) { prefs.setLyricsExtraItalic(it) }
-    SwitchRow(
-        tr(R.string.show_furigana), s.lyricsFurigana,
-        info = tr(R.string.hiragana_readings_above_kanji) + "\n" + tr(R.string.furigana_uses_the_japanese_reading_data),
-        changed = s.lyricsFurigana != d.lyricsFurigana,
-    ) { prefs.setLyricsFurigana(it) }
 }
 
 // In the same (decimal) megabytes as the download sizes, so "74 MB on the phone" and the installed size agree.
@@ -449,6 +444,12 @@ internal fun LsSourceRows(d: AppSettings) {
         tr(R.string.ls_offset), offset.toFloat(), LS_OFFSET_RANGE, { lyricsOffsetText(lyricsOffsetSnap(it)) }, steps = LS_OFFSET_STEPS,
         info = tr(R.string.ls_offset_info), changed = offset != d.behavior.lyricsOffsetMs,
     ) { prefs.setLyricsOffsetMs(lyricsOffsetSnap(it)) }
+    // Japanese reading data (the dictionary is in Language and translations): hiragana above the kanji.
+    SwitchRow(
+        tr(R.string.show_furigana), s.lyricsFurigana,
+        info = tr(R.string.hiragana_readings_above_kanji) + "\n" + tr(R.string.furigana_uses_the_japanese_reading_data),
+        changed = s.lyricsFurigana != d.lyricsFurigana,
+    ) { prefs.setLyricsFurigana(it) }
 }
 
 /**

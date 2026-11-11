@@ -151,7 +151,6 @@ val lyricsSingIndex: List<SettingEntry> by lazy {
             SettingEntry(page, g.language, tr(R.string.translation_size), tr(R.string.translation_romanization_size_color_italic_above)),
             SettingEntry(page, g.language, tr(R.string.translation_color), tr(R.string.translation_romanization_size_color_italic_above)),
             SettingEntry(page, g.language, tr(R.string.translation_in_italics), tr(R.string.italics)),
-            SettingEntry(page, g.language, tr(R.string.show_furigana), tr(R.string.hiragana_readings_above_kanji) + " " + tr(R.string.furigana_uses_the_japanese_reading_data)),
             // Sources and timing
             SettingEntry(page, g.sources, tr(R.string.prefer_karaoke_synced_lyrics), tr(R.string.word_by_word_time_synced)),
             SettingEntry(page, g.sources, tr(R.string.uncensor_lyrics), tr(R.string.explicit_swear_stars)),
@@ -160,6 +159,7 @@ val lyricsSingIndex: List<SettingEntry> by lazy {
             SettingEntry(page, g.sources, tr(R.string.read_lyrics_from_your_music_files), tr(R.string.flac_mp3_tags_embed)),
             SettingEntry(page, g.sources, tr(R.string.lyrics_source_button), tr(R.string.change_lyrics_source)),
             SettingEntry(page, g.sources, tr(R.string.ls_offset), tr(R.string.ls_offset_keywords)),
+            SettingEntry(page, g.sources, tr(R.string.show_furigana), tr(R.string.hiragana_readings_above_kanji) + " " + tr(R.string.furigana_uses_the_japanese_reading_data)),
             // Sing and music files
             SettingEntry(page, g.sing, tr(R.string.sing_s_voice_separation), tr(R.string.karaoke_vocals_remove_instrumental_download_mode)),
             SettingEntry(page, g.sing, tr(R.string.get_songs_ready_while_sing_is), tr(R.string.karaoke_prepare_ahead_background_preload_vocals)),
