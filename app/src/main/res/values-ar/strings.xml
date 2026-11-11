@@ -2132,6 +2132,7 @@
     <string name="downloading_5">جارٍ التنزيل… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">تعذّر التنزيل · انقر للمحاولة مرة أخرى</string>
     <string name="only_for_japanese_songs">للأغاني اليابانية فقط · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">اليابانية وحدها تحتاج إلى هذا: للكانجي عدة قراءات، لذا يختار قاموس القراءة الصحيحة لكتابة الروماجي («kimi no na wa»). يُنزَّل مرة واحدة. اللغات الأخرى (الكورية، الصينية، الروسية، الهندية…) تُكتب بالحروف اللاتينية دون تنزيل. وبدونه، تتهجى Google الكانجي.</string>
     <string name="sing_doesn_t_run_on_this">لا يعمل الفصل الكامل في الغناء على نوع معالج هذا الهاتف، لذا يستخدم الغناء الطريقة السريعة: يزيل ما في منتصف المزج، حيث يكون الصوت عادةً. النتيجة أقل نقاءً، والأغنية الأحادية تبقى كما هي.</string>
     <string name="needed_for_sing">مطلوب للغناء · %1$s</string>

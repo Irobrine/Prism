@@ -2132,6 +2132,7 @@
     <string name="downloading_5">ダウンロード中… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">ダウンロードできませんでした · タップして再試行</string>
     <string name="only_for_japanese_songs">日本語の曲専用 · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">これが必要なのは日本語だけです。漢字には複数の読みがあるため、辞書でローマ字（「kimi no na wa」）の正しい読みを選びます。ダウンロードは 1 回だけです。ほかの言語（韓国語、中国語、ロシア語、ヒンディー語など）はダウンロードなしでローマ字化できます。辞書がない場合は Google が漢字を表記します。</string>
     <string name="sing_doesn_t_run_on_this">このスマホのプロセッサではシングの完全な分離を使用できないため、シングは簡易モードを使います：ふつう歌声がある、ミックスの中央の音を取り除きます。仕上がりはやや粗く、モノラルの曲はそのままです。</string>
     <string name="needed_for_sing">シングに必要 · %1$s</string>

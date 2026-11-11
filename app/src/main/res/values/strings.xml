@@ -2354,6 +2354,7 @@
     <string name="downloading_5">Downloading… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Couldn\'t download it · tap to try again</string>
     <string name="only_for_japanese_songs">Only for Japanese songs · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Only Japanese needs this: its kanji have several readings, so a dictionary picks the right one for romaji (\"kimi no na wa\"). Downloaded once. Other languages (Korean, Chinese, Russian, Hindi…) romanize without a download. Without it, Google spells kanji out.</string>
     <string name="sing_doesn_t_run_on_this">Sing\'s full separation doesn\'t run on this phone\'s kind of processor, so Sing uses the quick way: it takes out what\'s in the middle of the mix, where the voice usually is. It\'s less clean, and a mono song stays as it is.</string>
     <string name="needed_for_sing">Needed for Sing · %1$s</string>

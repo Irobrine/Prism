@@ -2132,6 +2132,7 @@
     <string name="downloading_5">Letöltés… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Nem sikerült letölteni · koppints az újrapróbáláshoz</string>
     <string name="only_for_japanese_songs">Csak japán dalokhoz · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Csak a japánhoz kell: a kandzsiknak több olvasata van, ezért egy szótár választja ki a helyeset a romajihoz („kimi no na wa”). Egyszer kell letölteni. Más nyelvek (koreai, kínai, orosz, hindi…) letöltés nélkül írhatók át. Nélküle a Google írja át a kandzsikat.</string>
     <string name="sing_doesn_t_run_on_this">Az Éneklés teljes szétválasztása nem fut ennek a telefonnak a processzortípusán, ezért az Éneklés a gyors módot használja: kiveszi, ami a keverés közepén szól, ahol általában az ének van. Kevésbé tiszta, és egy monó dal úgy marad, ahogy van.</string>
     <string name="needed_for_sing">Az Énekléshez kell · %1$s</string>

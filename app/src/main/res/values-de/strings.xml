@@ -2132,6 +2132,7 @@
     <string name="downloading_5">Wird heruntergeladen… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Download fehlgeschlagen · zum Wiederholen tippen</string>
     <string name="only_for_japanese_songs">Nur für japanische Songs · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Nur Japanisch braucht das: Seine Kanji haben mehrere Lesungen, deshalb wählt ein Wörterbuch die richtige für Romaji („kimi no na wa“). Wird einmal heruntergeladen. Andere Sprachen (Koreanisch, Chinesisch, Russisch, Hindi…) werden ohne Download romanisiert. Ohne das buchstabiert Google die Kanji.</string>
     <string name="sing_doesn_t_run_on_this">Die volle Trennung von Mitsingen läuft nicht auf dem Prozessortyp dieses Handys, deshalb nutzt Mitsingen den schnellen Weg: Es nimmt heraus, was in der Mitte des Mixes liegt, wo meist die Stimme ist. Das klingt weniger sauber, und ein Mono-Song bleibt, wie er ist.</string>
     <string name="needed_for_sing">Nötig für Mitsingen · %1$s</string>
