@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.prism.music.ui.screens.settings.SettingsPageId
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -35,12 +36,10 @@ class LooksTest {
 
     @org.junit.After fun end() { com.prism.music.data.looks.Seasons.clock = null }
 
+    /** Settings → Looks (1.8.4: a page of the root; it was Customize Prism → Looks), scrolled to Prism's Looks. */
     private fun openLooks() {
-        compose.openSettings()
-        compose.onAllNodes(hasText("Customize Prism") and hasClickAction()).onFirst().performClick()
-        compose.waitForText("Looks")
-        compose.onAllNodes(hasText("Looks") and hasClickAction()).onFirst().performClick()
-        compose.waitUntil(10_000) { compose.onAllNodes(clickLabel("Use Midnight")).fetchSemanticsNodes().isNotEmpty() }
+        compose.openSettingsPage(SettingsPageId.LOOKS)
+        compose.scrollSettingsTo(clickLabel("Use Midnight"))
     }
 
     @Test fun aLookChangesEverythingAndUndoPutsItBack() {
