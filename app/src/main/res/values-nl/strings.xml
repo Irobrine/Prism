@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Downloaden… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Kan het niet downloaden · tik om het opnieuw te proberen</string>
     <string name="only_for_japanese_songs">Alleen voor Japanse nummers · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Alleen Japans heeft dit nodig: de kanji hebben meerdere uitspraken, dus een woordenboek kiest de juiste voor romaji (\"kimi no na wa\"). Eén keer gedownload. Andere talen (Koreaans, Chinees, Russisch, Hindi…) worden zonder download geromaniseerd. Zonder dit spelt Google de kanji uit.</string>
     <string name="sing_doesn_t_run_on_this">De volledige scheiding van Meezingen werkt niet op het soort processor van deze telefoon, dus Meezingen gebruikt de snelle manier: het haalt weg wat in het midden van de mix zit, waar de stem meestal zit. Dat is minder zuiver, en een monosong blijft zoals hij is.</string>
     <string name="needed_for_sing">Nodig voor Meezingen · %1$s</string>

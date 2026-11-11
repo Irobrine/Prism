@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Завантаження… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Не вдалося завантажити · торкнися, щоб спробувати ще раз</string>
     <string name="only_for_japanese_songs">Лише для японських пісень · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Це потрібно лише для японської: кандзі мають кілька читань, тож словник вибирає правильне для ромадзі («kimi no na wa»). Завантажується один раз. Інші мови (корейська, китайська, російська, гінді…) записуються латиницею без завантаження. Без нього кандзі записує Google.</string>
     <string name="sing_doesn_t_run_on_this">Повне розділення в Співі не працює на процесорі такого типу, як у цьому телефоні, тож Спів використовує швидкий спосіб: прибирає те, що звучить у центрі міксу, де зазвичай голос. Виходить менш чисто, а моно-трек лишається як є.</string>
     <string name="needed_for_sing">Потрібно для Співу · %1$s</string>

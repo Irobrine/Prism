@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Laddar ned… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Det gick inte att ladda ned · tryck för att försöka igen</string>
     <string name="only_for_japanese_songs">Bara för japanska låtar · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Bara japanska behöver detta: dess kanji har flera läsningar, så en ordbok väljer rätt för romaji (\"kimi no na wa\"). Laddas ned en gång. Andra språk (koreanska, kinesiska, ryska, hindi…) romaniseras utan nedladdning. Utan den skriver Google ut kanji.</string>
     <string name="sing_doesn_t_run_on_this">Sjungs fullständiga separering fungerar inte på den här telefonens typ av processor, så Sjung använder det snabba sättet: det tar bort det som ligger mitt i mixen, där rösten brukar ligga. Det blir mindre rent, och en monolåt förblir som den är.</string>
     <string name="needed_for_sing">Behövs för Sjung · %1$s</string>

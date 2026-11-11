@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Đang tải xuống… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Không tải xuống được · nhấn để thử lại</string>
     <string name="only_for_japanese_songs">Chỉ dành cho bài hát tiếng Nhật · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Chỉ tiếng Nhật cần cái này: kanji có nhiều cách đọc, nên cần từ điển để chọn đúng cách đọc cho romaji (\"kimi no na wa\"). Chỉ tải một lần. Các ngôn ngữ khác (tiếng Hàn, Trung, Nga, Hindi…) phiên âm không cần tải. Không có nó, Google sẽ phiên âm kanji.</string>
     <string name="sing_doesn_t_run_on_this">Chế độ tách đầy đủ của Hát cùng không chạy được trên loại bộ xử lý của điện thoại này, nên Hát cùng dùng cách nhanh: bỏ phần nằm giữa bản phối, nơi thường có giọng hát. Kết quả kém sạch hơn, và bài mono vẫn giữ nguyên.</string>
     <string name="needed_for_sing">Cần cho Hát cùng · %1$s</string>

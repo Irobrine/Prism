@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Descargando… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">No se pudo descargar · toca para reintentar</string>
     <string name="only_for_japanese_songs">Solo para canciones en japonés · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Solo el japonés lo necesita: sus kanji tienen varias lecturas, así que un diccionario elige la correcta para el romaji (\"kimi no na wa\"). Se descarga una vez. Otros idiomas (coreano, chino, ruso, hindi…) se romanizan sin descarga. Sin él, Google transcribe los kanji.</string>
     <string name="sing_doesn_t_run_on_this">La separación completa de Cantar no funciona con el tipo de procesador de este teléfono, así que Cantar usa la forma rápida: quita lo que está en el centro de la mezcla, donde suele estar la voz. Es menos limpia, y una canción mono se queda como está.</string>
     <string name="needed_for_sing">Necesario para Cantar · %1$s</string>

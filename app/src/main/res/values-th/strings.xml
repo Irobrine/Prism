@@ -2141,6 +2141,7 @@
     <string name="downloading_5">กำลังดาวน์โหลด… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">ดาวน์โหลดไม่ได้ · แตะเพื่อลองอีกครั้ง</string>
     <string name="only_for_japanese_songs">เฉพาะเพลงญี่ปุ่น · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">เฉพาะภาษาญี่ปุ่นที่ต้องใช้: คันจิมีหลายคำอ่าน จึงต้องใช้พจนานุกรมเลือกคำอ่านที่ถูกต้องสำหรับโรมาจิ (\"kimi no na wa\") ดาวน์โหลดครั้งเดียว ภาษาอื่นๆ (เกาหลี จีน รัสเซีย ฮินดี…) แปลงเป็นอักษรโรมันได้โดยไม่ต้องดาวน์โหลด ถ้าไม่มี Google จะสะกดคันจิให้</string>
     <string name="sing_doesn_t_run_on_this">การแยกเสียงแบบเต็มของร้องตามใช้กับหน่วยประมวลผลประเภทของโทรศัพท์เครื่องนี้ไม่ได้ ร้องตามจึงใช้วิธีด่วน: เอาเสียงที่อยู่ตรงกลางของมิกซ์ออก ซึ่งมักเป็นตำแหน่งของเสียงร้อง ผลจะไม่สะอาดเท่า และเพลงโมโนจะเล่นตามเดิม</string>
     <string name="needed_for_sing">จำเป็นสำหรับร้องตาม · %1$s</string>

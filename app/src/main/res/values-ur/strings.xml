@@ -2141,6 +2141,7 @@
     <string name="downloading_5">ڈاؤن لوڈ ہو رہا ہے… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">ڈاؤن لوڈ نہیں ہو سکا · دوبارہ کوشش کے لیے ٹیپ کریں</string>
     <string name="only_for_japanese_songs">صرف جاپانی گانوں کے لیے · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">صرف جاپانی کو اس کی ضرورت ہے: اس کے کانجی کے کئی تلفظ ہیں، اس لیے رومن (romaji) کے لیے ایک لغت درست تلفظ چنتی ہے (\"kimi no na wa\")۔ ایک بار ڈاؤن لوڈ ہوتی ہے۔ دوسری زبانیں (کوریائی، چینی، روسی، ہندی…) ڈاؤن لوڈ کے بغیر رومن ہوتی ہیں۔ اس کے بغیر Google کانجی کو لکھتا ہے۔</string>
     <string name="sing_doesn_t_run_on_this">گائیں کی مکمل علیحدگی اس فون کے پروسیسر کی قسم پر نہیں چلتی، اس لیے گائیں تیز طریقہ استعمال کرتا ہے: مکس کے بیچ میں جو ہے، جہاں عموماً آواز ہوتی ہے، اسے نکال دیتا ہے۔ یہ کم صاف ہے، اور مونو گانا ویسا ہی رہتا ہے۔</string>
     <string name="needed_for_sing">گائیں کے لیے درکار · %1$s</string>

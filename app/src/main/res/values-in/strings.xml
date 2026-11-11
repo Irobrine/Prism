@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Mendownload… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Tidak dapat mendownloadnya · ketuk untuk mencoba lagi</string>
     <string name="only_for_japanese_songs">Hanya untuk lagu Jepang · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Hanya bahasa Jepang yang perlu ini: kanjinya punya beberapa cara baca, jadi kamus memilih yang tepat untuk romaji (\"kimi no na wa\"). Didownload sekali. Bahasa lain (Korea, Mandarin, Rusia, Hindi…) diromanisasi tanpa download. Tanpanya, Google yang mengeja kanjinya.</string>
     <string name="sing_doesn_t_run_on_this">Pemisahan penuh Nyanyi tidak berjalan di jenis prosesor ponsel ini, jadi Nyanyi memakai cara cepat: menghapus apa yang ada di tengah campuran, tempat suara biasanya berada. Hasilnya kurang bersih, dan lagu mono tetap apa adanya.</string>
     <string name="needed_for_sing">Dibutuhkan untuk Nyanyi · %1$s</string>

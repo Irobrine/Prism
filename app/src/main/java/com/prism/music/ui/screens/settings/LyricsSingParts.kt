@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +62,7 @@ import com.prism.music.tr
 import com.prism.music.ui.components.ColorPickerSheet
 import com.prism.music.ui.components.DragGrip
 import com.prism.music.ui.components.PrismSwitch
+import com.prism.music.ui.components.PrismTextButton
 import com.prism.music.ui.components.ReorderList
 import com.prism.music.ui.player.LyricsLook
 import com.prism.music.ui.player.cardColor
@@ -405,40 +407,75 @@ internal fun LsLanguageRows(d: AppSettings) {
 // In the same (decimal) megabytes as the download sizes, so "74 MB on the phone" and the installed size agree.
 private fun formatMb(bytes: Long) = "${bytes / 1_000_000} MB"
 
-private fun japaneseEngineLabel(e: JapaneseEngine) = if (e == JapaneseEngine.SUDACHI) tr(R.string.sudachi_dict_full) else tr(R.string.ipadic)
+private fun japaneseEngineName(e: JapaneseEngine) = if (e == JapaneseEngine.SUDACHI) tr(R.string.sudachi_dict_full) else tr(R.string.ipadic)
 
-/** Japanese lyrics' kanji: which on-phone dictionary reads them. Its download is in Sources and timing. */
-@Composable
-private fun LsKanjiRow(d: AppSettings) {
-    val s = LocalAppSettings.current
-    val prefs = LocalContainer.current.settings
-    ChoiceRow(
-        tr(R.string.japanese_kanji_readings), JapaneseEngine.entries, s.japaneseEngine, ::japaneseEngineLabel,
-        info = tr(R.string.only_japanese_needs_this_its_kanji), changed = s.japaneseEngine != d.japaneseEngine,
-    ) { prefs.setJapaneseEngine(it) }
+/** What a dictionary's chip says: its name, "(not downloaded)", or the download's progress. */
+private fun japaneseEngineLabel(e: JapaneseEngine, state: ModelStore.State): String {
+    val name = japaneseEngineName(e)
+    return when (state) {
+        ModelStore.State.Ready -> name
+        is ModelStore.State.Downloading -> "$name · " + tr(R.string.downloading_5, (state.fraction * 100).toInt())
+        else -> "$name (" + tr(R.string.not_downloaded) + ")"
+    }
 }
 
-/** The dictionary the chosen Japanese engine reads with: download, progress, or removal. */
+/**
+ * Japanese lyrics' kanji: the on-phone dictionaries, each with its own state. Tap a downloaded one to read kanji with
+ * it; tap one that isn't here to confirm its download; hold a downloaded one to remove it.
+ */
 @Composable
-private fun LsKanjiDictionaryRow() {
+private fun LsKanjiRow(d: AppSettings) {
     val c = LocalContainer.current
     val s = LocalAppSettings.current
+    val prefs = c.settings
     val scope = rememberCoroutineScope()
     val states by c.models.states.collectAsState()
-    val m = s.japaneseEngine.model
-    val state = states[m]
-    val value = when (state) {
-        ModelStore.State.Ready -> tr(R.string.on_this_phone_tap_to_remove, formatMb(c.models.sizeOnPhone(m)))
-        is ModelStore.State.Downloading -> tr(R.string.downloading_5, (state.fraction * 100).toInt())
-        is ModelStore.State.Failed -> tr(R.string.couldn_t_download_it_tap_to)
-        else -> tr(R.string.only_for_japanese_songs, ModelStore.Model.sizeText(m))
-    }
-    LinkRow(japaneseEngineLabel(s.japaneseEngine), value = value, action = true) {
-        when (state) {
-            ModelStore.State.Ready -> c.models.delete(m)
-            is ModelStore.State.Downloading -> {}
-            else -> scope.launch { c.models.download(m) }
+    var askingDownload by remember { mutableStateOf<JapaneseEngine?>(null) }
+    var askingRemove by remember { mutableStateOf<JapaneseEngine?>(null) }
+    fun stateOf(e: JapaneseEngine) = states[e.model] ?: ModelStore.State.Missing
+
+    ChoiceRow(
+        tr(R.string.japanese_kanji_readings), JapaneseEngine.entries, s.japaneseEngine,
+        { e -> japaneseEngineLabel(e, stateOf(e)) },
+        info = tr(R.string.only_japanese_needs_this_its_kanji), changed = s.japaneseEngine != d.japaneseEngine,
+        onLongSelect = { e -> if (stateOf(e) == ModelStore.State.Ready) askingRemove = e },
+    ) { e ->
+        when (stateOf(e)) {
+            // Here: reading kanji with it is just picking it.
+            ModelStore.State.Ready -> prefs.setJapaneseEngine(e)
+            // A download already going: its chip says how far it is.
+            is ModelStore.State.Downloading -> Unit
+            // Not here (or a failed download): ask before fetching it.
+            else -> askingDownload = e
         }
+    }
+
+    askingDownload?.let { e ->
+        AlertDialog(
+            onDismissRequest = { askingDownload = null },
+            text = { Text(tr(R.string.download) + " " + japaneseEngineName(e) + "?") },
+            confirmButton = {
+                PrismTextButton(onClick = {
+                    askingDownload = null
+                    prefs.setJapaneseEngine(e)
+                    scope.launch { c.models.download(e.model) }
+                }) { Text(tr(R.string.download)) }
+            },
+            dismissButton = { PrismTextButton(onClick = { askingDownload = null }) { Text(tr(R.string.close)) } },
+        )
+    }
+    askingRemove?.let { e ->
+        AlertDialog(
+            onDismissRequest = { askingRemove = null },
+            text = { Text(tr(R.string.remove) + " " + japaneseEngineName(e) + "?") },
+            confirmButton = {
+                PrismTextButton(onClick = {
+                    askingRemove = null
+                    c.models.delete(e.model)
+                }) { Text(tr(R.string.remove)) }
+            },
+            dismissButton = { PrismTextButton(onClick = { askingRemove = null }) { Text(tr(R.string.close)) } },
+        )
     }
 }
 
@@ -451,8 +488,6 @@ internal fun LsSourceRows(d: AppSettings) {
     SwitchRow(tr(R.string.prefer_karaoke_synced_lyrics), s.preferSynced, info = tr(R.string.karaoke_lyrics_lit_up_word_by), changed = s.preferSynced != d.preferSynced) { prefs.setPreferSynced(it) }
     SwitchRow(tr(R.string.uncensor_lyrics), s.skipCensored, info = tr(R.string.swear_words_starred_out_f_k), changed = s.skipCensored != d.skipCensored) { prefs.setSkipCensored(it) }
     LsSourceOrder(d)
-    // Japanese reading data (the engine is picked in Language and translations): its dictionary.
-    LsKanjiDictionaryRow()
     // Its only control anywhere (plan §2.6): kept.
     SwitchRow(tr(R.string.lyrics_source_button), s.lyricsSourceButton, info = tr(R.string.lyrics_source_button_info), changed = s.lyricsSourceButton != d.lyricsSourceButton) { prefs.setLyricsSourceButton(it) }
     // #404: every song's lyrics a little earlier or later; applied at once.

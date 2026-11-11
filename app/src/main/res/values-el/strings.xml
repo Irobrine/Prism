@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Λήψη… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Δεν ήταν δυνατή η λήψη · πάτα για να ξαναδοκιμάσεις</string>
     <string name="only_for_japanese_songs">Μόνο για ιαπωνικά τραγούδια · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Μόνο τα ιαπωνικά το χρειάζονται: τα kanji τους έχουν πολλές αναγνώσεις, οπότε ένα λεξικό διαλέγει τη σωστή για τα romaji («kimi no na wa»). Λαμβάνεται μία φορά. Άλλες γλώσσες (κορεατικά, κινεζικά, ρωσικά, χίντι…) γράφονται με λατινικούς χαρακτήρες χωρίς λήψη. Χωρίς αυτό, η Google γράφει τα kanji.</string>
     <string name="sing_doesn_t_run_on_this">Ο πλήρης διαχωρισμός του Τραγούδα δεν λειτουργεί σε αυτόν τον τύπο επεξεργαστή του τηλεφώνου, οπότε το Τραγούδα χρησιμοποιεί τον γρήγορο τρόπο: αφαιρεί ό,τι βρίσκεται στη μέση της μίξης, εκεί που συνήθως είναι η φωνή. Είναι λιγότερο καθαρό, και ένα μονοφωνικό τραγούδι μένει όπως είναι.</string>
     <string name="needed_for_sing">Χρειάζεται για το Τραγούδα · %1$s</string>

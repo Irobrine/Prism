@@ -2141,6 +2141,7 @@
     <string name="downloading_5">در حال دانلود… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">دانلود ممکن نشد · برای تلاش دوباره ضربه بزنید</string>
     <string name="only_for_japanese_songs">فقط برای آهنگ‌های ژاپنی · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">فقط ژاپنی به این نیاز دارد: کانجی‌هایش چند خوانش دارند، پس یک فرهنگ لغت خوانش درست را برای روماجی انتخاب می‌کند («kimi no na wa»). یک بار دانلود می‌شود. زبان‌های دیگر (کره‌ای، چینی، روسی، هندی…) بدون دانلود لاتین‌نویسی می‌شوند. بدون آن، Google کانجی‌ها را هجی می‌کند.</string>
     <string name="sing_doesn_t_run_on_this">جداسازی کامل همخوانی روی این نوع پردازندهٔ گوشی اجرا نمی‌شود، برای همین همخوانی از روش سریع استفاده می‌کند: آنچه را در وسط میکس است، جایی که معمولاً صدای خواننده است، برمی‌دارد. نتیجه کمتر تمیز است و آهنگ مونو همان‌طور که هست می‌ماند.</string>
     <string name="needed_for_sing">لازم برای همخوانی · %1$s</string>

@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Pobieranie… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Nie udało się pobrać · kliknij, by spróbować ponownie</string>
     <string name="only_for_japanese_songs">Tylko dla japońskich utworów · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Potrzebne tylko dla japońskiego: kanji mają kilka odczytów, więc słownik wybiera właściwy dla romaji („kimi no na wa”). Pobierany raz. Inne języki (koreański, chiński, rosyjski, hindi…) są transliterowane bez pobierania. Bez niego kanji zapisuje Google.</string>
     <string name="sing_doesn_t_run_on_this">Pełne oddzielanie w Śpiewaj nie działa na procesorze tego telefonu, więc Śpiewaj używa szybkiego sposobu: usuwa to, co jest w środku miksu, gdzie zwykle jest głos. Efekt jest mniej czysty, a utwór mono pozostaje bez zmian.</string>
     <string name="needed_for_sing">Potrzebne do Śpiewaj · %1$s</string>

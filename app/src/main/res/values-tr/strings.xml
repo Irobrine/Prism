@@ -2141,6 +2141,7 @@
     <string name="downloading_5">İndiriliyor… %%%1$s</string>
     <string name="couldn_t_download_it_tap_to">İndirilemedi · tekrar denemek için dokun</string>
     <string name="only_for_japanese_songs">Yalnızca Japonca şarkılar için · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Buna yalnızca Japonca ihtiyaç duyar: kanjilerin birkaç okunuşu vardır, bu yüzden romaji için doğru okunuşu bir sözlük seçer (\"kimi no na wa\"). Bir kez indirilir. Diğer diller (Korece, Çince, Rusça, Hintçe…) indirme olmadan Latin harflerine çevrilir. Bu olmadan kanjileri Google yazar.</string>
     <string name="sing_doesn_t_run_on_this">Sing\'in tam ayırma işlemi bu telefonun işlemci türünde çalışmıyor, bu yüzden Sing hızlı yolu kullanıyor: miksin ortasında, sesin genellikle bulunduğu yerdekini çıkarır. Daha az temizdir ve mono bir şarkı olduğu gibi kalır.</string>
     <string name="needed_for_sing">Sing için gerekli · %1$s</string>

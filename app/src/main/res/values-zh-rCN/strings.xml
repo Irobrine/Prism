@@ -2141,6 +2141,7 @@
     <string name="downloading_5">正在下载… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">无法下载 · 点按重试</string>
     <string name="only_for_japanese_songs">仅用于日语歌曲 · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">只有日语需要这个：日语汉字有多种读音，需要词典为罗马字选出正确的读法（“kimi no na wa”）。只需下载一次。其他语言（韩语、中文、俄语、印地语…）无需下载即可转为罗马音。没有它时，由 Google 拼写汉字。</string>
     <string name="sing_doesn_t_run_on_this">跟唱的完整分离无法在这台手机的处理器类型上运行，所以跟唱改用快速方式：去掉混音中间的声音，人声通常就在那里。效果没那么干净，单声道歌曲会保持原样。</string>
     <string name="needed_for_sing">跟唱需要 · %1$s</string>

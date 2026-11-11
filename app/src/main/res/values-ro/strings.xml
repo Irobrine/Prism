@@ -2141,6 +2141,7 @@
     <string name="downloading_5">Se descarcă… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Nu s-a putut descărca · atinge ca să încerci din nou</string>
     <string name="only_for_japanese_songs">Doar pentru melodii japoneze · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Doar japoneza are nevoie de asta: kanji-urile ei au mai multe citiri, așa că un dicționar o alege pe cea corectă pentru romaji („kimi no na wa”). Se descarcă o singură dată. Celelalte limbi (coreeană, chineză, rusă, hindi…) se romanizează fără descărcare. Fără el, Google transcrie kanji-urile.</string>
     <string name="sing_doesn_t_run_on_this">Separarea completă din Cântă nu funcționează pe tipul de procesor al acestui telefon, așa că Cântă folosește metoda rapidă: scoate ce se află în mijlocul mixajului, unde e de obicei vocea. E mai puțin curat, iar o melodie mono rămâne cum e.</string>
     <string name="needed_for_sing">Necesar pentru Cântă · %1$s</string>
