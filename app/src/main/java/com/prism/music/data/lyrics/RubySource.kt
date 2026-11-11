@@ -1,5 +1,7 @@
 package com.prism.music.data.lyrics
 
+import kotlin.math.roundToLong
+
 /**
  * A line whose source writes furigana in parentheses right after the kanji it belongs to, as KuGou does:
  * 君(きみ)の名前(なまえ) — with either kind of parentheses, and spaces before them allowed. [clean] is the line with
@@ -35,14 +37,34 @@ internal class SourceFurigana private constructor(
 
     private fun List<LyricWord>.clean(removed: BooleanArray): List<LyricWord> {
         var at = 0
-        return map { word ->
-            val text = StringBuilder(word.text.length)
-            for (c in word.text) {
-                if (at >= removed.size || !removed[at]) text.append(c)
-                at++
+        var shift = 0.0
+        val out = ArrayList<LyricWord>(size)
+        for (word in this) {
+            val length = word.text.length
+            if (length == 0) { out += word; continue }
+            val start = word.startMs
+            val duration = (word.endMs - word.startMs).coerceAtLeast(0)
+            var i = 0
+            while (i < length) {
+                if (at + i < removed.size && removed[at + i]) {
+                    // The annotation's time leaves the line's word timings with it: the words after it don't wait for
+                    // characters that are no longer drawn.
+                    shift += duration.toDouble() / length
+                    i++
+                    continue
+                }
+                val from = i
+                val before = shift
+                while (i < length && (at + i >= removed.size || !removed[at + i])) i++
+                out += word.copy(
+                    startMs = (start + duration.toDouble() * from / length - before).roundToLong().coerceAtLeast(0),
+                    endMs = (start + duration.toDouble() * i / length - before).roundToLong().coerceAtLeast(0),
+                    text = word.text.substring(from, i),
+                )
             }
-            word.copy(text = text.toString())
+            at += length
         }
+        return out
     }
 
     private class Found(val start: Int, val end: Int, val from: Int, val close: Int, val reading: String)

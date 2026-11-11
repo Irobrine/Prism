@@ -39,7 +39,8 @@ class RubySourceTest {
         val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
         assertEquals("君の名前", clean.text)
         assertEquals(listOf("君", "の名前"), clean.words.map { it.text })
-        assertEquals(listOf(100L to 500L, 500L to 1_100L), clean.words.map { it.startMs to it.endMs })
+        // The annotation's time leaves the word timings with it; the word after it starts where its sound does.
+        assertEquals(listOf(100L to 180L, 180L to 405L), clean.words.map { it.startMs to it.endMs })
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(2, 4, "なまえ")), clean.sourceRuby)
     }
 
