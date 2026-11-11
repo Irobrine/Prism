@@ -6,7 +6,9 @@ import android.provider.MediaStore
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.isOff
 import androidx.compose.ui.test.isOn
 import androidx.compose.ui.test.isToggleable
@@ -69,6 +71,7 @@ class ListsAndFilesAppTest {
 
     private fun asset(name: String) = instrumentation.context.assets.open(name).use { it.readBytes() }
 
+    /** Settings search for [query], and its result named [title] opened: the setting's page, at its group. */
     private fun openSetting(title: String, query: String) {
         compose.openSettings()
         compose.onNode(hasSetTextAction()).performTextInput(query)
@@ -90,8 +93,9 @@ class ListsAndFilesAppTest {
         runBlocking { c.localMusic.scan() }
         compose.waitUntil(30_000) { onPhone().size == 2 }
 
+        // Its page: Downloads & data → Files on your phone (1.8.4); the row opens the folders' sheet as before.
         openSetting("Folders in Local files", "folders in local")
-        compose.clickWhenFound(hasText("Folders in Local files") and hasClickAction())
+        compose.clickWhenFound(settingsRow("Folders in Local files"))
         compose.waitForText("PrismLeftOut")
         val tick = isToggleable() and hasContentDescription("PrismLeftOut")
         compose.onNode(tick and isOn()).performClick()
@@ -131,8 +135,12 @@ class ListsAndFilesAppTest {
         // As it comes: the file isn't read.
         assertNull(runBlocking { c.lyrics.fetch(song, LyricsSource.EMBEDDED) })
 
+        // Search still finds it by its old name. Since 1.8.4 its one switch is "Your music files" in the order of the
+        // lyric sources (Lyrics & Sing → Sources); the row of its own is gone.
         openSetting("Read lyrics from your music files", "read lyrics from")
-        compose.clickWhenFound(hasText("Read lyrics from your music files") and hasClickAction())
+        val itsSwitch = hasTestTag(EMBEDDED_SOURCE_SWITCH) and isToggleable()
+        compose.scrollSettingsTo(itsSwitch)
+        compose.onNode(itsSwitch and isOff()).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         compose.waitUntil(5_000) { c.settings.current.behavior.embeddedLyrics }
 
         val found = runBlocking { withTimeout(20_000) { c.lyrics.fetch(song, LyricsSource.EMBEDDED) } }

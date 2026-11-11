@@ -2,6 +2,37 @@
 
 What changed in each release. Older releases are described on the [Releases page](https://github.com/Yigder/Prism/releases).
 
+## 1.8.4
+
+### Settings, made simple
+
+- **A new first page.** Search, your account and Performance mode at the top, then 17 pages in five groups. Each page's line says how it's set right now.
+- **Every page in short groups.** Each page is rebuilt with the same few kinds of rows. Choices with more than a few options open in a sheet with an example of each, and what a setting does is behind its ⓘ. Pages that change the player or the lyrics keep a live sample at the top.
+- **Nothing went missing.** Every setting from 1.8.3 still has its place (some joined into one row, like Wi-Fi and mobile quality), and search finds them all, under their old names too.
+- **Reset this page** puts one page back the way it came, without touching the others.
+- **Rearranging lists without dragging.** Lists you put in order (player buttons, tabs, lyrics sources, Library's playlists and tiles, notification buttons) can be moved with TalkBack's actions, or with a keyboard or TV remote: focus the grip, press Enter, move with Up and Down, Enter again to drop it. The small up and down arrows are gone.
+
+### New
+
+- **Lyrics earlier or later, for every song** (#404). Settings → Lyrics & Sing → Sources and timing. Up to half a second either way, changed at once while a song plays.
+- **Lyrics in the notification** without a car (#392), and in the car a long line can carry on into a second line (PR #400).
+- **The lock screen in the player's look.** Settings → Player → Lock screen options → Same look as the player: the player's background (held still), progress bar and accent. The Lyrics layout shows a heart when Like is shown.
+- **Find the playing song.** "Go to the playing song" in a song list's ⋯ menu, or a button above the mini player (Settings → Home & Library → Button to find the playing song, off by default).
+- **Shuffle without Smart Shuffle** (the Shuffle button can leave it out), and a new list can keep shuffle on from the last one (#416).
+- **Replay for yesterday, last week and last month**, beside today, this week and this month.
+- **A solid color as a screen's background** (#413).
+- **Albums**: sort Library's albums by when you added them, and full-width pictures on album pages too.
+- **Swiping song rows to the queue can be turned off** (#406).
+
+### Fixes
+
+- **Seeking no longer loses a song's crossfade** (#432). Move the progress bar back and the crossfade is planned again; land just before its mark and it starts a moment later.
+- **Text no longer shows through Liquid Glass bars** (#429). A title scrolled under the tab bar or the mini player can't be read through them, Clear included.
+- **Immersive lyrics no longer jump** at each new line.
+- **The queue's top row holds at a large display size** and with big text (#427).
+- **The notification's lyrics button is named "Lyrics"** and works outside a car too (#392).
+- Seven small settings fixes: search results open the right page, no setting listed twice, chips with labels, the crossfade choice shown only with Crossfade on, and more.
+
 ## 1.8.3.1
 
 ### Fixes
