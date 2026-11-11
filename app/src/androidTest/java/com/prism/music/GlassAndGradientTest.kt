@@ -25,6 +25,7 @@ import com.prism.music.ui.player.GradientStops
 import com.prism.music.ui.player.coverGradientOf
 import com.prism.music.ui.player.stops
 import com.prism.music.ui.screens.GlassChoice
+import com.prism.music.ui.screens.settings.SettingsPageId
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -150,12 +151,20 @@ class GlassAndGradientTest {
         compose.waitUntil(10_000) { gradientShows(wanted, 0.02f, 0.2f) }
     }
 
+    /**
+     * Settings → Theme & colors → Glass (1.8.4; it was Customize Prism → Glass & backgrounds): the group scrolled to,
+     * its "Glass" row (the kind, picked in a sheet of cards) and "Also on" chips on screen.
+     */
     private fun openGlassPage() {
-        compose.openSettings()
-        compose.clickWhenFound(hasText(tr(R.string.customize_prism)) and hasClickAction(), 15_000)
-        compose.clickWhenFound(hasText(tr(R.string.glass_backgrounds)) and hasClickAction(), 15_000)
-        compose.waitForText(tr(R.string.glass_on_more_of_the_screen))
+        compose.openSettingsPage(SettingsPageId.THEME_COLORS)
+        compose.scrollSettingsTo(glassRow)
+        compose.scrollSettingsTo(settingsChip(tr(R.string.tl_more_of_the_screen)))
     }
+
+    private val glassRow get() = settingsRow(tr(R.string.glass))
+
+    /** A kind of glass, by its card in the Glass row's sheet. */
+    private fun pickGlass(choice: GlassChoice) = compose.pickInSheet(tr(R.string.glass), choice.label)
 
     /** The whole text: "Frost" is also the start of "Frosted Glass". */
     private fun shown(text: String) = compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
@@ -167,22 +176,24 @@ class GlassAndGradientTest {
         openGlassPage()
         Fixture.screenshot("glass-page")
         if (android.os.Build.VERSION.SDK_INT < 31) {
-            // Bars are solid below Android 12: it says so, in place of sliders that would do nothing.
-            compose.waitForText(tr(R.string.glass_needs_android_12))
+            // Bars are solid below Android 12: there are no sliders that would do nothing, and the Glass row's ⓘ says
+            // why (1.8.4: explanations are behind the ⓘ, it was a note on the page).
             assertFalse(shown(tr(R.string.glass_blur)))
             assertFalse(shown(tr(R.string.glass_frost)))
+            compose.openSettingsInfo(tr(R.string.glass))
+            compose.waitForText(tr(R.string.glass_needs_android_12))
             return
         }
         compose.waitUntil(5_000) { shown(tr(R.string.glass_blur)) && shown(tr(R.string.glass_frost)) }
         // Regular, picked by its card: the same two.
-        compose.onAllNodes(hasText(GlassChoice.LIQUID_REGULAR.label) and hasClickAction()).onFirst().performClick()
+        pickGlass(GlassChoice.LIQUID_REGULAR)
         compose.waitUntil(5_000) { c.settings.current.liquidGlass && c.settings.current.glassKind == GlassKind.REGULAR && shown(tr(R.string.glass_blur)) && shown(tr(R.string.glass_frost)) }
         // Clear has next to no blur to set.
-        compose.onAllNodes(hasText(GlassChoice.LIQUID_CLEAR.label) and hasClickAction()).onFirst().performClick()
+        pickGlass(GlassChoice.LIQUID_CLEAR)
         compose.waitUntil(5_000) { c.settings.current.glassKind == GlassKind.CLEAR && !shown(tr(R.string.glass_blur)) }
         assertTrue(shown(tr(R.string.glass_frost)))
         // No glass at all: neither.
-        compose.onAllNodes(hasText(GlassChoice.OFF.label) and hasClickAction()).onFirst().performClick()
+        pickGlass(GlassChoice.OFF)
         compose.waitUntil(5_000) { !c.settings.current.liquidGlass && !shown(tr(R.string.glass_frost)) }
     }
 
@@ -192,14 +203,15 @@ class GlassAndGradientTest {
         assertEquals("off on a fresh install", GlassLook(), c.settings.current.view.glass)
         openGlassPage()
         val offValues = c.settings.lookValues.value
-        compose.onAllNodes(hasText(tr(R.string.glass_on_more_of_the_screen)) and hasClickAction()).onFirst().performScrollTo().performClick()
+        // "Glass on more of the screen" is the "More of the screen" chip of the Glass group's "Also on" row since 1.8.4.
+        compose.clickWhenFound(settingsChip(tr(R.string.tl_more_of_the_screen)))
         compose.waitUntil(5_000) { c.settings.current.glassEverywhere }
         // (lookValues is a flow of its own: it may not have this change yet.)
         compose.waitUntil(5_000) { c.settings.lookValues.value != offValues }
         // The Undo bar over a page is real glass with this on. A change on the page brings it up, and its button still answers.
         val before = c.settings.lookValues.value
         val other = if (c.settings.current.glassKind == GlassKind.CLEAR) GlassChoice.LIQUID_REGULAR else GlassChoice.LIQUID_CLEAR
-        compose.onAllNodes(hasText(other.label) and hasClickAction()).onFirst().performScrollTo().performClick()
+        pickGlass(other)
         compose.waitForText(tr(R.string.undo))
         Fixture.screenshot("undo-bar-glass")
         compose.onAllNodes(hasText(tr(R.string.undo)) and hasClickAction()).onFirst().performClick()

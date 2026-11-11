@@ -127,6 +127,8 @@ import com.prism.music.ui.components.ShareTarget
 import com.prism.music.ui.components.SheetItem
 import com.prism.music.ui.components.SongRow
 import com.prism.music.ui.components.dissolveBottom
+import com.prism.music.ui.components.locatePulse
+import com.prism.music.ui.components.LocatePlayingRow
 import com.prism.music.ui.components.frostFill
 import com.prism.music.ui.components.rememberArtPalette
 import com.prism.music.ui.components.rememberFrost
@@ -144,6 +146,18 @@ enum class CollectionType {
     /** One of the listener's tags (1.8.3): its songs, newest tagged first; renamed or deleted from its ⋯. */
     TAG,
 }
+
+/**
+ * Whether a page's picture goes across the whole width, like an artist's (D55, 1.8.4): playlists and Prism's other
+ * lists whenever full-width pictures aren't off, albums only when they're asked for too. Never beside the songs (a
+ * tablet on its side keeps the cover and its details in a column of their own).
+ */
+internal fun heroCover(type: CollectionType, pictures: com.prism.music.data.prefs.FullWidthPictures, sideBySide: Boolean): Boolean =
+    !sideBySide && when (pictures) {
+        com.prism.music.data.prefs.FullWidthPictures.OFF -> false
+        com.prism.music.data.prefs.FullWidthPictures.PLAYLISTS -> type != CollectionType.ALBUM
+        com.prism.music.data.prefs.FullWidthPictures.ALBUMS_AND_PLAYLISTS -> true
+    }
 
 /** Names of artists YouTube Music lists as similar ("Fans might also like"), for classifying obscure artists. */
 private suspend fun relatedArtists(c: com.prism.music.AppContainer, s: Song): List<String> {
@@ -315,7 +329,7 @@ class LiveCollection(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun CollectionContent(type: CollectionType, live: LiveCollection, initialGenre: String?, bottomPadding: Dp, reload: () -> Unit) {
+internal fun CollectionContent(type: CollectionType, live: LiveCollection, initialGenre: String?, bottomPadding: Dp, reload: () -> Unit) {
     val c = LocalContainer.current
     val nav = LocalNavigator.current
     val context = LocalContext.current
@@ -440,6 +454,14 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
     }
     val dim: (Song) -> Modifier = { s -> if (ready != null && s.id !in ready) Modifier.alpha(0.4f) else Modifier }
     val listState = rememberLazyListState()
+    // "Go to the playing song" (D54): its place among the songs shown (-1 once a search, filter or Hide explicit leaves
+    // it out), and where the songs' rows are in the list.
+    val locate = remember { com.prism.music.ui.components.LocateState() }
+    // A music video row played as its song (Songs in radios) is the playing row too: the queue knows the pair.
+    val playingVideo = current?.id?.let { c.queue.counterparts[it] }
+    val playingAt = remember(visible, current?.id, playingVideo) { com.prism.music.ui.components.LocatePlaying.indexIn(visible, current?.id, playingVideo) }
+    val playingRowId = com.prism.music.ui.components.LocatePlaying.rowId(visible, playingAt, current?.id)
+    val songRows = remember { com.prism.music.ui.components.SongRowPlaces() }
     // A video row downloaded as its song counts as downloaded (#315).
     val standIns by c.downloadStandIns.collectAsState()
     val downloadedCount = page.songs.count { downloads.forRow(it.id, standIns)?.state == Download.STATE_COMPLETED }
@@ -729,7 +751,7 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
     // does on an iPad, instead of a header the width of the screen above them.
     val window = com.prism.music.ui.theme.LocalWindowLayout.current
     val sideBySide = window.width == com.prism.music.ui.theme.WidthClass.EXPANDED && window.landscape
-    val hero = type != CollectionType.ALBUM && settings.playlistHeroCover && !sideBySide
+    val hero = heroCover(type, settings.fullWidthPictures, sideBySide)
     val config = LocalConfiguration.current
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var pageWidth by remember { mutableStateOf(config.screenWidthDp.dp) }
@@ -777,9 +799,10 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
                     onShuffle = { c.player.playQueue(playable, 0, source, shuffle = true) },
                 )
             }
-            // Under Play and Shuffle: above them, a long description pushed Play behind the mini player.
+            // Under Play and Shuffle: above them, a long description pushed Play behind the mini player. The same with an
+            // album's picture across the page (D55): the picture, its details, Play and Shuffle, then the description.
             val about: @Composable () -> Unit = {
-                shown.description?.takeIf { it.isNotBlank() }?.let { AboutBox(it, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)) }
+                shown.description?.takeIf { it.isNotBlank() }?.let { AboutBox(it, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp).testTag("collectionAbout")) }
             }
             val sideWidth = (pageWidth * 0.4f).coerceIn(320.dp, 460.dp)
             if (sideBySide) Column(
@@ -796,7 +819,8 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
                 modifier = (if (sideBySide) Modifier.padding(start = sideWidth) else Modifier)
                     .then(if (likedRefresh) Modifier.pullToRefresh(likesSyncing, pull, onRefresh = { c.library.syncInBackground() }) else Modifier),
                 contentPadding = PaddingValues(top = if (sideBySide) statusTop + 60.dp else 0.dp, bottom = bottomPadding + 24.dp),
-            ) {
+            ) { with(com.prism.music.ui.components.CountingLazyListScope(this)) {
+                // Counted as it's built (D54): what's above the songs differs by page, and a song's row is found by its place.
                 if (!sideBySide) item("header") { header() }
                 if (type == CollectionType.DOWNLOADS) item { DownloadsInfo(page.songs) { text, action -> confirm = text to action } }
                 if (type == CollectionType.DOWNLOADS) item("downloaded-collections") {
@@ -869,6 +893,9 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
                         })
                 }
                 if (groupByGenre && showGenres) {
+                    // Each song's first row, for "Go to the playing song".
+                    val firstRows = HashMap<String, Int>()
+                    songRows.grouped = firstRows
                     // A song with a second genre shows under both.
                     visible.flatMap { s -> genresOf(s.id).ifEmpty { listOf(tr(R.string.sorting)) }.map { it to s } }
                         .groupBy({ it.first }, { it.second }).toList().sortedByDescending { it.second.size }.forEach { (g, songs) ->
@@ -876,24 +903,28 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
                                 Text(com.prism.music.data.meta.Genres.shown(g), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 4.dp))
                             }
+                            val from = added
+                            songs.forEachIndexed { i, s -> if (s.id !in firstRows) firstRows[s.id] = from + i }
                             itemsIndexed(songs, key = { i, s -> "g:$g:${s.id}:$i" }) { _, s ->
-                                com.prism.music.ui.components.SwipeToQueue(s) {
-                                    SongRow(s, dim(s), playing = current?.id == s.id, trailingInfo = null, extraActions = removeAction(s) + skipAction(s), showAlbum = showAlbums) {
+                                com.prism.music.ui.components.SwipeToQueue(s, Modifier.locatePulse(locate, s.id)) {
+                                    SongRow(s, dim(s), playing = playingRowId == s.id, trailingInfo = null, extraActions = removeAction(s) + skipAction(s), showAlbum = showAlbums) {
                                         playFrom(songs, s, source.copy(title = "$title · $g"))
                                     }
                                 }
                             }
                         }
                 } else {
+                    songRows.grouped = null
+                    songRows.start = added
                     itemsIndexed(visible, key = { i, s -> "${s.id}:$i" }) { i, s ->
                         // Swipe right: play next; left: add to the queue.
-                        com.prism.music.ui.components.SwipeToQueue(s) {
+                        com.prism.music.ui.components.SwipeToQueue(s, Modifier.locatePulse(locate, s.id)) {
                             SongRow(
                                 s,
                                 dim(s),
                                 index = if (type == CollectionType.ALBUM) i + 1 else null,
                                 starred = s.id in popular,
-                                playing = current?.id == s.id,
+                                playing = playingRowId == s.id,
                                 // #314: a song playing from one of your own files says so ("MP3 · 320 kbps, from your file").
                                 trailingInfo = if (skippedCount > 0 && type != CollectionType.DOWNLOADS && com.prism.music.download.PlaylistDownloads.isSkipped(s.id, skipped, standIns)) tr(R.string.skipped_in_downloads)
                                 else if (type == CollectionType.ALBUM) formatDuration(s.durationSec)
@@ -924,7 +955,7 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
                     }
                     live.page.artists.firstOrNull { it.id != null }?.let { a -> item("moreby") { MoreBy(a.name, a.id!!, page.id) } }
                 }
-            }
+            } }
             }
 
             if (likedRefresh) androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
@@ -936,6 +967,13 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
                 listState, Modifier.align(Alignment.CenterEnd).padding(top = statusTop + 60.dp, bottom = bottomPadding),
                 description = tr(R.string.scroll_through_the_songs),
             ) { f -> visible.takeIf { it.isNotEmpty() }?.let { v -> (f * (v.size - 1)).toInt().coerceIn(0, v.size - 1) + 1 }?.toString() }
+
+            // D54: the ⋯ menu's "Go to the playing song" while that song is one of the rows shown, and (Settings) a small
+            // button above the mini player while its row is out of sight.
+            LocatePlayingRow(
+                locate, listState, inList = playingAt >= 0 && !rearranging, songId = playingRowId,
+                bottomPadding = bottomPadding, topInset = statusTop + 60.dp,
+            ) { songRows.of(playingRowId, playingAt) }
 
             // Content melts away under the bar into the page's own frost.
             ScrollEdge({ solid }, statusTop + 60.dp + 34.dp, pageHeight) { m ->
@@ -961,6 +999,8 @@ private fun CollectionContent(type: CollectionType, live: LiveCollection, initia
             val excludedLists by c.exclusions.playlists.collectAsState()
             val downloadsItems = if (type == CollectionType.DOWNLOADS) downloadsSheetItems { text, action -> confirm = text to action } else emptyList()
             val items = buildList {
+                // D54: always here while the playing song is one of the songs shown.
+                locate.go?.let { go -> add(SheetItem(PrismIcons.Song, tr(R.string.go_to_the_playing_song)) { go() }) }
                 if (radioId != null) add(SheetItem(PrismIcons.Radio, tr(R.string.start_radio)) { startRadio() })
                 if (savableId != null && saved != null) add(
                     SheetItem(if (saved == true) PrismIcons.LibraryAdded else PrismIcons.LibraryAdd, if (saved == true) tr(R.string.remove_from_library) else tr(R.string.add_to_library)) { toggleSaved() },
@@ -1141,7 +1181,7 @@ private fun rememberTellApart(items: List<com.prism.music.data.model.BrowseItem>
 @Composable
 private fun PlayShufflePills(enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Pill(PrismIcons.Play, tr(R.string.widget_play), primary = true, enabled = enabled, modifier = Modifier.weight(1f), onClick = onPlay)
+        Pill(PrismIcons.Play, tr(R.string.widget_play), primary = true, enabled = enabled, modifier = Modifier.weight(1f).testTag("collectionPlay"), onClick = onPlay)
         Pill(PrismIcons.Shuffle, tr(R.string.shuffle), primary = false, enabled = enabled, modifier = Modifier.weight(1f), onClick = onShuffle)
     }
 }
@@ -1311,12 +1351,12 @@ private fun HeaderDetails(page: CollectionPage, centred: Boolean, privacy: Strin
 
 /**
  * A playlist's picture edge to edge, like an artist page: it drifts behind the scroll and frosts
- * over into the page, with the title over its foot.
+ * over into the page, with the title over its foot. An album's too, when asked for ([heroCover]).
  */
 @Composable
 private fun HeroHeader(type: CollectionType, page: CollectionPage, art: String?, scroll: () -> Int, height: Dp) {
     val scheme = MaterialTheme.colorScheme
-    Box(Modifier.fillMaxWidth().height(height)) {
+    Box(Modifier.fillMaxWidth().height(height).testTag("collectionHero")) {
         Box(Modifier.matchParentSize().clipToBounds().dissolveBottom(0.5f)) {
             if (art != null) AsyncImage(
                 hiRes(art, 1440), null, contentScale = ContentScale.Crop,
@@ -1334,7 +1374,7 @@ private fun HeroHeader(type: CollectionType, page: CollectionPage, art: String?,
                         .border(1.5.dp, com.prism.music.ui.theme.PrismTokens.spectrum, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(when (type) { CollectionType.DOWNLOADS -> PrismIcons.DownloadDone; CollectionType.LIKED -> PrismIcons.HeartFilled; else -> PrismIcons.QueueMusic }, null, Modifier.size(64.dp), tint = scheme.onSurface)
+                    Icon(when (type) { CollectionType.DOWNLOADS -> PrismIcons.DownloadDone; CollectionType.LIKED -> PrismIcons.HeartFilled; CollectionType.ALBUM -> PrismIcons.Album; else -> PrismIcons.QueueMusic }, null, Modifier.size(64.dp), tint = scheme.onSurface)
                 }
             }
         }

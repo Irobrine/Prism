@@ -15,6 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.prism.music.data.spotify.SpotifyProfile
 import com.prism.music.data.spotify.SpotifyTokens
+import com.prism.music.ui.screens.settings.SettingsPageId
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -25,7 +26,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Spotify through your own developer app (1.8.1), end to end without Spotify: the page and its set-up guide show while
+ * Spotify through your own developer app (1.8.1), end to end without Spotify: its row on Accounts & sharing and the
+ * set-up guide it opens ("How to connect", a sheet since 1.8.4) show while
  * nothing is connected (and nothing Spotify runs: no job, no request), then a token is put in as a finished sign-in
  * would, Spotify's answers come from the test's own recordings, "Your playlists" lists the playlist in Library with its
  * Spotify mark, opening it matches its song (the YouTube match stands in: a silent tone on the device), it plays, and
@@ -79,19 +81,23 @@ class SpotifyConnectTest {
         assertFalse(c.spotify.connected)
         assertTrue(spotifyJobs().isEmpty())
 
-        // The page and its guide.
-        compose.openSettings()
-        compose.clickWhenFound(hasText("Devices & connections") and hasClickAction())
-        compose.clickWhenFound(hasText("Spotify") and hasClickAction())
+        // Its row and its guide. 1.8.4: Settings → Accounts & sharing; not connected, Spotify is one row ("Not
+        // connected") that opens "How to connect" in a sheet (the guide was the Spotify page of Devices & connections).
+        compose.openSettingsPage(SettingsPageId.ACCOUNTS_SHARING)
+        val spotifyRow = settingsRow("Spotify")
+        compose.scrollSettingsTo(spotifyRow and hasText("Not connected"))
+        compose.clickWhenFound(spotifyRow)
+        compose.waitForText("How to connect")
         compose.waitForText("Create app")
         compose.waitForText("http://127.0.0.1:43827/callback")
         compose.waitForText("Client ID")
         compose.waitForText("Spotify Premium")
 
-        // A finished sign-in.
+        // A finished sign-in: the sheet goes with its row, and the Spotify group holds the features' switches, with who
+        // is connected on its Disconnect row.
         c.spotify.connectForTest(SpotifyTokens("test-access", "test-refresh", Long.MAX_VALUE), SpotifyProfile("tester", "Tester"))
         compose.waitForText("Connected as Tester")
-        compose.clickWhenFound(hasText("Your playlists") and hasClickAction())
+        compose.clickWhenFound(settingsRow("Your playlists"))
         compose.waitUntil(15_000) { c.spotify.playlists.prismIds().isNotEmpty() }
         val prismId = c.spotify.playlists.prismIds().single()
         assertEquals("only your own", 1, c.spotify.playlists.mirror().notYours)
@@ -152,7 +158,7 @@ class SpotifyConnectTest {
         // Disconnect, from the page.
         instrumentation.runOnMainSync { c.player.stop() }
         // The song opened the player over the tab bar: Back closes it. The Settings tab then reopens where it was
-        // (tabs keep their pages), the Spotify page, so it's tapped directly rather than through openSettings().
+        // (tabs keep their pages), Accounts & sharing, so it's tapped directly rather than through openSettings().
         val settingsTab = androidx.compose.ui.test.hasContentDescription("Settings") and hasClickAction()
         repeat(3) {
             if (compose.onAllNodes(settingsTab).fetchSemanticsNodes().isNotEmpty()) return@repeat
@@ -160,11 +166,8 @@ class SpotifyConnectTest {
             compose.waitForIdle()
         }
         compose.clickWhenFound(settingsTab)
-        if (compose.onAllNodes(hasText("Connected as Tester")).fetchSemanticsNodes().isEmpty()) {
-            compose.clickWhenFound(hasText("Devices & connections") and hasClickAction())
-            compose.clickWhenFound(hasText("Spotify") and hasClickAction())
-        }
-        compose.clickWhenFound(hasText("Disconnect") and hasClickAction())
+        compose.backOnSettingsPage(SettingsPageId.ACCOUNTS_SHARING)
+        compose.clickWhenFound(settingsRow("Disconnect Spotify"))
         compose.waitForText("Disconnect Spotify?")
         compose.clickWhenFound(hasText("Disconnect") and hasClickAction() and hasAnyAncestor(isDialog()))
         compose.waitUntil(10_000) { !c.spotify.connected }
@@ -173,7 +176,8 @@ class SpotifyConnectTest {
         assertTrue(c.spotify.playlists.prismIds().isEmpty())
         assertTrue("the tokens are gone", c.spotify.store.tokens() == null)
         compose.waitUntil(10_000) { spotifyJobs().isEmpty() }
-        compose.waitForText("Create app")
+        // Back to the one row that says it isn't connected (the guide is its sheet again).
+        compose.waitUntil(10_000) { compose.onAllNodes(spotifyRow and hasText("Not connected")).fetchSemanticsNodes().isNotEmpty() }
         // The followed one is gone too, from the data and from Library.
         compose.waitUntil(10_000) { c.spotify.followedShown.value.isEmpty() && c.spotify.playlists.followed.value.isEmpty() }
         compose.onAllNodes(libraryTab).onFirst().performClick()

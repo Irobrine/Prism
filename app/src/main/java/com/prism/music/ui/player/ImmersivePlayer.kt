@@ -76,6 +76,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import coil3.compose.AsyncImage
 import com.prism.music.data.canvas.CanvasArtwork
 import com.prism.music.data.lyrics.LyricLine
+import com.prism.music.data.lyrics.RubySpan
 import com.prism.music.data.model.Song
 import com.prism.music.data.model.hiRes
 import com.prism.music.ui.components.ActionGroup
@@ -88,7 +89,6 @@ import com.prism.music.ui.theme.PrismIcons
 import kotlinx.coroutines.delay
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -631,7 +631,19 @@ private fun LyricsOverAll(song: Song, state: LyricsState, translation: com.prism
         val target = index.coerceAtLeast(0)
         // Glide to a line on screen; jump to one further off (a seek).
         val seen = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }
-        if (seen != null) list.animateScrollBy(seen.offset.toFloat(), tween(700, easing = FastOutSlowInEasing)) else list.scrollToItem(target)
+        if (seen == null) { list.scrollToItem(target); return@LaunchedEffect }
+        // As #399 on the lyrics page: the glide follows the line on the way (where it is, read again each frame) rather
+        // than going a distance worked out before it starts, so anything changing height meanwhile can't leave it off its place.
+        fun away(): Float? = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.offset?.toFloat()
+        list.scroll {
+            var left = seen.offset.toFloat()
+            var before = 0f
+            animate(0f, 1f, animationSpec = tween(700, easing = FastOutSlowInEasing)) { now, _ ->
+                left = away() ?: left
+                left -= scrollBy(settleStep(left, before, now))
+                before = now
+            }
+        }
     }
     BoxWithConstraints(modifier) {
         LazyColumn(
@@ -671,20 +683,7 @@ private fun LyricsOverAll(song: Song, state: LyricsState, translation: com.prism
                             }
                         }
                         if (look.extraAbove) translationLine(false)
-                        when {
-                            line.isGap -> Text("♪", style = style, color = Color.White, modifier = Modifier.fillMaxWidth())
-                            current && (line.isWordSynced || !look.plainWhenLineTimed) ->
-                                SungLine(
-                                    line, clock, style, look, axis, Modifier.fillMaxWidth(), dimAlpha = 0.45f,
-                                    ruby = if (instead) null else furigana?.getOrNull(i),
-                                )
-                            // The lines around it are dimmed by the list itself; their color is the look's.
-                            else -> TextWithFurigana(
-                                line.text, if (instead) null else furigana?.getOrNull(i), style.copy(shadow = look.shadow ?: style.shadow),
-                                if (current) Color.White else look.others, Modifier.fillMaxWidth(),
-                            )
-                        }
-                        if (current && !line.isGap && line.endMs > line.timeMs) LyricProgress(line.timeMs, line.endMs, clock, 0.5f, Modifier.fillMaxWidth().padding(top = 10.dp))
+                        ImmersiveListWords(line, current, clock, style, look, axis, ruby = if (instead) null else furigana?.getOrNull(i))
                         if (!instead && !line.isGap) roman?.getOrNull(i)?.let { r ->
                             val romanStyle = style.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal, textDirection = TextDirection.Ltr)
                             if (current && r.isWordSynced) SweptLine(r, clock, romanStyle, Modifier.fillMaxWidth().padding(top = 3.dp), dimAlpha = 0.45f)
@@ -695,6 +694,34 @@ private fun LyricsOverAll(song: Song, state: LyricsState, translation: com.prism
                 }
             }
         }
+    }
+}
+
+/**
+ * A line's own words in immersive mode's list of every line ([LyricsOverAll]): sung ([current], in the look's style) or
+ * resting, and under a line with an end the thin progress line, growing from the middle.
+ */
+@Composable
+internal fun ImmersiveListWords(
+    line: LyricLine, current: Boolean, clock: androidx.compose.runtime.State<Long>, style: androidx.compose.ui.text.TextStyle,
+    look: LyricsLook, axis: androidx.compose.ui.text.font.FontFamily?, ruby: List<RubySpan>? = null,
+) {
+    when {
+        line.isGap -> Text("♪", style = style, color = Color.White, modifier = Modifier.fillMaxWidth())
+        current && (line.isWordSynced || !look.plainWhenLineTimed) ->
+            SungLine(line, clock, style, look, axis, Modifier.fillMaxWidth(), dimAlpha = 0.45f, ruby = ruby)
+        // The lines around it are dimmed by the list itself; their color is the look's.
+        else -> TextWithFurigana(
+            line.text, ruby, style.copy(shadow = look.shadow ?: style.shadow),
+            if (current) Color.White else look.others, Modifier.fillMaxWidth(),
+        )
+    }
+    // As #399 on the lyrics page: every line that can show the progress line keeps its room, drawn only under the sung
+    // one, so a line is as tall sung as resting (the old line shrank and the new one grew at every change, in the middle
+    // of the glide to it: the lines below jumped and the glide ended off its place).
+    if (!line.isGap && line.endMs > line.timeMs) {
+        val room = Modifier.fillMaxWidth().padding(top = 10.dp)
+        if (current) LyricProgress(line.timeMs, line.endMs, clock, 0.5f, room) else Spacer(room.height(2.dp))
     }
 }
 

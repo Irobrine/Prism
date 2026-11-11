@@ -148,7 +148,10 @@ class LockScreenActivity : ComponentActivity() {
         setContent {
             val settings by c.settings.flow.collectAsState()
             CompositionLocalProvider(LocalContainer provides c) {
-                LockTheme(settings) { LockScreenHost(settings, ::finishNow, ::unlock) }
+                // 1.8.4 (D53): with the player's look and Prism's color taken from the cover, the accent the player has.
+                val song by c.player.currentSong.collectAsState()
+                val accent = rememberLockAccent(settings, song?.let { PlaylistCovers.artOf(it) })
+                LockTheme(settings, accent) { LockScreenHost(settings, ::finishNow, ::unlock) }
             }
         }
     }
@@ -229,8 +232,8 @@ class LockScreenActivity : ComponentActivity() {
  * screen is white on dark like the player, without touching the theme the rest of the app is drawn in.
  */
 @Composable
-internal fun LockTheme(settings: AppSettings, content: @Composable () -> Unit) {
-    PrismTheme(settings, null) { LookTheme(settings, true) { content() } }
+internal fun LockTheme(settings: AppSettings, artworkColor: Color? = null, content: @Composable () -> Unit) {
+    PrismTheme(settings, artworkColor) { LookTheme(settings, true) { content() } }
 }
 
 /** The real thing: the player's state made into a [LockScreenContent], inside the swipe that unlocks. */
@@ -259,7 +262,15 @@ private fun LockScreenHost(settings: AppSettings, close: () -> Unit, unlock: (((
     val duration by remember { derivedStateOf { position.value.let { pc.duration } } }
     val volume = rememberPlayerVolume()
     val art = remember(current.id) { PlaylistCovers.artOf(current) }
-    val frost = if (hide || layout == com.prism.music.data.prefs.LockLayout.QUIET) null else rememberFrost(art)?.image
+    // 1.8.4 (D53): the player's look, when that's on. The waveform is read only for the Waveform style.
+    val wantsWave = settings.view.lockScreenPlayerLook && settings.scrubberStyle == com.prism.music.data.prefs.ScrubberStyle.WAVE && !hide
+    val waveStamp = if (wantsWave) c.waves.stamp.collectAsState().value else 0L
+    val wave by androidx.compose.runtime.produceState<FloatArray?>(null, wantsWave, current.id, waveStamp) {
+        value = if (!wantsWave) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { c.waves.get(current.id) }
+    }
+    val look = rememberLockPlayerLook(settings, art, hide, wave)
+    // The frost isn't made when the player's background takes its place.
+    val frost = if (hide || layout == com.prism.music.data.prefs.LockLayout.QUIET || look != null) null else rememberFrost(art)?.image
     val (time, date) = rememberClockText()
     val output = lockOutput(settings)
     val lyrics = if (layout == com.prism.music.data.prefs.LockLayout.LYRICS) rememberLockLyrics(current, art) else null
@@ -292,6 +303,7 @@ private fun LockScreenHost(settings: AppSettings, close: () -> Unit, unlock: (((
         lyrics = lyrics,
         repeat = repeat,
         upNext = upNext,
+        look = look,
     )
     val actions = remember(current.id, duration) {
         LockScreenActions(

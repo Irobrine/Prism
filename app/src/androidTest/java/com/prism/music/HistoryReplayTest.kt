@@ -54,19 +54,20 @@ class HistoryReplayTest {
 
     @Test fun historyPausesAndComesBack() {
         Fixture.launch()
-        compose.openSettings()
-        compose.clickWhenFound(hasText("Recommendations & Replay") and hasClickAction())
+        // 1.8.4: Settings → Recommendations & history → History. "Pause history" is a row that opens its choices in a
+        // sheet (they were chips on the page), and says until when under its name.
+        compose.openSettingsPage(com.prism.music.ui.screens.settings.SettingsPageId.RECOMMENDATIONS_HISTORY)
         seeText("Pause history")
-        compose.clickWhenFound(hasText("1 hour") and hasClickAction())
+        compose.pickInSheet("Pause history", HistoryPause.Choice.HOUR.label)
         compose.waitUntil(5_000) { HistoryPause.paused(c.settings.current.behavior) }
         val until = c.settings.current.behavior.historyPausedUntil
         assertTrue("about an hour", until - System.currentTimeMillis() in 3_500_000L..3_600_000L)
         seeText("Paused until")
 
-        // When a song counts: 30 seconds, and back to ten.
-        compose.clickWhenFound(hasText("30 s") and hasClickAction())
+        // When a song counts: 30 seconds, and back to ten (chips of "Counts as a play after").
+        compose.clickWhenFound(settingsChip("30 s", row = tr(R.string.hist_count_after)))
         compose.waitUntil(5_000) { c.settings.current.behavior.playCountSeconds == 30 }
-        compose.clickWhenFound(hasText("10 s") and hasClickAction())
+        compose.clickWhenFound(settingsChip("10 s", row = tr(R.string.hist_count_after)))
         compose.waitUntil(5_000) { c.settings.current.behavior.playCountSeconds == 10 }
 
         // Replay says history is paused, and turns it back on.
