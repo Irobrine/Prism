@@ -249,6 +249,9 @@ fun DownloadsDataPage(bottomPadding: Dp, find: String? = null, showBack: Boolean
     // What differs from how Prism comes, for the rows' dots and for Reset this page (top to bottom, as the page).
     val wifiChanged = reset.add(tr(R.string.download_on_wi_fi_only), s.downloadWifiOnly, d.downloadWifiOnly, onOff) { prefs.setDownloadWifiOnly(it) }
     val likesChanged = reset.add(tr(R.string.download_liked_songs_automatically), s.downloadLikes, d.downloadLikes, onOff, setLikes)
+    val onStreamChanged = reset.add(tr(R.string.download_songs_when_you_play_them), s.downloadOnStream, d.downloadOnStream, onOff) { prefs.setDownloadOnStream(it) }
+    val videoOnStreamChanged = reset.add(tr(R.string.download_videos_when_you_play_them), s.downloadVideoOnStream, d.downloadVideoOnStream, onOff) { prefs.setDownloadVideoOnStream(it) }
+    val aheadChanged = reset.add(tr(R.string.download_songs_ahead), s.downloadQueueAhead, d.downloadQueueAhead, { if (it == 0) tr(R.string.off) else it.toString() }) { prefs.setDownloadQueueAhead(it) }
     val ownChanged = reset.add(tr(R.string.use_your_own_song_files), s.sound.ownLossyFiles, d.sound.ownLossyFiles, onOff) { prefs.setOwnLossyFiles(it) }
     val foldersChanged = reset.add(tr(R.string.folders_in_local_files), s.behavior.localSkipFolders, d.behavior.localSkipFolders, ::foldersText) { prefs.setLocalSkipFolders(it) }
     val sectionsChanged = reset.add(tr(R.string.dd_sections_in_local_files), s.localSections, d.localSections, ::sectionsText) { prefs.setLocalSections(it) }
@@ -271,6 +274,22 @@ fun DownloadsDataPage(bottomPadding: Dp, find: String? = null, showBack: Boolean
                 tr(R.string.download_liked_songs_automatically), s.downloadLikes,
                 info = tr(R.string.including_likes_from_other_devices), changed = likesChanged, onChange = setLikes,
             )
+            // "Always download": the stream itself saves the song or video it's playing.
+            SwitchRow(
+                tr(R.string.download_songs_when_you_play_them), s.downloadOnStream,
+                info = tr(R.string.download_songs_on_stream_detail), changed = onStreamChanged,
+            ) { prefs.setDownloadOnStream(it) }
+            SwitchRow(
+                tr(R.string.download_videos_when_you_play_them), s.downloadVideoOnStream,
+                info = tr(R.string.download_videos_on_stream_detail), changed = videoOnStreamChanged,
+            ) { prefs.setDownloadVideoOnStream(it) }
+            // The next songs in the queue, kept downloaded too (0 is off; 1 to 5 after the one playing).
+            val aheadChoices = listOf(0, 1, 2, 3, 4, 5)
+            ChoiceRow(
+                tr(R.string.download_songs_ahead), aheadChoices, s.downloadQueueAhead.coerceIn(0, 5),
+                { if (it == 0) tr(R.string.off) else it.toString() },
+                info = tr(R.string.download_songs_ahead_info), changed = aheadChanged,
+            ) { prefs.setDownloadQueueAhead(it) }
             // #298 (1.8.2).
             var choosingKept by remember { mutableStateOf(false) }
             val kept = s.behavior.keptPlaylists.size
@@ -489,6 +508,9 @@ val downloadsDataIndex: List<SettingEntry> by lazy {
             SettingEntry(page, downloads, tr(R.string.manage_downloads), tr(R.string.offline_delete)),
             SettingEntry(page, downloads, tr(R.string.download_on_wi_fi_only), tr(R.string.cellular_mobile_data)),
             SettingEntry(page, downloads, tr(R.string.download_liked_songs_automatically), tr(R.string.offline_likes)),
+            SettingEntry(page, downloads, tr(R.string.download_songs_when_you_play_them), tr(R.string.download_on_stream_keywords)),
+            SettingEntry(page, downloads, tr(R.string.download_videos_when_you_play_them), tr(R.string.download_on_stream_keywords)),
+            SettingEntry(page, downloads, tr(R.string.download_songs_ahead), tr(R.string.download_ahead_keywords)),
             SettingEntry(page, downloads, tr(R.string.keep_playlists_downloaded), tr(R.string.keep_playlists_keywords)),
             // #314 (1.8.1).
             SettingEntry(page, files, tr(R.string.use_your_own_song_files), tr(R.string.own_files_keywords)),
