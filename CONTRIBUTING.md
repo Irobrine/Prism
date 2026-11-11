@@ -1,4 +1,6 @@
-# Contributing to Prism
+# Contributing to Prismatica
+
+Prismatica is a fork of [Prism](https://github.com/Yigder/Prism).
 
 Thanks for wanting to help. Bug reports, ideas and pull requests are all welcome.
 
