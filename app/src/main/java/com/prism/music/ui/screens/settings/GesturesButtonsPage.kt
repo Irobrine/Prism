@@ -35,6 +35,7 @@ import com.prism.music.data.prefs.AppSettings
 import com.prism.music.data.prefs.PipMode
 import com.prism.music.data.prefs.PlayerGesture
 import com.prism.music.data.prefs.SessionButton
+import com.prism.music.data.prefs.SongSwipeAction
 import com.prism.music.tr
 import com.prism.music.ui.components.ReorderList
 import com.prism.music.ui.screens.InfoMark
@@ -153,6 +154,10 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     val panelChanged = reset.add(tr(R.string.swipe_up_for_the_queue), s.behavior.panelSwipes, d.behavior.panelSwipes, onOff) { prefs.setPanelSwipes(it) }
     val tabsChanged = reset.add(tr(R.string.swipe_between_tabs), s.swipeTabs, d.swipeTabs, onOff) { prefs.setSwipeTabs(it) }
     val rowsChanged = reset.add(tr(R.string.gb_row_swipes), s.behavior.rowSwipes, d.behavior.rowSwipes, onOff) { prefs.setRowSwipes(it) }
+    // 1.8.3.2: what a song row's swipe left and right do, and whether Library's rows swipe at all.
+    val songLeftChanged = reset.add(tr(R.string.songs) + " · " + tr(R.string.swipe_left), s.behavior.songSwipeLeft, d.behavior.songSwipeLeft, { it.label }) { prefs.setSongSwipeLeft(it) }
+    val songRightChanged = reset.add(tr(R.string.songs) + " · " + tr(R.string.swipe_right), s.behavior.songSwipeRight, d.behavior.songSwipeRight, { it.label }) { prefs.setSongSwipeRight(it) }
+    val songLibraryChanged = reset.add(tr(R.string.library) + " · " + tr(R.string.swipe_left) + " / " + tr(R.string.swipe_right), s.behavior.songSwipeLibrary, d.behavior.songSwipeLibrary, onOff) { prefs.setSongSwipeLibrary(it) }
     val buttonsChanged = reset.add(tr(R.string.buttons), s.sessionButtons, d.sessionButtons, ::buttonsText) { prefs.setSessionButtons(it) }
     val notificationLyricsChanged = reset.add(tr(R.string.gb_lyrics_in_notification), s.carLyricsOnPhone, d.carLyricsOnPhone, onOff) { prefs.setCarLyricsOnPhone(it) }
     val portraitChanged = reset.add(tr(R.string.lock_to_portrait), s.behavior.lockPortrait, d.behavior.lockPortrait, onOff) { prefs.setLockPortrait(it) }
@@ -194,6 +199,22 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
             SwitchRow(tr(R.string.swipe_between_tabs), s.swipeTabs, info = tr(R.string.a_sideways_swipe_on_a_tab), changed = tabsChanged) { prefs.setSwipeTabs(it) }
             // #406 (1.8.4): on is how Prism was.
             SwitchRow(tr(R.string.gb_row_swipes), s.behavior.rowSwipes, info = tr(R.string.gb_row_swipes_info), changed = rowsChanged) { prefs.setRowSwipes(it) }
+        }
+        // 1.8.3.2: the songs in every list: their two swipes, and Library's own switch for them.
+        group(tr(R.string.songs)) {
+            PickListRow(
+                tr(R.string.swipe_left), SongSwipeAction.entries, s.behavior.songSwipeLeft, { it.label },
+                changed = songLeftChanged,
+            ) { prefs.setSongSwipeLeft(it) }
+            PickListRow(
+                tr(R.string.swipe_right), SongSwipeAction.entries, s.behavior.songSwipeRight, { it.label },
+                changed = songRightChanged,
+            ) { prefs.setSongSwipeRight(it) }
+            // Library's pages change by swiping sideways, so its rows only take the gesture when asked for.
+            SwitchRow(
+                tr(R.string.library), s.behavior.songSwipeLibrary,
+                info = tr(R.string.swipe_left) + " / " + tr(R.string.swipe_right), changed = songLibraryChanged,
+            ) { prefs.setSongSwipeLibrary(it) }
         }
         group(tr(R.string.notification_and_car)) {
             GbSessionButtons(buttonsChanged)
@@ -328,6 +349,9 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
         SettingEntry(page, touch, tr(R.string.swipe_up_for_the_queue), tr(R.string.gesture_one_hand_queue_lyrics_swipe)),
         SettingEntry(page, touch, tr(R.string.swipe_between_tabs), tr(R.string.tab_bar_swipe_gesture_sideways)),
         SettingEntry(page, touch, tr(R.string.gb_row_swipes), tr(R.string.gb_row_swipes_keywords)),
+        SettingEntry(page, tr(R.string.songs), tr(R.string.swipe_left), tr(R.string.gb_row_swipes_keywords) + " " + SongSwipeAction.entries.joinToString(" ") { it.label }),
+        SettingEntry(page, tr(R.string.songs), tr(R.string.swipe_right), tr(R.string.gb_row_swipes_keywords) + " " + SongSwipeAction.entries.joinToString(" ") { it.label }),
+        SettingEntry(page, tr(R.string.songs), tr(R.string.library), tr(R.string.gb_row_swipes_keywords) + " " + tr(R.string.library)),
         SettingEntry(page, outside, tr(R.string.buttons), tr(R.string.notification_lock_screen_android_auto_car)),
         SettingEntry(page, outside, tr(R.string.gb_lyrics_in_notification), tr(R.string.gb_lyrics_in_notification_keywords)),
         SettingEntry(page, screen, tr(R.string.lock_to_portrait), tr(R.string.rotation_orientation_landscape_upright)),
