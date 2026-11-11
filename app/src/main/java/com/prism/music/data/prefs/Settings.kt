@@ -389,6 +389,14 @@ data class BehaviorPrefs(
     val carLyricsLines: CarLyricsLines = CarLyricsLines.ONE_LINE,
     /** D54 (1.8.4): a button above the mini player that scrolls a list to the playing song while it's off screen. */
     val locatePlaying: Boolean = false,
+    /**
+     * "Always download" (1.8.3.1): songs and music videos are saved as they stream; [AppSettings.downloadWifiOnly] still
+     * decides when their download may run. [AppSettings.downloadOnStream] reads these from here.
+     */
+    val downloadOnStream: Boolean = false,
+    val downloadVideoOnStream: Boolean = false,
+    /** Songs after the one playing to keep downloaded too: 0 (off) to 5. */
+    val downloadQueueAhead: Int = 0,
 ) {
     companion object {
         /** #404: how far [lyricsOffsetMs] goes either way. */
@@ -1520,14 +1528,6 @@ data class AppSettings(
     val downloadWifiOnly: Boolean = true,
     val downloadLikes: Boolean = true,
     /**
-     * "Always download": songs and music videos are saved for offline as soon as they're streamed, without asking.
-     * [downloadWifiOnly] still decides when their download may run. Off by default.
-     */
-    val downloadOnStream: Boolean = false,
-    val downloadVideoOnStream: Boolean = false,
-    /** Songs after the one playing to keep downloaded too: 0 (off) to 5. */
-    val downloadQueueAhead: Int = 0,
-    /**
      * Smart Downloads' picks: the songs you're most likely to play are downloaded ahead. Off on a new install (#339,
      * 1.8.1.1: Home offers it once); listeners who had it on before keep it ([addNewHomeSections]).
      */
@@ -1740,6 +1740,11 @@ data class AppSettings(
     val performanceOffered: Boolean = false,
 ) {
     val isLoggedIn: Boolean get() = cookie.contains("SAPISID")
+
+    // The streamed-download settings live in [behavior] (the constructor is near the JVM's limit); they read as before.
+    val downloadOnStream: Boolean get() = behavior.downloadOnStream
+    val downloadVideoOnStream: Boolean get() = behavior.downloadVideoOnStream
+    val downloadQueueAhead: Int get() = behavior.downloadQueueAhead
 
     // The lyrics' look, read as before (1.7.7 moved them into [lyricsLook]; see [LyricsLookPrefs]).
     val lyricsStyle: LyricsStyle get() = lyricsLook.style
@@ -2532,9 +2537,6 @@ class SettingsRepository(
             cacheSizeMb = p[K.cacheSizeMb] ?: d.cacheSizeMb,
             downloadWifiOnly = p[K.downloadWifiOnly] ?: d.downloadWifiOnly,
             downloadLikes = p[K.downloadLikes] ?: d.downloadLikes,
-            downloadOnStream = p[K.downloadOnStream] ?: d.downloadOnStream,
-            downloadVideoOnStream = p[K.downloadVideoOnStream] ?: d.downloadVideoOnStream,
-            downloadQueueAhead = (p[K.downloadQueueAhead] ?: d.downloadQueueAhead).coerceIn(0, 5),
             smartDownloads = p[K.smartDownloads] ?: d.smartDownloads,
             smartDownloadGb = p[K.smartDownloadGb] ?: d.smartDownloadGb,
             offlineGb = p[K.offlineGb] ?: run {
@@ -2700,6 +2702,9 @@ class SettingsRepository(
                 shuffleButton = p.enum(K.shuffleButton, d.behavior.shuffleButton),
                 carLyricsLines = p.enum(K.carLyricsLines, d.behavior.carLyricsLines),
                 locatePlaying = p[K.locatePlaying] ?: d.behavior.locatePlaying,
+                downloadOnStream = p[K.downloadOnStream] ?: d.behavior.downloadOnStream,
+                downloadVideoOnStream = p[K.downloadVideoOnStream] ?: d.behavior.downloadVideoOnStream,
+                downloadQueueAhead = (p[K.downloadQueueAhead] ?: d.behavior.downloadQueueAhead).coerceIn(0, 5),
             ),
             tv = TvPrefs(
                 ambientMinutes = (p[K.tvAmbientMinutes] ?: d.tv.ambientMinutes).coerceIn(0, 60),
