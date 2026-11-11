@@ -4971,6 +4971,9 @@
     <string name="tour_183_also_songs_from">音乐库的歌曲来自你选择的播放列表</string>
     <string name="tour_183_also_lock">锁屏上的重复播放和接下来播放</string>
     <string name="tour_183_also_uploads">在上传内容中上传和删除</string>
+    <string name="show_furigana">显示振假名</string>
+    <string name="hiragana_readings_above_kanji">在日语歌词的汉字上方显示平假名读音</string>
+    <string name="furigana_uses_the_japanese_reading_data">使用日语读音数据（在下方下载一次）。</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">更新</string>
     <string name="about_data_info">你的数据留在这里：Prism 没有服务器。你的历史记录、Replay 和设置只存在这部手机上。</string>

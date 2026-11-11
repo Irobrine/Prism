@@ -5115,6 +5115,9 @@
     <string name="tour_183_also_songs_from">Melodiile din Bibliotecă din playlisturile alese</string>
     <string name="tour_183_also_lock">Repetă și Urmează pe ecranul de blocare</string>
     <string name="tour_183_also_uploads">Încărcare și ștergere în Încărcări</string>
+    <string name="show_furigana">Arată furigana</string>
+    <string name="hiragana_readings_above_kanji">Citiri hiragana deasupra kanji în versurile japoneze</string>
+    <string name="furigana_uses_the_japanese_reading_data">Folosește datele de citire japoneze (descărcate o dată mai jos).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Actualizări</string>
     <string name="about_data_info">Datele tale rămân aici: Prism nu are server. Istoricul, Replay și setările tale există doar pe acest telefon.</string>

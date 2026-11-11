@@ -5043,6 +5043,9 @@
     <string name="tour_183_also_songs_from">Nummers in Bibliotheek uit de playlists die je kiest</string>
     <string name="tour_183_also_lock">Herhalen en Hierna op het vergrendelscherm</string>
     <string name="tour_183_also_uploads">Uploaden en verwijderen in Uploads</string>
+    <string name="show_furigana">Furigana tonen</string>
+    <string name="hiragana_readings_above_kanji">Hiragana-lezingen boven de kanji in Japanse songteksten</string>
+    <string name="furigana_uses_the_japanese_reading_data">Gebruikt de Japanse leesgegevens (eenmalig hieronder gedownload).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Updates</string>
     <string name="about_data_info">Je gegevens blijven hier: Prism heeft geen server. Je geschiedenis, Replay en instellingen staan alleen op deze telefoon.</string>

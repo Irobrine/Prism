@@ -159,6 +159,7 @@ val lyricsSingIndex: List<SettingEntry> by lazy {
             SettingEntry(page, g.sources, tr(R.string.read_lyrics_from_your_music_files), tr(R.string.flac_mp3_tags_embed)),
             SettingEntry(page, g.sources, tr(R.string.lyrics_source_button), tr(R.string.change_lyrics_source)),
             SettingEntry(page, g.sources, tr(R.string.ls_offset), tr(R.string.ls_offset_keywords)),
+            SettingEntry(page, g.sources, tr(R.string.show_furigana), tr(R.string.hiragana_readings_above_kanji) + " " + tr(R.string.furigana_uses_the_japanese_reading_data)),
             // Sing and music files
             SettingEntry(page, g.sing, tr(R.string.sing_s_voice_separation), tr(R.string.karaoke_vocals_remove_instrumental_download_mode)),
             SettingEntry(page, g.sing, tr(R.string.get_songs_ready_while_sing_is), tr(R.string.karaoke_prepare_ahead_background_preload_vocals)),
@@ -340,6 +341,7 @@ internal fun lyricsSingChanges(s: AppSettings, d: AppSettings): List<String> = b
     // Language and translations
     line(R.string.translate_into, translateLabel(translateToMerged(s.lyricsTranslate, s.lyricsTranslateTo)), translateLabel(translateToMerged(d.lyricsTranslate, d.lyricsTranslateTo)))
     line(R.string.romanize_lyrics, romanizeLabel(romanizeToMerged(s.romanize, s.romanizeAll)), romanizeLabel(romanizeToMerged(d.romanize, d.romanizeAll)))
+    line(R.string.show_furigana, lsOnOff(s.lyricsFurigana), lsOnOff(d.lyricsFurigana))
     line(R.string.translation_place, p.extraPlace.label, q.extraPlace.label)
     line(R.string.translation_size, lsPercent(p.extraSize), lsPercent(q.extraSize))
     line(R.string.translation_color, p.extraColor.label, q.extraColor.label)
@@ -379,4 +381,5 @@ internal fun resetLyricsSing(prefs: SettingsRepository, d: AppSettings) {
     prefs.setSingCacheMb(d.singCacheMb)
     prefs.setLyricsFileWords(d.lyricsFileWords)
     prefs.setLyricsFileTranslation(d.lyricsFileTranslation)
+    prefs.setLyricsFurigana(d.lyricsFurigana)
 }

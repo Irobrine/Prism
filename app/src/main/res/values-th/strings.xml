@@ -4971,6 +4971,9 @@
     <string name="tour_183_also_songs_from">เพลงในคลังเพลงจากเพลย์ลิสต์ที่คุณเลือก</string>
     <string name="tour_183_also_lock">เล่นซ้ำและถัดไปบนหน้าจอล็อก</string>
     <string name="tour_183_also_uploads">อัปโหลดและลบในรายการที่อัปโหลด</string>
+    <string name="show_furigana">แสดงฟุริงานะ</string>
+    <string name="hiragana_readings_above_kanji">คำอ่านฮิรางานะเหนือคันจิในเนื้อเพลงญี่ปุ่น</string>
+    <string name="furigana_uses_the_japanese_reading_data">ใช้ข้อมูลการอ่านภาษาญี่ปุ่น (ดาวน์โหลดครั้งเดียวด้านล่าง)</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">อัปเดต</string>
     <string name="about_data_info">ข้อมูลของคุณอยู่ที่นี่: Prism ไม่มีเซิร์ฟเวอร์ ประวัติ Replay และการตั้งค่าของคุณอยู่บนโทรศัพท์เครื่องนี้เท่านั้น</string>

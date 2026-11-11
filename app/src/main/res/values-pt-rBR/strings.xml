@@ -5115,6 +5115,9 @@
     <string name="tour_183_also_songs_from">Músicas da Biblioteca a partir das playlists que você escolher</string>
     <string name="tour_183_also_lock">Repetir e A seguir na tela de bloqueio</string>
     <string name="tour_183_also_uploads">Enviar e excluir em Envios</string>
+    <string name="show_furigana">Mostrar furigana</string>
+    <string name="hiragana_readings_above_kanji">Leituras em hiragana acima dos kanji nas letras japonesas</string>
+    <string name="furigana_uses_the_japanese_reading_data">Usa os dados de leitura japoneses (baixados uma vez abaixo).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Atualizações</string>
     <string name="about_data_info">Seus dados ficam aqui: o Prism não tem servidor. Seu histórico, o Replay e as configurações ficam só neste celular.</string>

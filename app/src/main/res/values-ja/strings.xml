@@ -4971,6 +4971,9 @@
     <string name="tour_183_also_songs_from">選んだプレイリストからライブラリの曲を表示</string>
     <string name="tour_183_also_lock">ロック画面にリピートと次の曲</string>
     <string name="tour_183_also_uploads">アップロードでアップロードと削除</string>
+    <string name="show_furigana">ふりがなを表示</string>
+    <string name="hiragana_readings_above_kanji">日本語の歌詞の漢字の上にひらがなの読みを表示します</string>
+    <string name="furigana_uses_the_japanese_reading_data">日本語の読みデータを使用します（下で一度だけダウンロード）。</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">アップデート</string>
     <string name="about_data_info">データはこの端末にとどまります。Prism にはサーバーがありません。履歴、Replay、設定はこのスマホの中だけにあります。</string>

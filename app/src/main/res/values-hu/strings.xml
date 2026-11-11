@@ -5043,6 +5043,9 @@
     <string name="tour_183_also_songs_from">A Könyvtár dalai a választott listákból</string>
     <string name="tour_183_also_lock">Ismétlés és Következő a lezárási képernyőn</string>
     <string name="tour_183_also_uploads">Feltöltés és törlés a Feltöltésekben</string>
+    <string name="show_furigana">Furigana megjelenítése</string>
+    <string name="hiragana_readings_above_kanji">Hiragana olvasatok a kandzsik felett a japán dalszövegekben</string>
+    <string name="furigana_uses_the_japanese_reading_data">A japán olvasási adatokat használja (egyszer lent letöltve).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Frissítések</string>
     <string name="about_data_info">Az adataid itt maradnak: a Prismnek nincs szervere. Az előzményeid, a Replay és a beállításaid csak ezen a telefonon vannak.</string>

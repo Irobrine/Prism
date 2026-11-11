@@ -37,6 +37,8 @@ data class LyricLine(
     val isGap: Boolean = false,
     /** Background vocals sung with the line ("(Back to let you know)"), word-timed; drawn smaller under it (#66). */
     val background: List<LyricWord> = emptyList(),
+    /** Readings the lyrics source wrote in parentheses, already at [text]'s offsets (the parentheses themselves removed). */
+    val sourceRuby: List<RubySpan> = emptyList(),
 ) {
     val isWordSynced: Boolean get() = words.isNotEmpty()
 

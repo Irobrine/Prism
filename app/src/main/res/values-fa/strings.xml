@@ -5043,6 +5043,9 @@
     <string name="tour_183_also_songs_from">آهنگ‌های کتابخانه از فهرست‌هایی که انتخاب می‌کنید</string>
     <string name="tour_183_also_lock">تکرار و بعدی در صفحهٔ قفل</string>
     <string name="tour_183_also_uploads">بارگذاری و حذف در بارگذاری‌ها</string>
+    <string name="show_furigana">نمایش فوریگانا</string>
+    <string name="hiragana_readings_above_kanji">خوانش‌های هیراگانا بالای کانجی در متن ترانه‌های ژاپنی</string>
+    <string name="furigana_uses_the_japanese_reading_data">از داده‌های خواندن ژاپنی استفاده می‌کند (یک‌بار در پایین دانلود می‌شود).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">به‌روزرسانی‌ها</string>
     <string name="about_data_info">داده‌های شما همین‌جا می‌ماند: Prism هیچ سروری ندارد. تاریخچه، Replay و تنظیمات شما فقط روی همین گوشی است.</string>

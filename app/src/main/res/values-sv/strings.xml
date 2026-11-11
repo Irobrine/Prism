@@ -5043,6 +5043,9 @@
     <string name="tour_183_also_songs_from">Bibliotekets låtar från spellistorna du väljer</string>
     <string name="tour_183_also_lock">Upprepa och Härnäst på låsskärmen</string>
     <string name="tour_183_also_uploads">Ladda upp och ta bort i Uppladdningar</string>
+    <string name="show_furigana">Visa furigana</string>
+    <string name="hiragana_readings_above_kanji">Hiraganaläsningar ovanför kanji i japanska låttexter</string>
+    <string name="furigana_uses_the_japanese_reading_data">Använder japanska läsdata (laddas ner en gång nedan).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Uppdateringar</string>
     <string name="about_data_info">Din data stannar här: Prism har ingen server. Din historik, Replay och dina inställningar finns bara på den här telefonen.</string>

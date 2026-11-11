@@ -4971,6 +4971,9 @@
     <string name="tour_183_also_songs_from">Lagu di Koleksi dari playlist pilihanmu</string>
     <string name="tour_183_also_lock">Ulangi dan Berikutnya di layar kunci</string>
     <string name="tour_183_also_uploads">Unggah dan hapus di Unggahan</string>
+    <string name="show_furigana">Tampilkan furigana</string>
+    <string name="hiragana_readings_above_kanji">Bacaan hiragana di atas kanji dalam lirik Jepang</string>
+    <string name="furigana_uses_the_japanese_reading_data">Menggunakan data bacaan Jepang (diunduh sekali di bawah).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Update</string>
     <string name="about_data_info">Datamu tetap di sini: Prism tidak punya server. Riwayat, Replay, dan setelanmu hanya ada di ponsel ini.</string>
