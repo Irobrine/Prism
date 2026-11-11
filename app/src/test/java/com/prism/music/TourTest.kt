@@ -1,8 +1,14 @@
 package com.prism.music
 
+import com.prism.music.ui.screens.settings.SettingsMap
+import com.prism.music.ui.screens.settings.SettingsPageId
+import com.prism.music.ui.screens.settings.SettingsTarget
+import com.prism.music.ui.screens.settings.index
 import com.prism.music.ui.tour.Tour
 import com.prism.music.ui.tour.TourStep
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -76,25 +82,86 @@ class TourTest {
     /** 1.8.3: an update from 1.8.2.1 (58) shows smart playlists, tags, select many, library search and the rest. */
     @Test
     fun anUpdateFrom182ShowsThe183Pages() {
-        val pages = Tour.stepsAfter(58)
+        val pages = Tour.stepsAfter(58).filter { it.since <= 59 }
         assertEquals(5, pages.size)
         assertTrue(pages.all { it.since == 59 })
         assertEquals(tr(R.string.tour_183_smart_title), pages.first().title)
         assertEquals(com.prism.music.ui.Routes.librarySearch(), pages.first { it.title == tr(R.string.tour_183_search_title) }.showMe)
     }
 
-    /** Every "Show me" opens a page that exists: a settings page by a key Settings knows, or one of the app's routes. */
+    /**
+     * 1.8.4 (build 61): an update from 1.8.3.1 (60) shows Settings made simple, lyrics timing, the lock screen in the
+     * player's look, finding the playing song and the rest, in that order, and nothing older.
+     */
+    @Test
+    fun anUpdateFrom1831ShowsThe184Pages() {
+        val pages = Tour.stepsAfter(60)
+        assertTrue(pages.all { it.since == 61 && it.kind == TourStep.Kind.PLAIN })
+        assertEquals(
+            listOf(R.string.tour_184_settings_title, R.string.tour_184_lyrics_title, R.string.tour_184_lock_title, R.string.tour_184_lists_title, R.string.also_new)
+                .map { tr(it) },
+            pages.map { it.title },
+        )
+        // As many pages as the releases before it, a few points each.
+        assertTrue(pages.all { it.points.size in 3..5 && it.points.all { p -> p.isNotBlank() } })
+        // The settings page opens Settings' first page (plan §5); "Also new" opens nothing, as before.
+        assertEquals(com.prism.music.ui.Routes.SETTINGS, pages.first().showMe)
+        assertNull(pages.last().showMe)
+        // A point that names a row says the row's own name (filled in, not a "%1$s").
+        assertTrue(pages.flatMap { it.points }.none { "%" in it })
+        assertTrue(pages[2].points.first().contains(tr(R.string.settings_player_same_look)))
+        assertTrue(pages[3].points.first().contains(tr(R.string.go_to_the_playing_song)))
+    }
+
+    /**
+     * 1.8.4: each step about a setting opens the page that holds it, at the group that draws it. Checked through
+     * [SettingsMap.resolve] (the route's page and group) and the page's search lines (each names the group its row is
+     * drawn in; SettingsMapTest holds those lines to the drawn page).
+     */
+    @Test
+    fun the184StepsOpenThePlaceTheyDescribe() {
+        val pages = Tour.stepsAfter(60)
+        // Step title → (page, group, a row the step talks of that is drawn in that group).
+        val places = mapOf(
+            tr(R.string.tour_184_lyrics_title) to Triple(SettingsPageId.LYRICS_SING, tr(R.string.ls_sources_and_timing), tr(R.string.ls_offset)),
+            tr(R.string.tour_184_lock_title) to Triple(SettingsPageId.PLAYER, tr(R.string.settings_player_modes), tr(R.string.settings_player_same_look)),
+            tr(R.string.tour_184_lists_title) to Triple(SettingsPageId.HOME_LIBRARY, tr(R.string.hl_lists), tr(R.string.hl_locate_button)),
+        )
+        for ((title, place) in places) {
+            val (page, group, row) = place
+            val step = pages.firstOrNull { it.title == title }
+            assertNotNull("no 1.8.4 step \"$title\"", step)
+            val route = step!!.showMe
+            assertNotNull("\"$title\" has no Show me", route)
+            val (key, find) = parse(route!!)
+            assertEquals("$route: its own page's key", page.key, key)
+            assertEquals(route, SettingsTarget(page, group), SettingsMap.resolve(key, find))
+            assertTrue("$route: ${page.title} draws no group \"$group\"", page.index.any { it.group == group })
+            assertTrue("$route: \"$row\" isn't in ${page.title} › $group", page.index.any { it.group == group && it.title == row })
+        }
+    }
+
+    /** `settings/<key>?find=<group>` → its key and group, as the app's route reads it. */
+    private fun parse(route: String): Pair<String, String?> {
+        val key = route.removePrefix("settings/").substringBefore('?')
+        val find = route.substringAfter("?find=", "").takeIf { it.isNotBlank() }?.let { android.net.Uri.decode(it) }
+        return key to find
+    }
+
+    /**
+     * Every "Show me" opens a page that exists: a settings page by a key Settings resolves (1.8.4's page keys and the
+     * old ones), or one of the app's routes.
+     */
     @Test
     fun everyShowMeOpensARealPage() {
-        val keys = com.prism.music.ui.screens.SettingsSection.entries.map { it.key }.toSet()
         val routes = setOf(
             com.prism.music.ui.Routes.SETTINGS, com.prism.music.ui.Routes.SEARCH, com.prism.music.ui.Routes.CATALOGUE,
             com.prism.music.ui.Routes.BRING_HISTORY, com.prism.music.ui.Routes.LIBRARY, com.prism.music.ui.Routes.librarySearch(),
         )
         for (route in Tour.steps.mapNotNull { it.showMe }) {
             if (route.startsWith("settings/")) {
-                val key = route.removePrefix("settings/").substringBefore('?')
-                assertTrue("$route: no settings page \"$key\"", key in keys)
+                val (key, find) = parse(route)
+                assertNotNull("$route: no settings page \"$key\"", SettingsMap.resolve(key, find))
             } else assertTrue("$route isn't a page the tour knows", route in routes)
         }
     }

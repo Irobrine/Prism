@@ -282,7 +282,8 @@ class ArtistExtrasAppTest {
         compose.clickWhenFound(hasText("You and this artist") and hasClickAction())
         compose.waitUntil(5_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
         assertFalse("off until turned on", c.settings.current.behavior.artistYou)
-        compose.clickWhenFound(hasText("You and this artist") and hasClickAction())
+        // 1.8.4: Home & Library → Artist pages → Show, where the three switches are chips of one row.
+        compose.clickWhenFound(settingsChip("You and this artist"))
         compose.waitUntil(5_000) { c.settings.current.behavior.artistYou }
         assertTrue(c.settings.current.behavior.artistYou)
         assertFalse("the others are their own", c.settings.current.behavior.artistBio)

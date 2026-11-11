@@ -232,7 +232,10 @@ private suspend fun loadPeriodStory(c: AppContainer, period: Period): ReplayStor
         fun shift(t: Long, field: Int, by: Int) = Calendar.getInstance().apply { timeInMillis = t; add(field, by) }.timeInMillis
         when (period.kind) {
             Period.Kind.MONTH -> Triple(shift(from, Calendar.MONTH, -1), shift(to, Calendar.MONTH, -1), tr(R.string.the_same_time_last_month))
-            Period.Kind.MONTH_OF -> Triple(shift(from, Calendar.MONTH, -1), from - 1, tr(R.string.the_month_before))
+            Period.Kind.MONTH_OF -> rangeBefore(period, from)!!.let { (a, b) -> Triple(a, b, tr(R.string.the_month_before)) }
+            // 1.8.4: a whole day or week already over, against the whole one before it (midnight to midnight).
+            Period.Kind.YESTERDAY -> rangeBefore(period, from)!!.let { (a, b) -> Triple(a, b, tr(R.string.the_day_before)) }
+            Period.Kind.LAST_WEEK -> rangeBefore(period, from)!!.let { (a, b) -> Triple(a, b, tr(R.string.the_week_before)) }
             Period.Kind.DAYS30 -> Triple(from - 30L * 86_400_000, from - 1, tr(R.string.the_30_days_before))
             Period.Kind.TODAY -> Triple(from - 86_400_000, to - 86_400_000, tr(R.string.this_time_yesterday))
             Period.Kind.WEEK -> Triple(from - 7 * 86_400_000L, to - 7 * 86_400_000L, tr(R.string.the_same_time_last_week))
@@ -727,7 +730,8 @@ private fun Intro(s: ReplayStory, modifier: Modifier) {
                 Period.Kind.MONTH, Period.Kind.MONTH_OF -> tr(R.string.your_month_in_music)
                 Period.Kind.DAYS30 -> tr(R.string.your_last_30_days_in_music)
                 Period.Kind.TODAY -> tr(R.string.your_day_in_music)
-                Period.Kind.WEEK -> tr(R.string.your_week_in_music)
+                Period.Kind.YESTERDAY -> tr(R.string.your_yesterday_in_music)
+                Period.Kind.WEEK, Period.Kind.LAST_WEEK -> tr(R.string.your_week_in_music)
                 Period.Kind.DAYS -> tr(R.string.those_days_in_music)
                 Period.Kind.ALL -> tr(R.string.everything_you_ve_played_in_one)
             },

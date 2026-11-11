@@ -4,7 +4,6 @@ import com.prism.music.R
 import com.prism.music.tr
 import com.prism.music.trp
 import com.prism.music.ui.theme.PrismIcons
-import android.app.Activity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,7 +41,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -67,13 +65,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
 import com.prism.music.data.ArtistOpened
 import com.prism.music.data.FavoriteArtist
@@ -548,17 +544,11 @@ private fun TopBar(
     shareable: Boolean = true,
 ) {
     val nav = LocalNavigator.current
-    val view = LocalView.current
     val dark = LocalIsDark.current
     // Light status-bar icons over the photo; the theme's own once the page's frost has taken over.
     val lightIcons by remember(dark) { derivedStateOf { solid() < 0.5f || dark } }
-    DisposableEffect(lightIcons) {
-        val window = (view.context as? Activity)?.window
-        val ctl = window?.let { WindowCompat.getInsetsController(it, view) }
-        val previous = ctl?.isAppearanceLightStatusBars
-        ctl?.isAppearanceLightStatusBars = !lightIcons
-        onDispose { if (previous != null) ctl.isAppearanceLightStatusBars = previous }
-    }
+    // Shared with the solid pages' asks: Home's solid page closing after this one came in leaves these icons be.
+    com.prism.music.ui.theme.StatusBarIcons(lightBar = !lightIcons)
     var menu by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().statusBarsPadding().height(60.dp)) {

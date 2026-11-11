@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.prism.music.BuildConfig
 import com.prism.music.ui.Routes
+import com.prism.music.ui.screens.settings.SettingsPageId
 import com.prism.music.ui.theme.PrismIcons
 
 /**
@@ -59,6 +60,8 @@ private const val V1_8_1 = 55
 private const val V1_8_2 = 57
 /** Prism 1.8.3 (build 59): your library, smarter. */
 private const val V1_8_3 = 59
+/** Prism 1.8.4 (build 61): Settings, made simple, and your requests. */
+private const val V1_8_4 = 61
 
     /** Every step, in the order they're shown. */
     val steps: List<TourStep> = listOf(
@@ -581,6 +584,67 @@ private const val V1_8_3 = 59
                 tr(R.string.tour_183_also_lock),
                 tr(R.string.tour_183_also_uploads),
             ),
+        ),
+        TourStep(
+            // Opens Settings' new first page (plan §5).
+            V1_8_4, PrismIcons.Settings, tr(R.string.tour_184_settings_title),
+            tr(R.string.tour_184_settings_body),
+            listOf(
+                tr(R.string.tour_184_settings_point_1),
+                tr(R.string.tour_184_settings_point_2),
+                tr(R.string.tour_184_settings_point_3),
+                tr(R.string.tour_184_settings_point_4),
+                tr(R.string.tour_184_settings_point_5),
+            ),
+            listOf(PrismIcons.Search, PrismIcons.Speed),
+            showMe = Routes.SETTINGS,
+        ),
+        TourStep(
+            // #404, with #392 and the car's Long lines. Opens Lyrics & Sing at the group with "Lyrics earlier / later".
+            V1_8_4, PrismIcons.Lyrics, tr(R.string.tour_184_lyrics_title),
+            tr(R.string.tour_184_lyrics_body),
+            listOf(tr(R.string.tour_184_lyrics_point_1), tr(R.string.tour_184_lyrics_point_2), tr(R.string.tour_184_lyrics_point_3)),
+            listOf(PrismIcons.Timer, PrismIcons.Car),
+            showMe = Routes.settings(SettingsPageId.LYRICS_SING.key, find = tr(R.string.ls_sources_and_timing)),
+        ),
+        TourStep(
+            // D53. Opens Player at Modes, where the lock screen and its options are.
+            V1_8_4, PrismIcons.Lock, tr(R.string.tour_184_lock_title),
+            tr(R.string.tour_184_lock_body),
+            listOf(
+                tr(R.string.tour_184_lock_point_1, tr(R.string.settings_player_same_look), tr(R.string.settings_player_lock_options)),
+                tr(R.string.tour_184_lock_point_2),
+                tr(R.string.tour_184_lock_point_3),
+            ),
+            listOf(PrismIcons.PlayCircle, PrismIcons.HeartFilled),
+            showMe = Routes.settings(SettingsPageId.PLAYER.key, find = tr(R.string.settings_player_modes)),
+        ),
+        TourStep(
+            // D54, D55, D56 and #406. Opens Home & Library at Lists, with "Button to find the playing song".
+            V1_8_4, PrismIcons.QueueMusic, tr(R.string.tour_184_lists_title),
+            tr(R.string.tour_184_lists_body),
+            listOf(
+                tr(R.string.tour_184_lists_point_1, tr(R.string.go_to_the_playing_song)),
+                tr(R.string.tour_184_lists_point_2, tr(R.string.hl_locate_button)),
+                tr(R.string.tour_184_lists_point_3),
+                tr(R.string.tour_184_lists_point_4),
+                tr(R.string.tour_184_lists_point_5),
+            ),
+            listOf(PrismIcons.Album, PrismIcons.Library),
+            showMe = Routes.settings(SettingsPageId.HOME_LIBRARY.key, find = tr(R.string.hl_lists)),
+        ),
+        TourStep(
+            // D57 + #416, D58/D59, #413, and the fixes #432 and #429.
+            V1_8_4, PrismIcons.QueueMusic, tr(R.string.also_new),
+            tr(R.string.from_your_requests),
+            listOf(
+                tr(R.string.tour_184_also_shuffle),
+                tr(R.string.tour_184_also_replay),
+                tr(R.string.tour_184_also_color),
+                tr(R.string.tour_184_also_crossfade),
+                tr(R.string.tour_184_also_glass),
+            ),
+            listOf(PrismIcons.Shuffle, PrismIcons.Stats),
         ),
         TourStep(
             V1_7, PrismIcons.Update, tr(R.string.stay_in_the_loop),
