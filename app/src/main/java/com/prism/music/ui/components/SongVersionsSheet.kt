@@ -41,7 +41,7 @@ import com.prism.music.data.innertube.SearchFilter
 import com.prism.music.data.model.Song
 import com.prism.music.data.model.SongItem
 import com.prism.music.data.model.formatDuration
-import com.prism.music.ui.screens.phoneMatches
+import com.prism.music.ui.screens.phoneMatchesForVersions
 import com.prism.music.ui.theme.PrismIcons
 import com.prism.music.ui.theme.LocalContainer
 import com.prism.music.ui.theme.LocalUi
@@ -95,7 +95,7 @@ fun SongVersionsSheet(song: Song, onDismiss: () -> Unit) {
     // The same words find the phone's own files, so a version kept only on the phone can be picked too.
     val localHits by produceState<List<Song>>(emptyList(), asked ?: defaultQuery, localTracks) {
         val q = asked ?: defaultQuery
-        value = withContext(Dispatchers.Default) { phoneMatches(q, localTracks.map { it.song }).take(12) }
+        value = withContext(Dispatchers.Default) { phoneMatchesForVersions(q, localTracks.map { it.song }).take(12) }
     }
     fun search() {
         val q = query.trim()

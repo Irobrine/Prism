@@ -7,7 +7,7 @@ import com.prism.music.playback.toSong
 import com.prism.music.data.model.AlbumRef
 import com.prism.music.data.model.ArtistRef
 import com.prism.music.data.model.Song
-import com.prism.music.ui.screens.phoneMatches
+import com.prism.music.ui.screens.phoneMatchesForVersions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -104,8 +104,8 @@ class SongVersionsTest {
             song("local:1", "Night Drive", "The Band", album = "Roads"),
             song("local:2", "Night Drive (Live)", "The Band", album = "Roads Live"),
         )
-        assertEquals(listOf("local:2"), phoneMatches("night drive live", files).map { it.id })
-        assertEquals(listOf("local:1", "local:2"), phoneMatches("night drive band", files).map { it.id })
+        assertEquals(listOf("local:2"), phoneMatchesForVersions("night drive live", files).map { it.id })
+        assertEquals(listOf("local:1", "local:2"), phoneMatchesForVersions("night drive band", files).map { it.id })
     }
 
     /** #328: a picked version shows in the song's place (cover, title, artists, album, length); the song stays itself. */

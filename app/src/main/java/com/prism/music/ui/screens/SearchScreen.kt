@@ -443,7 +443,7 @@ private fun PhoneResults(query: String, bottomPadding: Dp, onPlay: () -> Unit) {
  * [songs] (music files or downloads) with every typed word in their title, artist or album, the best first: titles
  * that start with it, then titles, artists and albums that have it.
  */
-internal fun phoneMatches(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> {
+private fun phoneMatches(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> {
     val q = phoneNorm(query)
     val words = q.split(' ').filter { it.isNotBlank() }
     if (words.isEmpty()) return emptyList()
@@ -687,3 +687,10 @@ internal fun chipOrder(saved: List<String>): List<SearchFilter?> {
 internal const val PHONE_CHIP = "PHONE"
 
 internal fun chipName(f: SearchFilter?) = f?.name ?: PHONE_CHIP
+
+/**
+ * [phoneMatches] for the versions sheet's local-file suggestions and its test. The screen's own function stays private:
+ * this is the one line a branch can change here without colliding with another that rewrites that declaration.
+ */
+internal fun phoneMatchesForVersions(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> =
+    phoneMatches(query, songs)
