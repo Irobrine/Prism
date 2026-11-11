@@ -45,7 +45,7 @@ import kotlin.math.roundToInt
 private const val RUBY_SCALE = 0.45f
 private const val RUBY_LINE = 0.85f
 /** How far above the line's baseline a reading's centre sits, as a share of the line's size. Its kanji stay just below. */
-private const val RUBY_CENTER = 1.08f
+private const val RUBY_CENTER = 1.12f
 /** How much of its kanji's width a reading may use, leaving room between it and the readings beside it. */
 private const val RUBY_FIT = 0.92f
 
