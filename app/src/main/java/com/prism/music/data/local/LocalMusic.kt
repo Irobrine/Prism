@@ -51,6 +51,8 @@ class LocalMusic(
         val albumTags: List<String> = SearchTags.forText(song.album?.title.orEmpty()),
     )
 
+    init { shared = this }
+
     private val _tracks = MutableStateFlow<List<Track>>(emptyList())
     /** Every music file found in the last scan, newest first. */
     val tracks: StateFlow<List<Track>> = _tracks
@@ -274,6 +276,13 @@ class LocalMusic(
     }
 
     companion object {
+        /**
+         * The phone's files, for what draws a local song without the app's container at hand (a row, the player): its
+         * album's picked cover is found by the MediaStore album id its [Track] has.
+         */
+        @Volatile var shared: LocalMusic? = null
+            private set
+
         private const val TAG = "PrismLocal"
         private const val MIN_DURATION_MS = 20_000L
         private const val MAX_COVER_READS = 400

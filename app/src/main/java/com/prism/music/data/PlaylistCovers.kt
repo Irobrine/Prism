@@ -51,6 +51,12 @@ class PlaylistCovers(private val context: Context) {
     /** An album's own cover (#305), kept under the album's id; its songs show it too. */
     fun albumKey(id: String) = "album:$id"
 
+    /** A file album's own cover, kept under Android's album id so it follows its songs wherever they show. */
+    fun localAlbumKey(albumId: Long) = "localalbum:$albumId"
+
+    /** The picture picked for a file album (by Android's album id), else [fallback]. */
+    fun localAlbumArt(albumId: Long, fallback: String?): String? = covers[localAlbumKey(albumId)] ?: fallback
+
     /**
      * #305: the picture to show for [song] wherever it shows: the one picked for it, else the one picked for its album,
      * else the cover of the version picked to play in its place (#328), else its own. Read in a composable, it follows a
@@ -58,12 +64,13 @@ class PlaylistCovers(private val context: Context) {
      */
     fun art(song: com.prism.music.data.model.Song): String? = picked(song) ?: SongVersions.shared?.coverOf(song.id) ?: song.thumbnail
 
-    /** The cover picked for [song] (or its album), if any. */
+    /** The cover picked for [song] (or its album), if any; a file's album is looked up by its MediaStore album id. */
     fun picked(song: com.prism.music.data.model.Song): String? =
         // With no covers picked (most phones), no keys are made for each row drawn (the empty check is read too, so a
         // first pick still shows at once).
         if (covers.isEmpty()) null
         else covers[songKey(song.id)] ?: song.album?.id?.let { covers[albumKey(it)] }
+            ?: if (song.isLocal) com.prism.music.data.local.LocalMusic.shared?.track(song.id)?.albumId?.let { covers[localAlbumKey(it)] } else null
 
     /** An album's picture: the one picked for it (#305), else [fallback]. */
     fun albumArt(id: String, fallback: String?): String? = covers[albumKey(id)] ?: fallback
