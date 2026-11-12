@@ -404,7 +404,9 @@ class Romanizer(
         // 4 (1.8.2.1, #370): Japanese songs with kanji read as Chinese are spelled again.
         // 5: Arabic numbers are read as Japanese numerals, so counters and dates come out right (2人 is ふたり, 4月 is
         // しがつ): those songs are spelled again.
-        private const val VERSION = 5
+        // 6: counters change with the number before them (20分 is にじゅっぷん, 3本 さんぼん) and the romanization spells
+        // the whole number and counter (futari, not "2futari"): those songs are spelled again.
+        private const val VERSION = 6
         private const val RELEASE_AFTER_MS = 3 * 60_000L
         /** Line-by-line requests are only made for this many lines (a long song's worth). */
         private const val MAX_SINGLE = 80
