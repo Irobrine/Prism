@@ -3,8 +3,7 @@ package com.prism.music
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.prism.music.data.SongVersions
-import com.prism.music.data.innertube.SearchFilter
-import com.prism.music.data.model.SongItem
+import com.prism.music.data.innertube.SearchRank
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -37,9 +36,10 @@ class SongVersionLiveTest {
             assertTrue("$what: plays on from $from ms (now ${pos()} ms; errors $errors)", pos() >= from + 4_000)
         }
         val (song, others) = withContext(Dispatchers.IO) {
-            val all = c.ytm.search("Woke Up Older The Wonder Years", SearchFilter.SONGS).items.filterIsInstance<SongItem>().map { it.song }
+            val all = SongVersions.recordings(c.ytm.searchTop("Woke Up Older The Wonder Years", SearchRank.Taste.NONE))
+                .filter { !it.isLive && !it.isEpisode }
             val song = all.first { it.title.equals("Woke Up Older", ignoreCase = true) && !it.isVideo }
-            song to SongVersions.candidates(song, all + c.ytm.search("Woke Up Older The Wonder Years", SearchFilter.VIDEOS).items.filterIsInstance<SongItem>().map { it.song }).take(4)
+            song to all.filter { it.id != song.id }.take(4)
         }
         android.util.Log.i("PrismTest", "song ${song.id} ${song.durationSec}s; versions ${others.joinToString { "${it.id} ${it.durationSec}s video=${it.isVideo} ${it.artistText}" }}")
         withContext(Dispatchers.Main) {
@@ -78,9 +78,10 @@ class SongVersionLiveTest {
             assertTrue("$what: plays on from $from ms (now ${pos()} ms; errors $errors)", pos() >= from + 4_000)
         }
         val (song, other) = withContext(Dispatchers.IO) {
-            val all = c.ytm.search("Woke Up Older The Wonder Years", SearchFilter.SONGS).items.filterIsInstance<SongItem>().map { it.song }
+            val all = SongVersions.recordings(c.ytm.searchTop("Woke Up Older The Wonder Years", SearchRank.Taste.NONE))
+                .filter { !it.isLive && !it.isEpisode }
             val song = all.first { it.title.equals("Woke Up Older", ignoreCase = true) && !it.isVideo }
-            song to SongVersions.candidates(song, all).first()
+            song to all.first { it.id != song.id }
         }
         c.downloads.download(song)
         val end = System.currentTimeMillis() + 120_000
