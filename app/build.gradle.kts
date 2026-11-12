@@ -22,7 +22,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.prism.music"
+        applicationId = "com.prismatica.music"
         minSdk = 26
         targetSdk = 36
         versionCode = 62
