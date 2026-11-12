@@ -702,3 +702,10 @@ internal fun chipOrder(saved: List<String>): List<SearchFilter?> {
 internal const val PHONE_CHIP = "PHONE"
 
 internal fun chipName(f: SearchFilter?) = f?.name ?: PHONE_CHIP
+
+/**
+ * [phoneMatches] for the versions sheet's local-file suggestions and its test. The screen's own function stays private:
+ * this is the one line a branch can change here without colliding with another that rewrites that declaration.
+ */
+internal fun phoneMatchesForVersions(query: String, songs: List<com.prism.music.data.model.Song>): List<com.prism.music.data.model.Song> =
+    phoneMatches(query, songs)
