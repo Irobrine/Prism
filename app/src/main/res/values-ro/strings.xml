@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">S-a pierdut conexiunea cu %1$s</string>
     <string name="listening_with">Asculți cu %1$s</string>
     <string name="this_phone_can_t_play_apple">Acest telefon nu poate reda fișiere Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Fișier %1$s: acest telefon nu îl poate decoda, așa că se redă streamul</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, așa că se redă sunetul videoclipului muzical</string>
     <string name="playback_failed">Redarea a eșuat</string>
     <string name="the_live_video_didn_t_load">Videoclipul live nu s-a încărcat, așa că se redă ca audio. Atinge butonul video ca să încerci din nou.</string>

@@ -35,6 +35,23 @@ class SongsEverywhereLiveTest {
         org.junit.Assert.assertTrue(episodes.isEmpty())
     }
 
+    /**
+     * #383 (1.8.4.1): the four the reporter named after 1.8.3 ("Yeshanagula", "Dheema", "Private Party", "Kajalu
+     * Chellivaa") are each found as a song by Prism's own search match (signed out, so no pairing from YouTube).
+     */
+    @Test fun theFourNamedAfter183FindTheirSongs() = runBlocking {
+        val named = listOf("Yeshanagula", "Dheema", "Private Party", "Kajalu")
+        val rows = listOf("PLtLEpc9CWsdfxbsiuKYw02kpbCF1mnNcS", "PLEwlFF5xcXHzubwrqTqBzexAGjhl_1LoA")
+            .flatMap { ytm.playlistAll(it, 80).songs }.filter { s -> s.isVideo && named.any { s.title.startsWith(it, true) } }
+        val missed = rows.filter { v ->
+            val s = ytm.songForVideo(v)
+            log("${v.id} \"${v.title}\" / ${v.artistText} (${v.durationSec}s) -> ${s?.let { "${it.id} \"${it.title}\" ${it.artistText} ${it.durationSec}s" } ?: "none"}")
+            s == null
+        }
+        org.junit.Assert.assertEquals(4, rows.size)
+        org.junit.Assert.assertTrue("missed: ${missed.map { it.title }}", missed.isEmpty())
+    }
+
     @Test fun reportersPlaylists() = runBlocking {
         for (id in listOf("PLEwlFF5xcXHzubwrqTqBzexAGjhl_1LoA", "PLtLEpc9CWsdfxbsiuKYw02kpbCF1mnNcS")) {
             val songs = ytm.playlistAll(id, 60).songs

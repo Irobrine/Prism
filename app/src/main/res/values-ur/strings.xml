@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">%1$s سے کنکشن ٹوٹ گیا</string>
     <string name="listening_with">%1$s کے ساتھ سن رہے ہیں</string>
     <string name="this_phone_can_t_play_apple">یہ فون Apple Lossless (ALAC) فائلیں نہیں چلا سکتا</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s فائل: یہ فون اسے ڈی کوڈ نہیں کر سکتا، اس لیے اس کی جگہ اسٹریم چل رہی ہے</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s، اس لیے اس کی میوزک ویڈیو کی آواز چل رہی ہے</string>
     <string name="playback_failed">پلے بیک ناکام</string>
     <string name="the_live_video_didn_t_load">لائیو ویڈیو لوڈ نہیں ہوئی، اس لیے آڈیو کے طور پر چل رہی ہے۔ دوبارہ کوشش کے لیے ویڈیو بٹن پر ٹیپ کریں۔</string>

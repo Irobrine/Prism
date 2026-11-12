@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">%1$s-এর সাথে কানেকশন হারিয়ে গেছে</string>
     <string name="listening_with">%1$s-এর সাথে শুনছেন</string>
     <string name="this_phone_can_t_play_apple">এই ফোন Apple Lossless (ALAC) ফাইল চালাতে পারে না</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s ফাইল: এই ফোন এটি ডিকোড করতে পারে না, তাই এর বদলে স্ট্রিম চলছে</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, তাই এর মিউজিক ভিডিওর আওয়াজ চলছে</string>
     <string name="playback_failed">প্লেব্যাক ব্যর্থ</string>
     <string name="the_live_video_didn_t_load">লাইভ ভিডিও লোড হয়নি, তাই অডিও হিসেবে চলছে। আবার চেষ্টা করতে ভিডিও বোতামে ট্যাপ করুন।</string>

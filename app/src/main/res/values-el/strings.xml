@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">Χάθηκε η σύνδεση με %1$s</string>
     <string name="listening_with">Ακρόαση με %1$s</string>
     <string name="this_phone_can_t_play_apple">Αυτό το τηλέφωνο δεν μπορεί να παίξει αρχεία Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Αρχείο %1$s: αυτό το τηλέφωνο δεν μπορεί να το αποκωδικοποιήσει, οπότε παίζει η ροή</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, οπότε παίζει ο ήχος του μουσικού βίντεο</string>
     <string name="playback_failed">Η αναπαραγωγή απέτυχε</string>
     <string name="the_live_video_didn_t_load">Το ζωντανό βίντεο δεν φόρτωσε, οπότε παίζει ως ήχος. Πάτα το κουμπί βίντεο για να ξαναδοκιμάσεις.</string>

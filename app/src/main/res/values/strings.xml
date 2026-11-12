@@ -3132,6 +3132,7 @@
     <string name="lost_the_connection_to">Lost the connection to %1$s</string>
     <string name="listening_with">Listening with %1$s</string>
     <string name="this_phone_can_t_play_apple">This phone can\'t play Apple Lossless (ALAC) files</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s file: this phone can\'t decode it, so the stream plays instead</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, so its music video\'s sound plays</string>
     <string name="playback_failed">Playback failed</string>
     <string name="sound_output_not_responding">Your headphones or speaker aren\'t responding. Try reconnecting them, or play on the phone</string>

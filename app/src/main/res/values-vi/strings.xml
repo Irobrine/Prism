@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">Mất kết nối với %1$s</string>
     <string name="listening_with">Đang nghe cùng %1$s</string>
     <string name="this_phone_can_t_play_apple">Điện thoại này không phát được tệp Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Tệp %1$s: điện thoại này không giải mã được, nên phát luồng thay thế</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, nên phát âm thanh từ video nhạc của nó</string>
     <string name="playback_failed">Phát thất bại</string>
     <string name="the_live_video_didn_t_load">Video trực tiếp không tải được, nên đang phát dạng âm thanh. Nhấn nút video để thử lại.</string>
