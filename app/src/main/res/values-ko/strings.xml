@@ -2132,6 +2132,7 @@
     <string name="downloading_5">다운로드 중… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">다운로드할 수 없어요 · 탭하여 다시 시도</string>
     <string name="only_for_japanese_songs">일본어 곡 전용 · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">일본어에만 필요해요. 한자는 읽는 법이 여러 가지라 로마지(\"kimi no na wa\")로 바꿀 때 사전이 올바른 읽기를 골라요. 한 번만 다운로드하면 돼요. 다른 언어(한국어, 중국어, 러시아어, 힌디어 등)는 다운로드 없이 로마자로 표기돼요. 사전이 없으면 Google이 한자를 표기해요.</string>
     <string name="sing_doesn_t_run_on_this">따라 부르기의 전체 분리는 이 휴대전화의 프로세서에서 작동하지 않아, 따라 부르기가 빠른 방식을 사용해요: 보통 목소리가 있는 믹스 가운데의 소리를 빼요. 덜 깔끔하고, 모노 곡은 그대로 재생돼요.</string>
     <string name="needed_for_sing">따라 부르기에 필요 · %1$s</string>

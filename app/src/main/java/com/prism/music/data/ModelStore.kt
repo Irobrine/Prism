@@ -22,15 +22,36 @@ import java.util.zip.ZipInputStream
 
 /**
  * Big data files some features need, downloaded the first time they're used rather than carried in every APK:
- * each one a zip attached to Prism's own GitHub release `models-v1`, checked against its SHA-256 before use, and kept
- * in `filesDir/models` (left out of backups; it can always be downloaded again).
+ * each one a zip with its SHA-256 checked before use, kept in `filesDir/models` (left out of backups; it can always be
+ * downloaded again). Most are attached to Prism's own GitHub release `models-v1`; Sudachi's full dictionary comes from
+ * the dictionary's own release ([Model.SUDACHI]), so its LEGAL notices travel with it.
  */
 class ModelStore(private val context: Context, private val http: OkHttpClient) {
-    enum class Model(val id: String, val file: String, val sha256: String, val bytes: Long, val title: String, /** Its size unpacked on the phone. */ val unpacked: Long) {
+    enum class Model(
+        val id: String,
+        val file: String,
+        val sha256: String,
+        val bytes: Long,
+        val title: String,
+        /** Its size unpacked on the phone. */
+        val unpacked: Long,
+        /** Where the zip is, when it isn't on Prism's `models-v1` release (null: there). */
+        val url: String? = null,
+    ) {
         /** Kuromoji's IPADIC dictionary (Apache-2.0 / IPADIC licence): readings for Japanese lyrics' kanji. */
         JAPANESE(
             "ja-ipadic", "ja-ipadic-0.9.0.zip",
             "286c372433219548c20fed47f813a84b334a68a7eb694787369789d8008f0b2a", 13_331_021, tr(R.string.japanese_kanji_readings), 33_443_143,
+        ),
+        /**
+         * Sudachi's full dictionary, SudachiDict (Apache-2.0, built from UniDic and NEologd; its LEGAL file is in
+         * assets/licenses/sudachidict-legal.txt and unpacked beside the dictionary). More words than IPADIC, and much
+         * bigger: 137 MB down, 330 MB on the phone.
+         */
+        SUDACHI(
+            "ja-sudachi-full", "sudachi-dictionary-20261015-full.zip",
+            "b38318ca26a444cd713a5a377a353308ef38c733c64cc0be905122527516c793", 137_444_817, tr(R.string.japanese_kanji_readings), 330_523_734,
+            "https://github.com/WorksApplications/SudachiDict/releases/download/v20261015/sudachi-dictionary-20261015-full.zip",
         ),
         /** Deezer's Spleeter, 2 stems, as sherpa-onnx exported it (fp16): Sing's vocal separation. */
         SING_MODEL(
@@ -121,7 +142,7 @@ class ModelStore(private val context: Context, private val http: OkHttpClient) {
     private fun fetch(m: Model) {
         root.mkdirs()
         val part = File(root, m.file + ".part")
-        val req = Request.Builder().url("$BASE/${m.file}").build()
+        val req = Request.Builder().url(m.url ?: "$BASE/${m.file}").build()
         http.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException(tr(R.string.the_download_answered_http, resp.code))
             val body = resp.body

@@ -2132,6 +2132,7 @@
     <string name="downloading_5">डाउनलोड हो रहा है… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">डाउनलोड नहीं हो सका · फिर से कोशिश करने के लिए टैप करें</string>
     <string name="only_for_japanese_songs">सिर्फ़ जापानी गानों के लिए · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">इसकी ज़रूरत सिर्फ़ जापानी को है: उसके कांजी के कई उच्चारण होते हैं, इसलिए एक शब्दकोश romaji (\"kimi no na wa\") के लिए सही उच्चारण चुनता है। एक बार डाउनलोड होता है। दूसरी भाषाएं (कोरियाई, चीनी, रूसी, हिंदी…) बिना डाउनलोड के रोमन लिपि में आ जाती हैं। इसके बिना, Google कांजी लिखता है।</string>
     <string name="sing_doesn_t_run_on_this">साथ गाएं का पूरा अलगाव इस फ़ोन के प्रोसेसर पर नहीं चलता, इसलिए साथ गाएं तेज़ तरीका इस्तेमाल करता है: मिक्स के बीच में जो है, जहाँ आमतौर पर आवाज़ होती है, उसे हटा देता है। यह कम साफ़ है, और मोनो गाना जैसा है वैसा ही रहता है।</string>
     <string name="needed_for_sing">साथ गाएं के लिए ज़रूरी · %1$s</string>

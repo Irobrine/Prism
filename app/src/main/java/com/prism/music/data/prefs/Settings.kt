@@ -357,6 +357,8 @@ data class BehaviorPrefs(
     val radioTune: com.prism.music.data.foryou.RadioTune = com.prism.music.data.foryou.RadioTune(),
     /** #299 (1.8.2): Autoplay leaves out songs longer than this many minutes (0: no limit, as before). */
     val autoplayMaxMinutes: Int = 0,
+    /** Japanese lyrics' kanji: read by Kuromoji's IPADIC, or Sudachi with its full dictionary ([AppSettings.japaneseEngine]). */
+    val japaneseEngine: com.prism.music.data.lyrics.roman.JapaneseEngine = com.prism.music.data.lyrics.roman.JapaneseEngine.IPADIC,
     /** #281 (1.8.2): with Data saver on, no music videos on mobile data ([com.prism.music.playback.VideoOnData]). */
     val noVideoOnData: Boolean = false,
     /** #282 (1.8.2): the cover's gestures work on the controls below the lyrics too, never on the lyrics themselves. */
@@ -1809,6 +1811,9 @@ data class AppSettings(
 
     /** Whether [src] is asked: every source until it's switched off, but a file's own lyrics only once they're switched on (#344). */
     fun lyricsSourceOn(src: LyricsSource) = if (src == LyricsSource.EMBEDDED) behavior.embeddedLyrics else src !in lyricsOff
+
+    // Which Japanese dictionary reads kanji lives in [behavior] (the constructor is near the JVM's limit); reads as before.
+    val japaneseEngine: com.prism.music.data.lyrics.roman.JapaneseEngine get() = behavior.japaneseEngine
 }
 
 /** [writer]: where the settings' writes run, one at a time (tests hold it back to line writes up). */
@@ -1887,6 +1892,8 @@ class SettingsRepository(
         val lyricsOff = stringPreferencesKey("lyrics_off")
         val preferSynced = booleanPreferencesKey("prefer_synced")
         val skipCensored = booleanPreferencesKey("skip_censored")
+        /** Which Japanese dictionary reads lyrics' kanji (IPADIC or Sudachi's full SudachiDict). */
+        val japaneseEngine = stringPreferencesKey("japanese_engine")
         val lyricsTranslate = booleanPreferencesKey("lyrics_translate")
         val lyricsTranslateTo = stringPreferencesKey("lyrics_translate_to")
         val lyricsFileWords = booleanPreferencesKey("lyrics_file_words")
@@ -2352,6 +2359,8 @@ class SettingsRepository(
                 "kept_playlists",
                 // 1.8.1 (#296, #263): what Prism keeps of your listening.
                 "history_paused_until", "play_count_seconds", "play_count_account",
+                // Which Japanese dictionary reads lyrics' kanji (Settings → Lyrics): how Prism reads, not a look.
+                "japanese_engine",
                 // 1.8.4 (#406, #404, #416, D57, PR #400, D54): how Prism behaves, not how it looks.
                 "row_swipes", "lyrics_offset_ms", "keep_shuffle", "shuffle_button", "car_lyrics_lines", "locate_playing",
             )
@@ -2677,6 +2686,7 @@ class SettingsRepository(
                     (p[K.radioNewness] ?: 0f).coerceIn(-1f, 1f), (p[K.radioDepth] ?: 0f).coerceIn(-1f, 1f), (p[K.radioEnergy] ?: 0f).coerceIn(-1f, 1f),
                 ),
                 autoplayMaxMinutes = (p[K.autoplayMaxMinutes] ?: d.behavior.autoplayMaxMinutes).coerceIn(0, com.prism.music.data.AutoplayLength.MAX_MINUTES),
+                japaneseEngine = p.enum(K.japaneseEngine, d.behavior.japaneseEngine),
                 noVideoOnData = p[K.noVideoOnData] ?: d.behavior.noVideoOnData,
                 gesturesUnderLyrics = p[K.gesturesUnderLyrics] ?: d.behavior.gesturesUnderLyrics,
                 playerRemembersPage = p[K.playerRemembersPage] ?: d.behavior.playerRemembersPage,
@@ -3125,6 +3135,7 @@ class SettingsRepository(
     fun setPreferSynced(v: Boolean) = edit { it[K.preferSynced] = v }
     fun setLyricsOff(v: Set<LyricsSource>) = edit { it[K.lyricsOff] = v.joinToString(",") { s -> s.name } }
     fun setSkipCensored(v: Boolean) = edit { it[K.skipCensored] = v }
+    fun setJapaneseEngine(v: com.prism.music.data.lyrics.roman.JapaneseEngine) = edit { it[K.japaneseEngine] = v.name }
     fun setLyricsTranslate(v: Boolean) = edit { it[K.lyricsTranslate] = v }
     fun setLyricsTranslateTo(v: String) = edit { it[K.lyricsTranslateTo] = v }
     fun setLyricsFileWords(v: Boolean) = edit { it[K.lyricsFileWords] = v }

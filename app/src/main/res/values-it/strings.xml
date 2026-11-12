@@ -2132,6 +2132,7 @@
     <string name="downloading_5">Download… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Impossibile scaricarlo · tocca per riprovare</string>
     <string name="only_for_japanese_songs">Solo per brani giapponesi · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Serve solo al giapponese: i suoi kanji hanno più letture, quindi un dizionario sceglie quella giusta per il romaji (\"kimi no na wa\"). Si scarica una volta. Le altre lingue (coreano, cinese, russo, hindi…) si traslitterano senza download. Senza di esso, i kanji li scrive Google.</string>
     <string name="sing_doesn_t_run_on_this">La separazione completa di Canta non funziona con il tipo di processore di questo telefono, quindi Canta usa il modo rapido: toglie ciò che sta al centro del mix, dove di solito c\'è la voce. È meno pulito, e un brano mono resta com\'è.</string>
     <string name="needed_for_sing">Necessario per Canta · %1$s</string>

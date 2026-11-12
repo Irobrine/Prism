@@ -2132,6 +2132,7 @@
     <string name="downloading_5">Stahování… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Nepodařilo se stáhnout · klepni a zkus to znovu</string>
     <string name="only_for_japanese_songs">Jen pro japonské skladby · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Potřebuje to jen japonština: její kandži mají několik čtení, takže slovník vybere to správné pro romaji („kimi no na wa“). Stahuje se jednou. Ostatní jazyky (korejština, čínština, ruština, hindština…) se přepisují bez stahování. Bez něj kandži přepíše Google.</string>
     <string name="sing_doesn_t_run_on_this">Úplné oddělení hlasu v Zpívání na tomto typu procesoru telefonu nefunguje, takže Zpívání použije rychlý způsob: odstraní to, co je uprostřed mixu, kde obvykle bývá hlas. Je méně čistý a mono skladba zůstane, jak je.</string>
     <string name="needed_for_sing">Potřeba pro Zpívání · %1$s</string>

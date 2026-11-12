@@ -2,9 +2,11 @@ package com.prism.music.ui.screens.settings
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -312,6 +314,7 @@ fun <T> ChoiceRow(
     info: String? = null,
     changed: Boolean = false,
     enabled: Boolean = true,
+    onLongSelect: ((T) -> Unit)? = null,
     onSelect: (T) -> Unit,
 ) {
     // One capsule while the words fit in it; at large text (or long words) pills that wrap, so no word is cut off.
@@ -332,7 +335,7 @@ fun <T> ChoiceRow(
                     labels.all { measurer.measure(it, words, maxLines = 1, softWrap = false).size.width + 1 <= share }
                 }
                 if (capsule) Segmented(options, selected, label, Modifier, pick)
-                else KitChips { options.forEach { o -> KitChip(o == selected, label(o)) { pick(o) } } }
+                else KitChips { options.forEach { o -> KitChip(o == selected, label(o), onLongClick = onLongSelect?.let { it2 -> { it2(o) } }) { pick(o) } } }
             }
         },
     )
@@ -350,8 +353,9 @@ private fun KitChips(modifier: Modifier = Modifier, chips: @Composable () -> Uni
  * when picked), but never cut off: 36 dp tall on one line, and where the words don't fit the row's width (large text, a
  * long translation) it wraps them and grows.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun KitChip(selected: Boolean, label: String, modifier: Modifier = Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
+private fun KitChip(selected: Boolean, label: String, modifier: Modifier = Modifier, icon: ImageVector? = null, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     // The pill's round ends at one line; a rounded box when it grows.
     val shape = RoundedCornerShape(18.dp)
@@ -361,7 +365,10 @@ private fun KitChip(selected: Boolean, label: String, modifier: Modifier = Modif
         modifier.heightIn(min = 36.dp).clip(shape).background(bg)
             .then(if (selected) Modifier.spectrumRing(shape) else Modifier.border(1.dp, glassEdge(), shape))
             .semantics { this.selected = selected }
-            .clickable(onClick = onClick).padding(horizontal = 15.dp, vertical = 4.dp),
+            .then(
+                if (onLongClick == null) Modifier.clickable(onClick = onClick)
+                else Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            ).padding(horizontal = 15.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) { Icon(icon, null, Modifier.size(18.dp), tint = fg); Spacer(Modifier.width(6.dp)) }
