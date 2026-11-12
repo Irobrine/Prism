@@ -50,8 +50,8 @@ private const val RUBY_CENTER = 1.12f
 private const val RUBY_FIT = 0.92f
 
 /**
- * Each line's kanji and its hiragana reading, line for line, when furigana is on and this is a Japanese song with the
- * Japanese reading data on the phone; null otherwise.
+ * Each line's kanji and its hiragana reading, line for line, when furigana is on and this is a Japanese song with a
+ * Japanese dictionary on the phone (Sudachi or IPADIC); null otherwise.
  */
 @Composable
 fun rememberFurigana(state: LyricsState): List<List<RubySpan>>? {
@@ -66,7 +66,7 @@ fun rememberFurigana(state: LyricsState): List<List<RubySpan>>? {
     }
     if (!japanese || !lines.any { hasKanji(it.text) }) return null
     val modelStates by c.models.states.collectAsState()
-    val ready = remember(modelStates, settings) { c.romanizer.japaneseReady }
+    val ready = remember(modelStates, settings) { c.romanizer.furiganaReady }
     val ruby by produceState<List<List<RubySpan>>?>(null, state.song.id, lines, ready, settings) {
         value = if (!ready) null else runCatching { c.romanizer.furigana(lines) }
             .onFailure { android.util.Log.w("PrismFurigana", "Couldn't read the kanji: $it") }

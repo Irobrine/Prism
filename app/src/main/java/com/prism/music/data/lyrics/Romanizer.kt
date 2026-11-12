@@ -87,6 +87,9 @@ class Romanizer(
     /** Whether kanji can be read on the phone (the chosen Japanese dictionary is downloaded). */
     val japaneseReady: Boolean get() = japaneseForTests != null || models.ready(japaneseEngine().model)
 
+    /** Whether furigana can be read: either dictionary can give the kana, and Sudachi is preferred when both are here. */
+    val furiganaReady: Boolean get() = japaneseForTests != null || models.ready(ModelStore.Model.SUDACHI) || models.ready(ModelStore.Model.JAPANESE)
+
     @Serializable
     private data class Stored(val t: String, val w: List<String>? = null, val b: String? = null, val bw: List<String>? = null)
 
@@ -216,10 +219,12 @@ class Romanizer(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<RubySpan>>?) = size > 128
     }
 
-    // Kuromoji's IPADIC also gives the kana over the kanji. It's reused when it's the reader already loaded; otherwise it's
-    // loaded only if the active reader can't give furigana, and let go a few minutes after the last line.
+    // The dictionary that gives the kana over the kanji: Sudachi when it's on the phone (it reads more names and slang),
+    // else IPADIC. Each is reused when it's the reader already loaded; otherwise it's loaded for furigana and let go a
+    // few minutes after the last line.
     private val furiganaLock = Mutex()
     @Volatile private var furiganaJapanese: Japanese? = null
+    @Volatile private var furiganaSudachi: SudachiJapanese? = null
     private var furiganaReleaseJob: Job? = null
 
     /**
@@ -249,24 +254,55 @@ class Romanizer(
     }
 
     /**
-     * The reader that gives the kana above the kanji: one that offers [RubyReader] itself (Sudachi), Kuromoji's
-     * [Japanese] wrapped, or the IPADIC reader loaded here when another reader is in use. Null while no Japanese
-     * dictionary that can give kana is on the phone.
+     * The reader that gives the kana above the kanji. Sudachi comes first whenever its dictionary is on the phone, even
+     * if IPADIC is the engine chosen for the romanization; without it, IPADIC. Null while neither is on the phone.
      */
     private suspend fun furiganaReader(): RubyReader? {
         japaneseForTests?.let { japanese -> return RubyReader { text -> japanese.furigana(text) } }
-        val reader = japaneseReader()
-        if (reader is Japanese) return RubyReader { text -> reader.furigana(text) }
-        (reader as? RubyReader)?.let { return it }
+        if (models.ready(ModelStore.Model.SUDACHI)) {
+            sudachiForFurigana()?.let { sudachi -> return RubyReader { text -> sudachi.furigana(text) } }
+        }
         if (!models.ready(ModelStore.Model.JAPANESE)) return null
+        val japanese = japaneseForFurigana() ?: return null
+        return RubyReader { text -> japanese.furigana(text) }
+    }
+
+    /** The Sudachi reader, reusing the one the romanization already loaded when that's Sudachi. */
+    private suspend fun sudachiForFurigana(): SudachiJapanese? {
+        (japanese?.takeIf { it.first == JapaneseEngine.SUDACHI }?.second as? SudachiJapanese)?.let { return it }
+        val sudachi = furiganaLock.withLock {
+            furiganaSudachi ?: runCatching {
+                withContext(Dispatchers.Default) { SudachiJapanese.load(models.dir(ModelStore.Model.SUDACHI)) }
+            }.onFailure { android.util.Log.w("PrismRoman", "Couldn't load Sudachi for furigana: $it") }
+                .getOrNull()?.also { furiganaSudachi = it }
+        } ?: return null
+        releaseFuriganaLater()
+        return sudachi
+    }
+
+    /** The IPADIC reader, reusing the one the romanization already loaded when that's IPADIC. */
+    private suspend fun japaneseForFurigana(): Japanese? {
+        (japanese?.takeIf { it.first == JapaneseEngine.IPADIC }?.second as? Japanese)?.let { return it }
         val japanese = furiganaLock.withLock {
-            furiganaJapanese ?: runCatching { withContext(Dispatchers.Default) { Japanese.load(models.dir(ModelStore.Model.JAPANESE)) } }
-                .onFailure { android.util.Log.w("PrismRoman", "Couldn't load the Japanese dictionary for furigana: $it") }
+            furiganaJapanese ?: runCatching {
+                withContext(Dispatchers.Default) { Japanese.load(models.dir(ModelStore.Model.JAPANESE)) }
+            }.onFailure { android.util.Log.w("PrismRoman", "Couldn't load IPADIC for furigana: $it") }
                 .getOrNull()?.also { furiganaJapanese = it }
         } ?: return null
+        releaseFuriganaLater()
+        return japanese
+    }
+
+    private fun releaseFuriganaLater() {
         furiganaReleaseJob?.cancel()
-        furiganaReleaseJob = scope.launch { delay(RELEASE_AFTER_MS); furiganaLock.withLock { furiganaJapanese = null } }
-        return RubyReader { text -> japanese.furigana(text) }
+        furiganaReleaseJob = scope.launch {
+            delay(RELEASE_AFTER_MS)
+            furiganaLock.withLock {
+                runCatching { furiganaSudachi?.close() }
+                furiganaSudachi = null
+                furiganaJapanese = null
+            }
+        }
     }
 
     /**
