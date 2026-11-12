@@ -85,6 +85,12 @@ class LocalLossless(private val context: Context) {
     val matched = ConcurrentHashMap<String, Track>()
     /** Files this phone couldn't decode (ALAC without a decoder, #135): the song's stream plays instead, this run. */
     val unplayable: MutableSet<Uri> = ConcurrentHashMap.newKeySet()
+    /**
+     * Songs whose file was set aside so ([setAside]), by video id -> the file's format ("ALAC"): Stats for nerds says on
+     * the song that its stream plays because this phone can't decode the file (1.8.4.1; Reddit took the quiet stream for
+     * ALAC not being supported at all). This run only, as [unplayable].
+     */
+    val streamInstead = ConcurrentHashMap<String, String>()
     /** How many lossless files were found in the last scan (-1 = not scanned). */
     val found = MutableStateFlow(-1)
     /** How many of your own lossy files (good enough to play instead of the stream) the last scan found; -1 = not looked for. */
@@ -201,6 +207,20 @@ class LocalLossless(private val context: Context) {
         // [note]: a play, kept for the stats; a song row only asking (#385) isn't one.
         if (note) matched[song.id] = hit
         return hit
+    }
+
+    /**
+     * The file [songId] played from won't decode on this phone (ALAC without a decoder, #135): it's set aside for this run,
+     * so the song's stream plays, and the song is noted in [streamInstead]. False when there's nothing to set aside (no
+     * file matched, or it already was): the error is then the song's own.
+     */
+    fun setAside(songId: String): Boolean {
+        val track = matched[songId] ?: return false
+        if (!unplayable.add(track.uri)) return false
+        streamInstead[songId] = track.format
+        // The stream plays now: the file's size no longer stands for what's playing (Stats for nerds' bitrate).
+        matched.remove(songId)
+        return true
     }
 
     companion object {

@@ -1008,11 +1008,17 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                     // Full width meets the screen's sides whatever the player's height (#276); a record, a tape and a
                     // shaped cover stay whole.
                     val fullWidth = settings.coverSize == com.prism.music.data.prefs.CoverSize.FULL && !vinyl && !cassette && settings.shapes.player == com.prism.music.data.prefs.CoverShape.ROUNDED
-                    val (artWidth, fullArt) = coverBox(maxWidth, maxHeight, extra.dp, fullWidth)
+                    // The title and the artist under the cover, and the room they take (#464: more than HEADER_HEIGHT
+                    // in a tall font or a large text size, so the artist line isn't squeezed and cut off).
+                    val shownSong = com.prism.music.data.SongVersions.shownOf(song)
+                    val titleStyle = playerTitleStyle(MaterialTheme.typography, settings)
+                    val artistStyle = playerArtistStyle(MaterialTheme.typography, settings)
+                    val headerHeight = playerHeaderHeight(shownSong.title, titleStyle, shownSong.artistText, artistStyle)
+                    val (artWidth, fullArt) = coverBox(maxWidth, maxHeight, extra.dp, fullWidth, titleRoom = ART_TITLE_GAP + headerHeight)
                     // Room the cover can't use (a tall screen) is shared above and below it, as before 1.6.4 (all of it
                     // above pushed the whole player down). The title drops into part of the room below, so no blank
                     // band opens up between the artist and the scrubber (issue #9).
-                    val slack = (maxHeight - fullArt - ART_TITLE_GAP - HEADER_HEIGHT).coerceAtLeast(0.dp)
+                    val slack = (maxHeight - fullArt - ART_TITLE_GAP - headerHeight).coerceAtLeast(0.dp)
                     val groupTop = slack / 2
                     // #293: the title sits right above the controls, and the picture runs down to it.
                     val titleDrop = if (bleedRoomy) slack - groupTop else minOf(slack / 2, TITLE_DROP_MAX)
@@ -1148,13 +1154,13 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                     // The visualizer's Wave, behind the title.
                     if (viz != null && vizStyle == com.prism.music.data.prefs.VisualizerStyle.WAVE && !collapsePastHalf) VisualizerWave(
                         viz, vizBrush,
-                        Modifier.fillMaxWidth().height(HEADER_HEIGHT).offset { IntOffset(0, titleTop().roundToPx()) }.graphicsLayer { alpha = 1f - 2f * p() }.inked(),
+                        Modifier.fillMaxWidth().height(headerHeight).offset { IntOffset(0, titleTop().roundToPx()) }.graphicsLayer { alpha = 1f - 2f * p() }.inked(),
                     )
                     // ---- Credits: title, artist, like, menu
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .offset { IntOffset(0, (titleTop() - lerp(0.dp, (HEADER_HEIGHT - THUMB_SIZE) / 2, p())).roundToPx()) }
+                            .offset { IntOffset(0, (titleTop() - lerp(0.dp, (headerHeight - THUMB_SIZE) / 2, p())).roundToPx()) }
                             .layout { measurable, constraints ->
                                 val start = titleStart().roundToPx()
                                 val placeable = measurable.measure(constraints.offsetConstraints(horizontal = -start))
@@ -1162,7 +1168,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                                     placeable.placeRelative(start, 0)
                                 }
                             }
-                            .height(HEADER_HEIGHT)
+                            .height(headerHeight)
                             .then(sleeveGesture)
                             // #320: dark over the White background.
                             .inked(),
@@ -1187,15 +1193,13 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                             horizontalAlignment = if (centred) Alignment.CenterHorizontally else Alignment.Start,
                         ) {
                             val scrolls = collapse.value < 0.01f && !covered && settings.playerTitleScroll
-                            val titleScale = settings.playerTitleSize.scale
                             // With the ⋯ button hidden (1.8.0), a long press on the title or the artist opens the menu.
                             val menuHeld: (() -> Unit)? = if (settings.shows(PlayerPart.MENU)) null else ({ showActions = true })
                             // #328: the title, artists and album of the version picked to play in its place, if any.
                             @Suppress("NAME_SHADOWING") val song = com.prism.music.data.SongVersions.shownOf(song)
                             if (inHeader(PlayerPart.TITLE)) PlayerMarquee(
-                                // The title leads, the artist under it a size smaller (#41). Spectrum: large and light
-                                // (a tenth under headlineMedium, so longer titles fit before they scroll).
-                                song.title, MaterialTheme.typography.headlineMedium.let { it.copy(fontSize = it.fontSize * 0.9f * titleScale, lineHeight = it.lineHeight * 0.9f * titleScale, fontWeight = settings.type.playerTitleWeight.title ?: it.fontWeight) }, Color.White, scrolls,
+                                // The title leads, the artist under it a size smaller (#41). Spectrum: large and light.
+                                song.title, titleStyle, Color.White, scrolls,
                                 Modifier.testTag("playerTitle").combinedClickable(enabled = song.album?.id != null || menuHeld != null, onLongClick = menuHeld) {
                                     song.album?.id?.let { onCollapse(); nav.go(Routes.album(it)) }
                                 },
@@ -1208,7 +1212,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                                 // #289 (1.8.1): each name its own link, if asked for; a tap between them still asks.
                                 val artistLine = artistLinkText(song.artistText, linked, settings.view.artistLinks) { a -> onCollapse(); nav.go(Routes.artist(a)) }
                                 PlayerMarquee(
-                                    artistLine, MaterialTheme.typography.bodyLarge.let { it.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = settings.type.playerTitleWeight.artist ?: it.fontWeight) }, Color.White.copy(alpha = 0.6f), scrolls,
+                                    artistLine, artistStyle, Color.White.copy(alpha = 0.6f), scrolls,
                                     Modifier.testTag("playerArtist").combinedClickable(enabled = linked.isNotEmpty() || menuHeld != null, onLongClick = menuHeld) {
                                         if (linked.size > 1) pickArtist = true else linked.firstOrNull()?.let { onCollapse(); nav.go(Routes.artist(it)) }
                                     },
@@ -1592,3 +1596,40 @@ private fun BlendingCover(songId: String, modifier: Modifier) {
 @kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun statusBarRoom(): WindowInsets = WindowInsets.statusBarsIgnoringVisibility
+
+/**
+ * The player's title under the cover: a size under headlineMedium (#41; a tenth under, so longer titles fit before they
+ * scroll), at Settings → Player → Title's size and weight.
+ */
+internal fun playerTitleStyle(type: androidx.compose.material3.Typography, settings: com.prism.music.data.prefs.AppSettings): androidx.compose.ui.text.TextStyle {
+    val titleScale = settings.playerTitleSize.scale
+    return type.headlineMedium.let { it.copy(fontSize = it.fontSize * 0.9f * titleScale, lineHeight = it.lineHeight * 0.9f * titleScale, fontWeight = settings.type.playerTitleWeight.title ?: it.fontWeight) }
+}
+
+/** The artists' line under the player's title, a size smaller than it (#41). */
+internal fun playerArtistStyle(type: androidx.compose.material3.Typography, settings: com.prism.music.data.prefs.AppSettings): androidx.compose.ui.text.TextStyle =
+    type.bodyLarge.let { it.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = settings.type.playerTitleWeight.artist ?: it.fontWeight) }
+
+/**
+ * How tall the title and artist block under the cover (and in the header over the lyrics and the queue) is: 60 dp, or
+ * as much as its two lines need when that's more. #464 (1.8.4.1): in a tall font (Nothing's NDot as the app's and the
+ * titles' font) or a larger text size, the title took its height and the artist line got what was left of a fixed 60 dp,
+ * so it was cut off at the bottom. Both lines are counted even when one is hidden (the header over the lyrics shows
+ * both), so the cover doesn't change size as the player closes into it.
+ */
+@Composable
+internal fun playerHeaderHeight(
+    title: String,
+    titleStyle: androidx.compose.ui.text.TextStyle,
+    artist: String,
+    artistStyle: androidx.compose.ui.text.TextStyle,
+): Dp {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer(cacheSize = 4)
+    val density = LocalDensity.current
+    val needed = remember(title, titleStyle, artist, artistStyle, density, measurer) {
+        fun line(text: String, style: androidx.compose.ui.text.TextStyle) =
+            measurer.measure(text, style, maxLines = 1, softWrap = false).size.height
+        with(density) { (line(title, titleStyle) + line(artist, artistStyle)).toDp() }
+    }
+    return maxOf(HEADER_HEIGHT, needed)
+}
