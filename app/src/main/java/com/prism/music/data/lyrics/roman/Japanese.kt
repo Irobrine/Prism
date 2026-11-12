@@ -21,13 +21,16 @@ import java.io.InputStream
 class Japanese private constructor(private val tokenizer: Tokenizer) {
     /**
      * Each character of [text] spelled out: a word's whole reading on its first Japanese character (with a space before
-     * it when it starts a new word), nothing on the rest. Numbers stay as they were written, with the reading after them.
+     * it when it starts a new word), nothing on the rest. A number with a counter is spelled out as it's read (20分 is
+     * nijuppun); a number on its own stays the number it was written as.
      */
     fun pieces(text: String): List<String> {
         val out = MutableList(text.length) { text[it].toString() }
-        // Numbers are fed to Kuromoji as Japanese numerals (2人 → 二人), so counters, dates and times get the reading
-        // Japanese gives them; the line itself keeps the numbers as they were written.
+        // Numbers are fed to Kuromoji as Japanese numerals (2人 → 二人) so it reads the counter as Japanese. Kuromoji
+        // still reads a counter on its own (20分 → 二〇分 → にれいふん), so [counterRuns] reads the number with the
+        // counter after the loop.
         val tokens = tokenizer.tokenize(numbersAsKanji(text))
+        val runs = JapaneseCounters.runs(text, tokens.map { JapaneseCounters.Token(it.position, it.surface) })
         var first = true
         // A word whose reading ends in っ (だっ, 分かっ) doubles the consonant of the next one: "datta", "wakatta".
         var doubling = false
@@ -37,8 +40,8 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
             if (at < 0 || at + len > text.length) continue
             if (t.surface.isBlank()) { first = true; doubling = false; continue }
             val original = text.substring(at, at + len)
-            // Where the word starts on screen: a number Kuromoji read as Japanese stays a number, so the reading goes on
-            // the first character of it that isn't one.
+            // Where the word starts on screen: a number outside a counter run stays a number, so the reading goes on the
+            // first character of it that isn't one.
             val place = (at until at + len).firstOrNull { isJapanese(text[it]) }
             val reading = readingAt(t, text, at)
             var roman = romaji(t, reading)
@@ -51,7 +54,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
             }
             doubling = reading.endsWith('ッ')
             val joins = !first && attaches(t)
-            // A number stays the number it was written as, with the reading after it: 2人 is "2futari".
+            // A number outside a counter run stays the number it was written as, with its reading after it.
             val space = !first && !joins && !text[place - 1].isWhitespace() && !isNumber(text[place - 1])
             out[place] = (if (space) " " else "") + roman
             for (k in 0 until len) {
@@ -60,6 +63,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
             }
             first = false
         }
+        JapaneseCounters.apply(out, text, runs)
         return out
     }
 
@@ -67,14 +71,27 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
 
     /**
      * Each run of kanji in [text] with the hiragana it's read as: 君の名は → きみ above 君, な above 名. Okurigana and
-     * other kana shared by the word and its reading are left out of the reading, so only the kanji is annotated.
+     * other kana shared by the word and its reading are left out of the reading, so only the kanji is annotated. A
+     * number with a counter is read as one phrase, so its reading goes above both (20分 → にじゅっぷん).
      */
     fun furigana(text: String): List<RubySpan> {
         if (text.isEmpty()) return emptyList()
         val out = ArrayList<RubySpan>()
         // As [pieces]: Kuromoji reads 2人 as 二人, while the line keeps its Arabic number.
-        for (t in tokenizer.tokenize(numbersAsKanji(text))) {
+        val tokens = tokenizer.tokenize(numbersAsKanji(text))
+        val runs = JapaneseCounters.runs(text, tokens.map { JapaneseCounters.Token(it.position, it.surface) })
+        val runByStart = runs.associateBy { it.start }
+        var coveredUntil = -1
+        for (t in tokens) {
             val at = t.position
+            if (at < coveredUntil) continue
+            val run = runByStart[at]
+            if (run != null) {
+                val reading = Kana.toHiragana(run.reading.all)
+                if (reading.isNotEmpty()) out += RubySpan(run.start, run.end, reading)
+                coveredUntil = run.end
+                continue
+            }
             val surface = t.surface
             if (at < 0 || at + surface.length > text.length) continue
             if (surface.none(::isKanji)) continue
@@ -94,8 +111,8 @@ class Japanese private constructor(private val tokenizer: Tokenizer) {
                 readingKana = readingKana.dropLast(1)
             }
             if (readingKana.isBlank()) continue
-            // A number on screen stays a number: its furigana goes above the kanji the line actually has (2人's ふたり
-            // above 人), not above the digit.
+            // A number outside a counter run stays a number: its reading goes above the kanji the line actually has,
+            // not above the digit.
             var firstKanji = -1
             var lastKanji = -1
             for (i in at + start until at + end) {
