@@ -43,6 +43,12 @@ class LocalMusic(
         val addedAt: Long,
         val mime: String,
         val size: Long,
+        /** Latin spellings of the title for "On this phone" (#363), made once here while the files are scanned. */
+        val searchTags: List<String> = SearchTags.forTitle(song.title),
+        /** Latin spellings of the artists' names, for search too (#363). */
+        val artistTags: List<String> = SearchTags.forText(song.artistText),
+        /** Latin spellings of the album's title, for search too (#363). */
+        val albumTags: List<String> = SearchTags.forText(song.album?.title.orEmpty()),
     )
 
     private val _tracks = MutableStateFlow<List<Track>>(emptyList())
@@ -181,6 +187,9 @@ class LocalMusic(
     }
 
     private fun publish(tracks: List<Track>) {
+        // The spellings search reads without scanning every title again, in step with the list it shows.
+        SearchTags.clearIndex()
+        tracks.forEach { SearchTags.index(it.song.id, it.searchTags, it.artistTags, it.albumTags) }
         byId = tracks.associateBy { it.song.id }
         _tracks.value = tracks
     }

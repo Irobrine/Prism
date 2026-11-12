@@ -76,8 +76,8 @@ data class BringMerged(val songs: Int = 0, val likes: Int = 0, val plays: Int = 
  * songs) never go: not their plays, likes or names.
  */
 object BringOver {
-    /** The saved preferences that come along: starred artists, song versions, lyric timings, best parts, exclusions. */
-    val PREFS = listOf("artist_prefs", "song_versions", "lyric_offsets", "best_part_mine", "exclusions", "dislikes")
+    /** The saved preferences that come along: starred artists, song versions, metadata edits, lyric timings, best parts, exclusions. */
+    val PREFS = listOf("artist_prefs", "song_versions", "song_metadata", "lyric_offsets", "best_part_mine", "exclusions", "dislikes")
 
     /** Preferences that hold a list: the two sides' lists are joined rather than one kept. */
     private val LIST_KEYS = mapOf("artist_prefs" to setOf("favorites"), "exclusions" to setOf("artists", "playlists", "songs"), "dislikes" to setOf("ids"))

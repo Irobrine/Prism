@@ -4930,6 +4930,14 @@
     <string name="deleted_from_your_uploads">アップロードから削除しました</string>
     <string name="couldn_t_delete_it_s">削除できませんでした: %1$s</string>
     <string name="uploads_couldn_t_find_it">YouTube Music に表示されなくなっています</string>
+    <!-- 1.8.3 Edit metadata -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="metadata_leave_blank">Leave a field blank to keep it as it is. Changes show on this phone; your files and YouTube Music stay as they are.</string>
+    <string name="metadata_saved">Metadata saved</string>
+    <string name="reset_metadata">Reset metadata</string>
+    <string name="metadata_reset">Metadata reset</string>
+    <string name="metadata_mixed">Mixed</string>
+    <string name="metadata_currently">Currently %s</string>
     <!-- 1.8.3 Tour -->
     <string name="tour_183_smart_title">スマートプレイリスト</string>
     <string name="tour_183_smart_body">決めたルールで自動的に曲が入り、ライブラリに合わせて更新されるプレイリスト。</string>

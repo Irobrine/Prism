@@ -215,6 +215,9 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
     }
     var tagging by remember { mutableStateOf<List<Song>?>(null) }
     tagging?.let { list -> TagPicker(list, null) { tagging = null; selection.clear() } }
+    // 1.8.3: artist, album and genre on every picked song at once.
+    var editingMetadata by remember { mutableStateOf<List<Song>?>(null) }
+    editingMetadata?.let { list -> MetadataEditorSheet(list) { editingMetadata = null; selection.clear() } }
     changingCover?.let { list ->
         CoverPickSheet(CoverFor.OfSongs(list, list.map { c.covers.songKey(it.id) })) { changingCover = null; selection.clear() }
     }
@@ -271,6 +274,7 @@ fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
                 BarButton(PrismIcons.PlaylistAdd, tr(R.string.add_to_playlist), ink, enabled = forList.isNotEmpty()) { addingTo = forList }
                 val forTags = songs.filter(com.prism.music.data.TagStore::taggable)
                 BarButton(PrismIcons.Tag, tr(R.string.add_a_tag), ink, enabled = forTags.isNotEmpty()) { tagging = forTags }
+                BarButton(PrismIcons.Edit, tr(R.string.edit_metadata), ink, enabled = !none) { editingMetadata = songs }
                 // Change cover (1.8.3): one photo for every picked song that can have one (a live song's or an episode's
                 // own picture isn't its cover). Each song keeps its own, so an album's others aren't changed with it.
                 val forCover = songs.filter { !it.isEpisode && !it.isLive }
