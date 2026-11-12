@@ -493,24 +493,18 @@ class AppContainer(val app: Application) {
     }
     /**
      * Whole playlists for Library → Songs' "From" (1.8.3, #382): Prism's own from the phone, YouTube's page after page
-     * (the copy kept on the phone without a network).
+     * (the copy kept on the phone without a network). Only a whole read is kept ([com.prism.music.data.PlaylistSongs]):
+     * a page that doesn't come, or a read the screen's leaving cancels, is read again rather than left short.
      */
     val playlistSongs by lazy {
         com.prism.music.data.PlaylistSongs { id ->
-            prismLibrary.list(id)?.songs ?: run {
-                val page = try { ytm.playlist(id) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
-                    offline.page(id) ?: offline.page("VL$id") ?: throw e
-                }
-                val songs = page.songs.toMutableList()
-                var token = page.continuation
-                while (token != null && songs.size < com.prism.music.data.PlaylistSongs.MAX) {
-                    val chunk = runCatching { ytm.playlistPage(token!!) }.getOrNull() ?: break
-                    if (chunk.songs.isEmpty()) break
-                    songs += chunk.songs
-                    token = chunk.next
-                }
-                songs.distinctBy { it.id }
+            prismLibrary.list(id)?.let { return@PlaylistSongs com.prism.music.data.PlaylistRead(it.songs, complete = true) }
+            val page = try { ytm.playlist(id) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+                val kept = offline.page(id) ?: offline.page("VL$id") ?: throw e
+                // The copy on the phone may be shorter than the playlist: show it, but read it live again next time.
+                return@PlaylistSongs com.prism.music.data.PlaylistRead(kept.songs, complete = false)
             }
+            com.prism.music.data.readPlaylist(page, ytm::playlistPage)
         }
     }
     /** "Measure now" on a smart playlist: the songs its Sound rules can't see yet, scanned one by one (Wi-Fi for streams). */

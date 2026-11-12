@@ -250,11 +250,22 @@ fun LibraryScreen(bottomPadding: Dp) {
     val albumsSeen by c.library.albumsSeen.times.collectAsState()
     var artistSort by remember { mutableStateOf(ArtistSort.entries.firstOrNull { it.name == c.library.sortOf("library:artists") } ?: ArtistSort.LIBRARY) }
     // Songs "From" (1.8.3, #382): liked songs and the songs of playlists the listener picks, once each. Prism's own
-    // lists are read as they are now; YouTube's are loaded whole once per session.
+    // lists are read as they are now; YouTube's are loaded whole once per session, again if a page didn't come.
     var songsFrom by remember { mutableStateOf(com.prism.music.data.SongsFrom.decode(c.library.sortOf(com.prism.music.data.SongsFrom.KEY))) }
     val fromLoaded by androidx.compose.runtime.produceState(emptyMap<String, List<com.prism.music.data.model.Song>>(), songsFrom.playlists) {
-        songsFrom.playlists.filter { !com.prism.music.data.PrismLibrary.isPrismList(it) }.forEach { id ->
-            c.playlistSongs.songs(id)?.let { value = value + (id to it) }
+        val lists = songsFrom.playlists.filter { !com.prism.music.data.PrismLibrary.isPrismList(it) }
+        var tries = 0
+        while (true) {
+            // A read that stopped short (a page that didn't come) shows what it has, then is read again while the tab
+            // stays open: the rest of a big playlist comes by itself, without leaving the tab or reopening Prism.
+            var more = false
+            lists.forEach { id ->
+                val songs = c.playlistSongs.songs(id)
+                if (songs != null) value = value + (id to songs)
+                if (songs == null || !c.playlistSongs.isComplete(id)) more = true
+            }
+            if (!more || ++tries >= 3) break
+            kotlinx.coroutines.delay(3_000L * tries)
         }
     }
     val fromLoading = songsFrom.playlists.any { !com.prism.music.data.PrismLibrary.isPrismList(it) && it !in fromLoaded }
