@@ -146,7 +146,7 @@ val lyricsSingIndex: List<SettingEntry> by lazy {
                 page, g.language, tr(R.string.romanize_lyrics),
                 listOf(R.string.romanization_romaji_pinyin_latin_letters_transli, R.string.romanize_my_own_language_too, R.string.romanization_native_script).joinToString(" ") { tr(it) },
             ),
-            SettingEntry(page, g.language, tr(R.string.japanese_kanji_readings), tr(R.string.romaji_kanji_dictionary_download_kuromoji_japane)),
+            SettingEntry(page, g.language, tr(R.string.japanese_kanji_readings), tr(R.string.romaji_kanji_dictionary_download_kuromoji_japane) + " " + tr(R.string.ipadic) + " " + tr(R.string.sudachi_japanese_analyzer) + " " + tr(R.string.sudachi_dict_full)),
             SettingEntry(page, g.language, tr(R.string.translation_place), tr(R.string.translation_look) + " " + tr(R.string.translation_romanization_size_color_italic_above)),
             SettingEntry(page, g.language, tr(R.string.translation_size), tr(R.string.translation_romanization_size_color_italic_above)),
             SettingEntry(page, g.language, tr(R.string.translation_color), tr(R.string.translation_romanization_size_color_italic_above)),
@@ -372,6 +372,7 @@ internal fun resetLyricsSing(prefs: SettingsRepository, d: AppSettings) {
     prefs.setRomanizeAll(d.romanizeAll)
     prefs.setPreferSynced(d.preferSynced)
     prefs.setSkipCensored(d.skipCensored)
+    prefs.setJapaneseEngine(d.japaneseEngine)
     prefs.setLyricsOrder(d.lyricsOrder)
     prefs.setLyricsOff(d.lyricsOff)
     prefs.setEmbeddedLyrics(d.behavior.embeddedLyrics)

@@ -42,8 +42,8 @@ fun rememberRomanized(state: LyricsState): List<LyricLine?>? {
     val skip = remember(settings.romanizeAll, overrides[state.song.id]) {
         if (settings.romanizeAll || overrides[state.song.id] == true) emptySet() else Script.native(Locale.getDefault().language)
     }
-    // Downloading the Japanese reading data mid-song spells that song out again, properly.
-    val jaReady = models[ModelStore.Model.JAPANESE] == ModelStore.State.Ready
+    // Downloading the Japanese reading data mid-song spells that song out again, properly (whichever dictionary is chosen).
+    val jaReady = models[settings.japaneseEngine.model] == ModelStore.State.Ready
     val roman by produceState<List<LyricLine?>?>(null, state.song.id, lines, skip, mode == RomanizeMode.OFF, jaReady) {
         value = null
         if (mode == RomanizeMode.OFF || lines.isEmpty()) return@produceState

@@ -2132,6 +2132,7 @@
     <string name="downloading_5">正在下載… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">無法下載 · 輕觸即可重試</string>
     <string name="only_for_japanese_songs">僅適用於日文歌曲 · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">只有日文需要這項資料：日文漢字有多種讀音，因此需要字典來選出正確的羅馬字讀音（「kimi no na wa」）。只需下載一次。其他語言（韓文、中文、俄文、印地文…）不需下載即可轉成羅馬拼音。沒有這項資料時，會由 Google 拼出漢字讀音。</string>
     <string name="sing_doesn_t_run_on_this">這支手機的處理器類型無法執行歡唱的完整分離，所以歡唱改用快速方式：去除混音中間的聲音，人聲通常就在那裡。效果沒那麼乾淨，單聲道歌曲會維持原樣。</string>
     <string name="needed_for_sing">歡唱需要 · %1$s</string>

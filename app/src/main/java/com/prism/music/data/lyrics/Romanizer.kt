@@ -10,10 +10,13 @@ import com.prism.music.data.lyrics.roman.Cyrillic
 import com.prism.music.data.lyrics.roman.Greek
 import com.prism.music.data.lyrics.roman.Hangul
 import com.prism.music.data.lyrics.roman.Japanese
+import com.prism.music.data.lyrics.roman.JapaneseEngine
 import com.prism.music.data.lyrics.roman.JapaneseKanji
+import com.prism.music.data.lyrics.roman.JapaneseReader
 import com.prism.music.data.lyrics.roman.Kana
 import com.prism.music.data.lyrics.roman.RubyReader
 import com.prism.music.data.lyrics.roman.Script
+import com.prism.music.data.lyrics.roman.SudachiJapanese
 import com.prism.music.data.lyrics.roman.plainLatin
 import com.prism.music.data.lyrics.RubySpan
 import kotlinx.coroutines.CoroutineScope
@@ -40,11 +43,11 @@ import java.io.IOException
 /**
  * Lyrics in Latin letters, so a song in a script the listener can't read can still be sung along to.
  *
- * Each line goes to the best engine for its script: on the phone for Korean (Revised Romanization), Japanese (Kuromoji
- * readings, once its dictionary is downloaded; kana alone without it), Cyrillic and Greek, which keep a karaoke line's
- * word timings; Google Translate's romanization (the endpoint [LyricsTranslator] uses) for Chinese (pinyin), Arabic,
- * Hebrew, the Indian scripts and the rest, spread over the line's timing; and Android's own transliterator when
- * that can't be reached. Results are kept per song, so they work offline after the first time.
+ * Each line goes to the best engine for its script: on the phone for Korean (Revised Romanization), Japanese (Kuromoji's
+ * or Sudachi's readings, whichever dictionary is downloaded and chosen; kana alone without one), Cyrillic and Greek, which
+ * keep a karaoke line's word timings; Google Translate's romanization (the endpoint [LyricsTranslator] uses) for Chinese
+ * (pinyin), Arabic, Hebrew, the Indian scripts and the rest, spread over the line's timing; and Android's own
+ * transliterator when that can't be reached. Results are kept per song, so they work offline after the first time.
  */
 class Romanizer(
     private val http: OkHttpClient,
@@ -55,6 +58,8 @@ class Romanizer(
     private val songPrefs: android.content.SharedPreferences? = null,
     /** The Japanese reader to use without the downloaded dictionary (tests read from Kuromoji's own). */
     private val japaneseForTests: Japanese? = null,
+    /** Which Japanese dictionary the listener chose (Settings → Lyrics); IPADIC unless they picked Sudachi. */
+    private val japaneseEngine: () -> JapaneseEngine = { JapaneseEngine.IPADIC },
 ) {
     private val _overrides = MutableStateFlow(
         songPrefs?.all?.mapNotNull { (k, v) -> (v as? Boolean)?.let { k to it } }?.toMap().orEmpty()
@@ -79,8 +84,8 @@ class Romanizer(
         runCatching { localSpelling(LyricLine(0, text), scripts, japanese) }.getOrNull()?.first?.takeIf { it.isNotBlank() && it != text }
     }
 
-    /** Whether kanji can be read on the phone (the Japanese dictionary is downloaded). */
-    val japaneseReady: Boolean get() = japaneseForTests != null || models.ready(ModelStore.Model.JAPANESE)
+    /** Whether kanji can be read on the phone (the chosen Japanese dictionary is downloaded). */
+    val japaneseReady: Boolean get() = japaneseForTests != null || models.ready(japaneseEngine().model)
 
     @Serializable
     private data class Stored(val t: String, val w: List<String>? = null, val b: String? = null, val bw: List<String>? = null)
@@ -94,22 +99,42 @@ class Romanizer(
     /** A Japanese song was shown without the reading data: kanji were spelled out by Google instead (less well). */
     val needsJapanese: StateFlow<Boolean> = _needsJapanese
 
-    // Kuromoji takes tens of MB: loaded when a Japanese song needs it, let go a few minutes after the last.
+    // Kuromoji takes tens of MB, Sudachi maps 330 MB of dictionary: loaded when a Japanese song needs it, let go a few
+    // minutes after the last (Sudachi's is closed then, not just dropped).
     private val jaLock = Mutex()
-    @Volatile private var japanese: Japanese? = null
+    @Volatile private var japanese: Pair<JapaneseEngine, JapaneseReader>? = null
     private var releaseJob: Job? = null
 
-    private suspend fun japaneseReader(): Japanese? {
+    private suspend fun japaneseReader(): JapaneseReader? {
         japaneseForTests?.let { return it }
-        if (!models.ready(ModelStore.Model.JAPANESE)) return null
+        val engine = japaneseEngine()
+        if (!models.ready(engine.model)) return null
         val reader = jaLock.withLock {
-            japanese ?: runCatching { withContext(Dispatchers.Default) { Japanese.load(models.dir(ModelStore.Model.JAPANESE)) } }
-                .onFailure { android.util.Log.w("PrismRoman", "Couldn't load the Japanese dictionary: $it") }
-                .getOrNull()?.also { japanese = it }
+            val held = japanese
+            if (held?.first == engine) held.second
+            else {
+                // Another dictionary than the one loaded (the listener switched): let that one go first.
+                held?.second?.let { runCatching { it.close() } }
+                runCatching { withContext(Dispatchers.Default) { loadJapanese(engine) } }
+                    .onFailure { android.util.Log.w("PrismRoman", "Couldn't load the Japanese dictionary: $it") }
+                    .getOrNull()?.also { japanese = engine to it }
+            }
         }
         releaseJob?.cancel()
-        releaseJob = scope.launch { delay(RELEASE_AFTER_MS); jaLock.withLock { japanese = null } }
+        releaseJob = scope.launch {
+            delay(RELEASE_AFTER_MS)
+            jaLock.withLock {
+                japanese?.second?.let { runCatching { it.close() } }
+                japanese = null
+            }
+        }
         return reader
+    }
+
+    /** Opens the chosen dictionary, unpacked by [ModelStore]. */
+    private fun loadJapanese(engine: JapaneseEngine): JapaneseReader = when (engine) {
+        JapaneseEngine.IPADIC -> Japanese.load(models.dir(engine.model))
+        JapaneseEngine.SUDACHI -> SudachiJapanese.load(models.dir(engine.model))
     }
 
     /**
@@ -122,8 +147,8 @@ class Romanizer(
     suspend fun romanize(songId: String, lines: List<LyricLine>, skip: Set<Script>, network: Boolean = true, title: String = ""): List<LyricLine?> =
         withContext(Dispatchers.Default) {
             val japaneseSong = Script.KANA in Script.foreignIn(title) || lines.any { Script.KANA in Script.foreignIn(it.text) }
-            val jaReady = japaneseForTests != null || models.ready(ModelStore.Model.JAPANESE)
-            val key = "$songId|$VERSION|${if (jaReady) "ja" else "-"}|${if (japaneseSong) "j" else ""}|${skip.sorted().joinToString(",")}|" +
+            val jaReady = japaneseReady
+            val key = "$songId|$VERSION|${if (jaReady) japaneseEngine().name else "-"}|${if (japaneseSong) "j" else ""}|${skip.sorted().joinToString(",")}|" +
                 lines.joinToString("\n") { it.text + "|" + it.backgroundLine?.text.orEmpty() }.hashCode()
             synchronized(memory) { memory[key] }?.let { return@withContext it }
             runCatching { dao.get(key) }.getOrNull()?.let { saved ->

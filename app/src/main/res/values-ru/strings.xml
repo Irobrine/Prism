@@ -2132,6 +2132,7 @@
     <string name="downloading_5">Скачиваем… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Не удалось скачать · нажми, чтобы повторить</string>
     <string name="only_for_japanese_songs">Только для японских песен · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Это нужно только для японского: у кандзи несколько чтений, поэтому словарь выбирает правильное для ромадзи («kimi no na wa»). Скачивается один раз. Другие языки (корейский, китайский, русский, хинди…) переводятся в латиницу без скачивания. Без словаря кандзи записывает Google.</string>
     <string name="sing_doesn_t_run_on_this">Полное разделение в «Подпевай» не работает на процессоре этого телефона, поэтому «Подпевай» использует быстрый способ: убирает то, что звучит в центре микса, где обычно голос. Получается менее чисто, а моно-трек остаётся как есть.</string>
     <string name="needed_for_sing">Нужно для «Подпевай» · %1$s</string>

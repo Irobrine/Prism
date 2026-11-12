@@ -2132,6 +2132,7 @@
     <string name="downloading_5">Dina-download… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">Hindi ma-download · i-tap para subukan ulit</string>
     <string name="only_for_japanese_songs">Para lang sa mga kantang Japanese · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">Japanese lang ang nangangailangan nito: may ilang pagbasa ang kanji nito, kaya diksyunaryo ang pumipili ng tama para sa romaji (\"kimi no na wa\"). Isang beses lang dina-download. Ang ibang wika (Korean, Chinese, Ruso, Hindi…) ay nai-romanize nang walang download. Kung wala ito, Google ang magbabaybay ng kanji.</string>
     <string name="sing_doesn_t_run_on_this">Hindi gumagana ang buong paghihiwalay ng Kumanta sa uri ng processor ng phone na ito, kaya ginagamit ng Kumanta ang mabilis na paraan: inaalis nito ang nasa gitna ng mix, kung saan karaniwang naroon ang boses. Hindi ito kasinglinis, at mananatili ang mono na kanta kung ano ito.</string>
     <string name="needed_for_sing">Kailangan para sa Kumanta · %1$s</string>

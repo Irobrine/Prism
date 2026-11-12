@@ -2132,6 +2132,7 @@
     <string name="downloading_5">מוריד… %1$s%%</string>
     <string name="couldn_t_download_it_tap_to">לא ניתן להוריד · הקש כדי לנסות שוב</string>
     <string name="only_for_japanese_songs">רק לשירים ביפנית · %1$s</string>
+    <string name="not_downloaded">not downloaded</string>
     <string name="only_japanese_needs_this_its_kanji">רק יפנית צריכה את זה: לקאנג׳י יש כמה הגיות, ולכן מילון בוחר את הנכונה עבור רומאג׳י (״kimi no na wa״). מורד פעם אחת. שפות אחרות (קוריאנית, סינית, רוסית, הינדי…) נכתבות באותיות לטיניות בלי הורדה. בלעדיו, Google מתעתק את הקאנג׳י.</string>
     <string name="sing_doesn_t_run_on_this">ההפרדה המלאה של שירה לא פועלת על סוג המעבד של הטלפון הזה, לכן שירה משתמשת בדרך המהירה: היא מסירה את מה שנמצא באמצע המיקס, היכן שהקול נמצא בדרך כלל. התוצאה פחות נקייה, ושיר מונו נשאר כמו שהוא.</string>
     <string name="needed_for_sing">נדרש לשירה · %1$s</string>

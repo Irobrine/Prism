@@ -531,6 +531,8 @@ class AppContainer(val app: Application) {
     /** Lyrics in Latin letters (Korean, Japanese, Chinese, Arabic, Hindi…). */
     val romanizer = com.prism.music.data.lyrics.Romanizer(
         http, db.romanized(), models, scope, app.getSharedPreferences("romanize_songs", android.content.Context.MODE_PRIVATE),
+        // Settings → Lyrics: IPADIC or Sudachi's full dictionary reads Japanese kanji.
+        japaneseEngine = { settings.current.japaneseEngine },
     )
     /** Titles in other scripts in Latin letters, for searching the library (1.8.3, #363); spelled when a search wants them. */
     val titleSpellings by lazy {
