@@ -575,7 +575,7 @@ fun PrismSheet(
     onDismiss: () -> Unit,
     containerColor: Color = androidx.compose.material3.BottomSheetDefaults.ContainerColor,
     contentColor: Color = androidx.compose.material3.contentColorFor(containerColor),
-    dragHandle: (@Composable () -> Unit)? = { androidx.compose.material3.BottomSheetDefaults.DragHandle() },
+    dragHandle: (@Composable (close: () -> Unit) -> Unit)? = { _ -> androidx.compose.material3.BottomSheetDefaults.DragHandle() },
     content: @Composable androidx.compose.foundation.layout.ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit,
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -604,7 +604,11 @@ fun PrismSheet(
             scope.launch { try { state.hide() } finally { finish() } }
         }
     }
-    ModalBottomSheet(onDismissRequest = finish, sheetState = state, containerColor = containerColor, contentColor = contentColor, dragHandle = dragHandle) {
+    val dismissNow: () -> Unit = { close {} }
+    val sheetDragHandle: (@Composable () -> Unit)? = if (dragHandle == null) null else {
+        @Composable { dragHandle(dismissNow) }
+    }
+    ModalBottomSheet(onDismissRequest = finish, sheetState = state, containerColor = containerColor, contentColor = contentColor, dragHandle = sheetDragHandle) {
         val keep = remember { KeepFlingsOffSheet() }
         Column(Modifier.fillMaxWidth().nestedScroll(keep)) { content(close) }
     }

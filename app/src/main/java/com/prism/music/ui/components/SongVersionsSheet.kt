@@ -236,6 +236,7 @@ private fun ExpandableSheet(
     val screenCap = maxOf(baseCap, (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
     val density = LocalDensity.current
     val maxExtra = with(density) { (screenCap - baseCap).toPx() }.coerceAtLeast(0f)
+    val closeAt = with(density) { 96.dp.toPx() }
     var extraPx by remember(maxExtra) { mutableStateOf(0f) }
     var settle by remember { mutableStateOf<Job?>(null) }
     val dragScope = rememberCoroutineScope()
@@ -244,50 +245,45 @@ private fun ExpandableSheet(
     val listCap = baseCap + with(density) { extraPx.coerceIn(0f, maxExtra).toDp() }
     PrismSheet(
         onDismiss = onDismiss,
-        dragHandle = {
+        dragHandle = { close ->
             Box(
                 Modifier.fillMaxWidth().height(44.dp)
                     .onGloballyPositioned { grabberTop.value = it.positionInRoot().y }
-                    .pointerInput(maxExtra) {
+                    .pointerInput(maxExtra, closeAt) {
                         if (maxExtra > 0f) awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            // A tap on the bar stays with the bar: it mustn't reach the sheet and close it.
+                            down.consume()
                             // A new slide takes over from where the last one was settling.
                             settle?.cancel()
                             settle = null
                             val startFinger = grabberTop.value + down.position.y
                             val startExtra = extraPx
-                            var ours = false
-                            var wasOpen = startExtra > 0f
+                            var lastY = down.position.y
+                            var moved = false
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) break
-                                // Measured from the bar's place on screen, since the bar moves with the finger.
-                                val travel = startFinger - (grabberTop.value + change.position.y)
-                                if (!ours) {
-                                    // Any pull down on an open list is the list's, from the first pixel: the sheet
-                                    // must not start closing under a slide that is only putting the list back.
-                                    if (startExtra > 0f && travel < 0f) {
-                                        ours = true
-                                    } else {
-                                        if (kotlin.math.abs(travel) <= viewConfiguration.touchSlop) continue
-                                        // A pull down on a list already at 440 dp is the sheet's: it puts it away.
-                                        if (travel < 0f && startExtra <= 0f) break
-                                        ours = true
-                                    }
+                                val travel = lastY - change.position.y
+                                lastY = change.position.y
+                                if (travel != 0f) moved = true
+                                if (moved) {
+                                    // Measured from the bar's place on screen, since the bar moves with the finger.
+                                    val open = startExtra + (startFinger - (grabberTop.value + change.position.y))
+                                    extraPx = open.coerceIn(-closeAt, maxExtra)
                                 }
-                                val open = (startExtra + travel).coerceIn(0f, maxExtra)
-                                extraPx = open
-                                if (open > 0f) wasOpen = true
-                                // Once it has taken the pull, the list keeps it, so coming back to 440 dp can't
-                                // give what's left of the pull to the sheet (that closed it).
                                 change.consume()
                             }
-                            if (ours) {
-                                // Let go near the bottom: back to 440 dp. Near the top: open tall.
-                                val target = if (wasOpen && extraPx < maxExtra / 2f) 0f else maxExtra
-                                settle = dragScope.launch {
-                                    animate(extraPx, target, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                            if (moved) {
+                                when {
+                                    extraPx <= -closeAt / 2f -> close()
+                                    extraPx < maxExtra / 2f -> settle = dragScope.launch {
+                                        animate(extraPx, 0f, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                                    }
+                                    else -> settle = dragScope.launch {
+                                        animate(extraPx, maxExtra, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                                    }
                                 }
                             }
                         }
