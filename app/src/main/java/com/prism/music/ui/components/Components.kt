@@ -580,7 +580,7 @@ fun PrismSheet(
     onDismiss: () -> Unit,
     containerColor: Color = androidx.compose.material3.BottomSheetDefaults.ContainerColor,
     contentColor: Color = androidx.compose.material3.contentColorFor(containerColor),
-    dragHandle: (@Composable () -> Unit)? = { androidx.compose.material3.BottomSheetDefaults.DragHandle() },
+    dragHandle: (@Composable (close: () -> Unit) -> Unit)? = { _ -> androidx.compose.material3.BottomSheetDefaults.DragHandle() },
     content: @Composable androidx.compose.foundation.layout.ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit,
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -609,7 +609,11 @@ fun PrismSheet(
             scope.launch { try { state.hide() } finally { finish() } }
         }
     }
-    ModalBottomSheet(onDismissRequest = finish, sheetState = state, containerColor = containerColor, contentColor = contentColor, dragHandle = dragHandle) {
+    val dismissNow: () -> Unit = { close {} }
+    val sheetDragHandle: (@Composable () -> Unit)? = if (dragHandle == null) null else {
+        @Composable { dragHandle(dismissNow) }
+    }
+    ModalBottomSheet(onDismissRequest = finish, sheetState = state, containerColor = containerColor, contentColor = contentColor, dragHandle = sheetDragHandle) {
         val keep = remember { KeepFlingsOffSheet() }
         Column(Modifier.fillMaxWidth().nestedScroll(keep)) { content(close) }
     }
@@ -846,7 +850,14 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // A playlist picked to add songs to moves above New playlist; go back to the top then, so it's in view.
     var topJumps by remember { mutableStateOf(0) }
-    LaunchedEffect(topJumps) { if (topJumps > 0) listState.scrollToItem(0) }
+    // A playlist just moved above New playlist; wait for that order to be laid out before going to the top, or the
+    // list keeps the old first row in view and the new one stays just above it.
+    LaunchedEffect(topJumps) {
+        if (topJumps > 0) {
+            androidx.compose.runtime.withFrameNanos { }
+            listState.scrollToItem(0)
+        }
+    }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     // Only what YouTube says went in is called added (Reddit, 1.7.9: "Added" for songs that never got there).
     fun addToYouTube(id: String, title: String, wanted: List<String>, checkLive: Boolean) {
@@ -922,7 +933,10 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     }
     // The playlists that already have the songs move above New playlist once the phone works them out: go back to the
     // top then, so they're in view (and after a new playlist is made, which moves up too).
-    LaunchedEffect(held) { listState.scrollToItem(0) }
+    LaunchedEffect(held) {
+        androidx.compose.runtime.withFrameNanos { }
+        listState.scrollToItem(0)
+    }
     fun has(p: PlaylistItem) = held[p.id]?.size ?: 0
     // Above New playlist when the songs will be in it: one that has them all and wasn't tapped off, or one tapped to
     // add them to (a new one included).
@@ -991,13 +1005,15 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
             }
         }
     }
-    // The list opens at 440 dp. Pulling the grabber up (the bar above the title) makes it taller as the finger moves,
-    // so the bar follows the slide; a tap on it does nothing. Pulling it back down to around where it started puts it
-    // back to 440 dp, and that pull stays with the list: it must not hand the rest to the sheet and close it.
+    // The list opens at 440 dp. Pulling the grabber (the bar above the title) makes it taller as the finger moves, so
+    // the bar follows the hand; a tap on it does nothing. Pulling back to 440 dp returns it there, and pulling below
+    // that closes the sheet, so one slide can go from tall to gone. Letting go snaps to the nearest of closed, 440 dp
+    // and tall.
     val baseCap = 440.dp
     val screenCap = maxOf(baseCap, (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val maxExtra = with(density) { (screenCap - baseCap).toPx() }.coerceAtLeast(0f)
+    val closeAt = with(density) { 96.dp.toPx() }
     var extraPx by remember(maxExtra) { mutableStateOf(0f) }
     var settle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val dragScope = rememberCoroutineScope()
@@ -1007,50 +1023,45 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     PrismSheet(
         // Putting the sheet away leaves it all as it was, like Cancel.
         onDismiss = onDismiss,
-        dragHandle = {
+        dragHandle = { close ->
             Box(
                 Modifier.fillMaxWidth().height(44.dp)
                     .onGloballyPositioned { grabberTop.value = it.positionInRoot().y }
-                    .pointerInput(maxExtra) {
+                    .pointerInput(maxExtra, closeAt) {
                         if (maxExtra > 0f) awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            // A tap on the bar stays with the bar: it mustn't reach the sheet and close it.
+                            down.consume()
                             // A new slide takes over from where the last one was settling.
                             settle?.cancel()
                             settle = null
                             val startFinger = grabberTop.value + down.position.y
                             val startExtra = extraPx
-                            var ours = false
-                            var wasOpen = startExtra > 0f
+                            var lastY = down.position.y
+                            var moved = false
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) break
-                                // Measured from the bar's place on screen, since the bar moves with the finger.
-                                val travel = startFinger - (grabberTop.value + change.position.y)
-                                if (!ours) {
-                                    // Any pull down on an open list is the list's, from the first pixel: the sheet
-                                    // must not start closing under a slide that is only putting the list back.
-                                    if (startExtra > 0f && travel < 0f) {
-                                        ours = true
-                                    } else {
-                                        if (kotlin.math.abs(travel) <= viewConfiguration.touchSlop) continue
-                                        // A pull down on a list already at 440 dp is the sheet's: it puts it away.
-                                        if (travel < 0f && startExtra <= 0f) break
-                                        ours = true
-                                    }
+                                val travel = lastY - change.position.y
+                                lastY = change.position.y
+                                if (travel != 0f) moved = true
+                                if (moved) {
+                                    // Measured from the bar's place on screen, since the bar moves with the finger.
+                                    val open = startExtra + (startFinger - (grabberTop.value + change.position.y))
+                                    extraPx = open.coerceIn(-closeAt, maxExtra)
                                 }
-                                val open = (startExtra + travel).coerceIn(0f, maxExtra)
-                                extraPx = open
-                                if (open > 0f) wasOpen = true
-                                // Once it has taken the pull, the list keeps it, so coming back to 440 dp can't
-                                // give what's left of the pull to the sheet (that closed it).
                                 change.consume()
                             }
-                            if (ours) {
-                                // Let go near the bottom: back to 440 dp. Near the top: open tall.
-                                val target = if (wasOpen && extraPx < maxExtra / 2f) 0f else maxExtra
-                                settle = dragScope.launch {
-                                    androidx.compose.animation.core.animate(extraPx, target, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                            if (moved) {
+                                when {
+                                    extraPx <= -closeAt / 2f -> close()
+                                    extraPx < maxExtra / 2f -> settle = dragScope.launch {
+                                        androidx.compose.animation.core.animate(extraPx, 0f, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                                    }
+                                    else -> settle = dragScope.launch {
+                                        androidx.compose.animation.core.animate(extraPx, maxExtra, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                                    }
                                 }
                             }
                         }
