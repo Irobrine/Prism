@@ -123,7 +123,7 @@ class DownloadsDataPageTest : ListeningPageHarness(SettingsPageId.DOWNLOADS_DATA
         assertBudgets("defaults")
         // The ledger's layout with a fresh install's settings (Load ahead joined Mobile data: its group was named as its row).
         assertEquals(listOf(gDownloads, gFiles, gSmart, gCovers, gData), groupTitles())
-        assertEquals(listOf(4, 3, 3, 3, 3), groupSizes())
+        assertEquals(listOf(7, 3, 3, 3, 3), groupSizes())
         assertEquals("nothing differs from how Prism comes", 0, changedRows())
         // No group is named as the page, and none as one of its own rows (§2.7: "Smart Downloads" and "Load ahead" were both).
         assertTrue(groupTitles().none { it == SettingsPageId.DOWNLOADS_DATA.title })
@@ -252,7 +252,7 @@ class DownloadsDataPageTest : ListeningPageHarness(SettingsPageId.DOWNLOADS_DATA
 
         // Every row with a setting now differs from how Prism comes, says so, and the page still fits.
         assertBudgets("everything changed")
-        assertEquals(listOf(4, 4, 3, 3, 3), groupSizes())
+        assertEquals(listOf(7, 4, 3, 3, 3), groupSizes())
         assertEquals(11, changedRows())
         // The root's line is live.
         val line = downloadsLine()
@@ -271,7 +271,7 @@ class DownloadsDataPageTest : ListeningPageHarness(SettingsPageId.DOWNLOADS_DATA
         }
         assertEquals(setOf("PLkept"), stored.behavior.keptPlaylists)
         assertEquals(0, changedRows())
-        assertEquals(listOf(4, 3, 3, 3, 3), groupSizes())
+        assertEquals(listOf(7, 3, 3, 3, 3), groupSizes())
     }
 
     /**
