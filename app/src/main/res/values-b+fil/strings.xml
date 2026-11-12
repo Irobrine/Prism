@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">Nawala ang koneksyon kay %1$s</string>
     <string name="listening_with">Nakikinig kasama si %1$s</string>
     <string name="this_phone_can_t_play_apple">Hindi kayang i-play ng phone na ito ang mga Apple Lossless (ALAC) file</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s file: hindi ito kayang i-decode ng phone na ito, kaya ang stream ang pinapatugtog</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, kaya ang tunog ng music video nito ang nagpe-play</string>
     <string name="playback_failed">Nabigo ang playback</string>
     <string name="the_live_video_didn_t_load">Hindi nag-load ang live video, kaya audio ang nagpe-play. I-tap ang button ng video para subukan ulit.</string>

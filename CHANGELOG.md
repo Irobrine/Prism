@@ -2,6 +2,16 @@
 
 What changed in each release. Older releases are described on the [Releases page](https://github.com/Yigder/Prism/releases).
 
+## 1.8.4.1
+
+### Fixes
+
+- **Previous goes back after a music video** (#455). With shuffle on, the song you watched as its video moved to the end of the shuffled order, so Previous only started the playing song over.
+- **Film songs play as songs under "Songs everywhere"** (#383). Videos whose song YouTube lists with a soundtrack tag ('From "…"') or a language tag ("Telugu") now find it, and a different language's dub is never taken for it.
+- **Menus and other sheets stay put on a fast swipe** (#401). A fling that reached the end of a sheet's list (the player's ⋯ menu, a song's menu, Add to playlist, Settings' choices) could pull or push the whole sheet and keep it bouncing.
+- **The artist under the player's title shows in full with a tall font or larger text** (#464), in the player and above the lyrics.
+- **An ALAC file this phone can't decode says so.** Stats for nerds tells you on the song that its stream plays instead, rather than switching without a word.
+
 ## 1.8.4
 
 ### Settings, made simple

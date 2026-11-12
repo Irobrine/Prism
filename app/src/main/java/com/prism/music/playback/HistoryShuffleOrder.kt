@@ -2,7 +2,9 @@ package com.prism.music.playback
 
 import androidx.annotation.OptIn
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder
 
 /**
@@ -101,6 +103,9 @@ class HistoryShuffleOrder(private val order: IntArray, private val current: () -
         return HistoryShuffleOrder(list.toIntArray(), current)
     }
 
+    /** Whether [other] plays the queue in the same order. */
+    fun sameOrderAs(other: HistoryShuffleOrder) = order.contentEquals(other.order)
+
     companion object {
         /** A fresh random order of [count] songs with [first] (if it's one of them) at the start. */
         fun shuffled(count: Int, first: Int, current: () -> Int): HistoryShuffleOrder {
@@ -108,4 +113,18 @@ class HistoryShuffleOrder(private val order: IntArray, private val current: () -
             return HistoryShuffleOrder((if (first in 0 until count) listOf(first) + rest else rest).toIntArray(), current)
         }
     }
+}
+
+/**
+ * #455: replaces the queue's item at [index] with another form of the same song (its music video, its sound again), which
+ * keeps its place in the play order. Media3 replaces an item by adding the new one after it and taking the old one out,
+ * and [HistoryShuffleOrder.cloneAndInsert] can't tell that from a song added there: a song already heard went to the end
+ * of the shuffled order, so Previous found nothing before the playing song and only started it over.
+ */
+@OptIn(UnstableApi::class)
+fun ExoPlayer.replaceKeepingOrder(index: Int, item: MediaItem) {
+    val before = shuffleOrder as? HistoryShuffleOrder
+    replaceMediaItem(index, item)
+    val after = shuffleOrder as? HistoryShuffleOrder ?: return
+    if (before != null && before.length == mediaItemCount && !after.sameOrderAs(before)) setShuffleOrder(before)
 }
