@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">%1$s との接続が切れました</string>
     <string name="listening_with">%1$s と一緒に聴いています</string>
     <string name="this_phone_can_t_play_apple">このスマホでは Apple Lossless（ALAC）ファイルを再生できません</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s ファイル：このスマホではデコードできないため、ストリームを再生しています</string>
     <string name="so_its_music_video_s_sound">%1$s は%2$sため、ミュージック ビデオの音声を再生します</string>
     <string name="playback_failed">再生に失敗しました</string>
     <string name="the_live_video_didn_t_load">ライブ動画を読み込めなかったため、音声で再生しています。動画ボタンをタップして再試行してください。</string>

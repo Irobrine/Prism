@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">與 %1$s 的連線中斷</string>
     <string name="listening_with">正在與 %1$s 一起聆聽</string>
     <string name="this_phone_can_t_play_apple">這支手機無法播放 Apple Lossless（ALAC）檔案</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s 檔案：這支手機無法解碼，因此改為播放串流</string>
     <string name="so_its_music_video_s_sound">「%1$s」%2$s，因此改為播放其音樂影片的聲音</string>
     <string name="playback_failed">播放失敗</string>
     <string name="the_live_video_didn_t_load">直播影片無法載入，因此以音訊播放。輕觸影片按鈕即可重試。</string>

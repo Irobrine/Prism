@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">Connexion perdue avec %1$s</string>
     <string name="listening_with">En écoute avec %1$s</string>
     <string name="this_phone_can_t_play_apple">Ce téléphone ne peut pas lire les fichiers Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Fichier %1$s : ce téléphone ne peut pas le décoder, c’est donc le flux qui est lu</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, le son de son clip est donc lu</string>
     <string name="playback_failed">Échec de la lecture</string>
     <string name="the_live_video_didn_t_load">La vidéo en direct ne s’est pas chargée, elle est donc lue en audio. Appuyez sur le bouton vidéo pour réessayer.</string>

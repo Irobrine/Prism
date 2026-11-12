@@ -591,7 +591,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     /** Replaces the item at [idx] with another form of the same song, without counting a new play. */
     private fun swapInPlace(idx: Int, item: MediaItem) {
         swappingInPlace = item.mediaId
-        try { player.replaceMediaItem(idx, item) } finally { swappingInPlace = null }
+        try { player.replaceKeepingOrder(idx, item) } finally { swappingInPlace = null }
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -697,12 +697,12 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             if (!c.settings.current.showVideoSwitch && player.currentMediaItem?.mediaId == song.id) setVideoMode(false)
         }
         // Every new song starts as the song; the track that just finished goes back to audio too,
-        // so returning to it doesn't land in its video.
+        // so returning to it doesn't land in its video (#455: and Previous still reaches it, shuffled).
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK || !c.settings.current.showVideoSwitch) {
             for (i in 0 until player.mediaItemCount) {
                 if (i == player.currentMediaItemIndex) continue
                 val other = player.getMediaItemAt(i)
-                if (other.videoModeId != null) other.toSong()?.let { player.replaceMediaItem(i, it.toMediaItem(null)) }
+                if (other.videoModeId != null) other.toSong()?.let { player.replaceKeepingOrder(i, it.toMediaItem(null)) }
             }
         }
         continueVideo()
@@ -1057,9 +1057,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 return
             }
             // Only once per file: one that can't be told apart (or was already set aside) fails as usual, never loops.
-            val file = c.localLossless.matched[id]?.uri
-            if (file == null || !c.localLossless.unplayable.add(file)) { failAndSkip(error); return }
+            // Set aside, the song is noted, and Stats for nerds says on it why the stream plays (1.8.4.1).
+            if (!c.localLossless.setAside(id)) { failAndSkip(error); return }
             AudioDiagnostics.log("error", "$id's ALAC file won't decode here: its stream plays instead")
+            c.nerdStats.value = c.nerdStats.value.copy(undecodedFile = c.localLossless.streamInstead[id].orEmpty())
             player.seekToDefaultPosition(idx)
             player.prepare()
             player.play()
@@ -1777,7 +1778,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             for (i in 0 until player.mediaItemCount) {
                 if (i == player.currentMediaItemIndex) continue
                 val other = player.getMediaItemAt(i)
-                if (other.videoModeId != null) other.toSong()?.takeIf { videoOffFor(it) }?.let { player.replaceMediaItem(i, it.toMediaItem(null)) }
+                if (other.videoModeId != null) other.toSong()?.takeIf { videoOffFor(it) }?.let { player.replaceKeepingOrder(i, it.toMediaItem(null)) }
             }
         } else armNextVideo()
         c.player.recheckVideo()
@@ -1813,7 +1814,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             if (!keepVideos() || next.mediaId != song.id || next.videoModeId != null || videoOffFor(song)) return@launch
             val nextSong = next.toSong() ?: return@launch
             if (failedVideos.remove(vid)) c.streams.invalidate(vid)
-            player.replaceMediaItem(at, nextSong.toMediaItem(if (nextSong.isLive) nextSong.id else vid))
+            player.replaceKeepingOrder(at, nextSong.toMediaItem(if (nextSong.isLive) nextSong.id else vid))
             if (!nextSong.isLive) prefetchVideo(nextSong, vid)
         }
     }
@@ -1823,7 +1824,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         for (i in 0 until player.mediaItemCount) {
             if (i == player.currentMediaItemIndex) continue
             val other = player.getMediaItemAt(i)
-            if (other.videoModeId != null) other.toSong()?.let { player.replaceMediaItem(i, it.toMediaItem(null)) }
+            if (other.videoModeId != null) other.toSong()?.let { player.replaceKeepingOrder(i, it.toMediaItem(null)) }
         }
     }
 
@@ -2396,6 +2397,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             streamBitrateKbps = s?.bitrate ?: savedKbps.takeIf { it > 0 } ?: c.nerdStats.value.streamBitrateKbps,
             contentLength = s?.contentLength ?: savedBytes,
             client = s?.client ?: "",
+            undecodedFile = c.localLossless.streamInstead[id].orEmpty(),
         )
     }
 

@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">Verbindung zu %1$s verloren</string>
     <string name="listening_with">Hörst mit %1$s</string>
     <string name="this_phone_can_t_play_apple">Dieses Handy kann keine Apple-Lossless-Dateien (ALAC) abspielen</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s-Datei: Dieses Handy kann sie nicht dekodieren, daher läuft stattdessen der Stream</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, deshalb läuft der Ton des Musikvideos</string>
     <string name="playback_failed">Wiedergabe fehlgeschlagen</string>
     <string name="the_live_video_didn_t_load">Das Live-Video wurde nicht geladen, deshalb läuft es als Audio. Tippe auf die Video-Taste, um es noch mal zu versuchen.</string>

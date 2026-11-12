@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">ขาดการเชื่อมต่อกับ %1$s</string>
     <string name="listening_with">กำลังฟังกับ %1$s</string>
     <string name="this_phone_can_t_play_apple">โทรศัพท์เครื่องนี้เล่นไฟล์ Apple Lossless (ALAC) ไม่ได้</string>
+    <string name="file_can_t_be_decoded_stream_plays">ไฟล์ %1$s: โทรศัพท์เครื่องนี้ถอดรหัสไม่ได้ จึงเล่นสตรีมแทน</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s จึงเล่นเสียงจากมิวสิกวิดีโอแทน</string>
     <string name="playback_failed">เล่นไม่สำเร็จ</string>
     <string name="the_live_video_didn_t_load">วิดีโอไลฟ์ไม่โหลด จึงเล่นเป็นเสียงแทน แตะปุ่มวิดีโอเพื่อลองอีกครั้ง</string>

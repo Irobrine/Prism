@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">Потеряно соединение с %1$s</string>
     <string name="listening_with">Слушаешь вместе с %1$s</string>
     <string name="this_phone_can_t_play_apple">Этот телефон не может воспроизводить файлы Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Файл %1$s: этот телефон не может его декодировать, поэтому играет поток</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, поэтому играет звук из клипа</string>
     <string name="playback_failed">Ошибка воспроизведения</string>
     <string name="the_live_video_didn_t_load">Видео трансляции не загрузилось, поэтому играет только звук. Нажми кнопку видео, чтобы попробовать снова.</string>

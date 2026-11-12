@@ -2927,6 +2927,7 @@
     <string name="lost_the_connection_to">החיבור אל %1$s אבד</string>
     <string name="listening_with">מאזין עם %1$s</string>
     <string name="this_phone_can_t_play_apple">הטלפון הזה לא יכול להשמיע קובצי Apple Lossless ‏(ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">קובץ %1$s: הטלפון הזה לא יכול לפענח אותו, ולכן מושמע הזרם במקומו</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, ולכן מתנגן הצליל של הקליפ שלו</string>
     <string name="playback_failed">ההשמעה נכשלה</string>
     <string name="the_live_video_didn_t_load">הווידאו החי לא נטען, ולכן הוא מתנגן כאודיו. הקש על כפתור הסרטון כדי לנסות שוב.</string>
