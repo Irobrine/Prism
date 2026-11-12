@@ -4963,6 +4963,9 @@
     <string name="tour_183_also_songs_from">Bài hát trong Thư viện từ các danh sách bạn chọn</string>
     <string name="tour_183_also_lock">Lặp lại và Tiếp theo trên màn hình khóa</string>
     <string name="tour_183_also_uploads">Tải lên và xóa trong Nội dung tải lên</string>
+    <string name="show_furigana">Hiện furigana</string>
+    <string name="hiragana_readings_above_kanji">Cách đọc hiragana phía trên kanji trong lời bài hát tiếng Nhật</string>
+    <string name="furigana_uses_the_japanese_reading_data">Dùng dữ liệu đọc tiếng Nhật (tải một lần bên dưới).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Cập nhật</string>
     <string name="about_data_info">Dữ liệu của bạn ở lại đây: Prism không có máy chủ. Lịch sử, Replay và cài đặt của bạn chỉ nằm trên điện thoại này.</string>

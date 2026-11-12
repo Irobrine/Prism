@@ -5035,6 +5035,9 @@
     <string name="tour_183_also_songs_from">Mga kanta sa Library mula sa mga playlist na pinili mo</string>
     <string name="tour_183_also_lock">Ulitin at Susunod sa lock screen</string>
     <string name="tour_183_also_uploads">Mag-upload at magbura sa Mga Upload</string>
+    <string name="show_furigana">Ipakita ang furigana</string>
+    <string name="hiragana_readings_above_kanji">Mga pagbasang hiragana sa itaas ng kanji sa mga lirikong Hapon</string>
+    <string name="furigana_uses_the_japanese_reading_data">Gumagamit ng data ng pagbasa ng Hapon (isang beses lang ida-download sa ibaba).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Mga update</string>
     <string name="about_data_info">Dito lang ang data mo: walang server ang Prism. Ang history, Replay at mga setting mo ay nasa phone na ito lang.</string>

@@ -4963,6 +4963,9 @@
     <string name="tour_183_also_songs_from">Lagu Pustaka daripada senarai main yang anda pilih</string>
     <string name="tour_183_also_lock">Ulang dan Seterusnya pada skrin kunci</string>
     <string name="tour_183_also_uploads">Muat naik dan padam dalam Muat naik</string>
+    <string name="show_furigana">Tunjukkan furigana</string>
+    <string name="hiragana_readings_above_kanji">Bacaan hiragana di atas kanji dalam lirik Jepun</string>
+    <string name="furigana_uses_the_japanese_reading_data">Menggunakan data bacaan Jepun (dimuat turun sekali di bawah).</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">Kemas kini</string>
     <string name="about_data_info">Data anda kekal di sini: Prism tiada pelayan. Sejarah, Replay dan tetapan anda hanya ada pada telefon ini.</string>

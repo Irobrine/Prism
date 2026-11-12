@@ -5035,6 +5035,9 @@
     <string name="tour_183_also_songs_from">लाइब्रेरी के गाने, आपकी चुनी प्लेलिस्ट से</string>
     <string name="tour_183_also_lock">लॉक स्क्रीन पर दोहराएँ और आगे</string>
     <string name="tour_183_also_uploads">अपलोड में अपलोड करें और हटाएँ</string>
+    <string name="show_furigana">फुरिगाना दिखाएँ</string>
+    <string name="hiragana_readings_above_kanji">जापानी बोलों में कांजी के ऊपर हिरागाना पठन</string>
+    <string name="furigana_uses_the_japanese_reading_data">जापानी पठन डेटा का उपयोग करता है (नीचे एक बार डाउनलोड होता है)।</string>
     <!-- 1.8.4 Settings -->
     <string name="about_updates">अपडेट</string>
     <string name="about_data_info">आपका डेटा यहीं रहता है: Prism का कोई सर्वर नहीं है। आपका इतिहास, Replay और सेटिंग सिर्फ़ इसी फ़ोन पर रहते हैं।</string>
