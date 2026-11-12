@@ -807,6 +807,11 @@ fun PlaylistPicker(song: Song, onDismiss: () -> Unit) = PlaylistPicker(listOf(so
 /**
  * Adds [songs] (a song, or a whole album or playlist: Reddit R8) to one of the listener's playlists, or to a new one.
  * [what] names them under the sheet's title.
+ *
+ * Nothing is added or taken out until Done (the back button is Done too). A tap only moves a playlist above New
+ * playlist when the songs will be in it, or back below when they won't; Done does what the taps planned, and Cancel
+ * leaves it all as it was. One already holding them all starts above: tapping it takes them out. One holding some is
+ * added to without doubling what's there. A new playlist is made straight away (it shows above), its songs go in on Done.
  */
 @Composable
 fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
@@ -816,25 +821,48 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     // A file on the phone can only go in a Prism playlist (YouTube Music has no copy of it).
     val signedIn = c.settings.current.isLoggedIn && songs.none { it.isLocal }
     val ids = songs.map { it.id }
+    val total = ids.distinct().size
     val many = songs.size > 1
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var creating by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    // What Done will do: add the songs to these playlists, or take them out of these (ones that have them all).
+    var adding by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var removing by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Playlists made from here (id to name): they show above straight away; their songs go in on Done.
+    var made by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    // Cancel does nothing; Done (or the back button, a swipe down) does what the taps planned.
+    var cancelled by remember { mutableStateOf(false) }
+    var committed by remember { mutableStateOf(false) }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+    // Only what YouTube says went in is called added (Reddit, 1.7.9: "Added" for songs that never got there).
+    fun addToYouTube(id: String, title: String) {
+        c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            val result = runCatching { c.ytm.addSongsToPlaylist(id, ids) }.getOrNull()
+            toast(addedMessage(result, title, many))
+            // #246: the next time the sheet opens it says they're in, though the kept copy predates them.
+            result?.takeIf { it.added + it.alreadyThere > 0 }?.let { com.prism.music.data.PlaylistMembership.noteAdded(id, ids) }
+            if ((result?.added ?: 0) > 0) c.library.playlistChanged(id)
+        }
+    }
     if (creating) {
-        NewPlaylistDialog(onDismiss = { creating = false; onDismiss() }, local = !signedIn) { name, privacy ->
+        NewPlaylistDialog(onDismiss = { creating = false }, local = !signedIn) { name, privacy ->
             creating = false
-            onDismiss()
-            if (!signedIn) { c.prismLibrary.create(name, songs); toast(tr(R.string.added_to, name)); return@NewPlaylistDialog }
+            if (!signedIn) {
+                // Made now, empty: its songs go in on Done, like a playlist picked here.
+                val id = c.prismLibrary.create(name)
+                made = made + (id to name)
+                adding = adding + id
+                return@NewPlaylistDialog
+            }
             c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                // A long list (Liked songs, a big playlist) goes in 50 at a time after the first: one request with
-                // thousands of songs could be refused.
-                val id = runCatching {
-                    c.ytm.createPlaylist(name, ids.take(50), privacy = privacy)?.also { if (ids.size > 50) runCatching { c.ytm.addAllToPlaylist(it, ids.drop(50)) } }
-                }.getOrNull()
-                toast(if (id != null) tr(R.string.added_to, name) else tr(R.string.couldn_t_make_the_playlist))
-                if (id != null) c.library.created(id, name, ids.size)
+                val id = runCatching { c.ytm.createPlaylist(name, emptyList(), privacy = privacy) }.getOrNull()
+                if (id == null) { toast(tr(R.string.couldn_t_make_the_playlist)); return@launch }
+                val key = id.removePrefix("VL")
+                c.library.created(key, name, 0)
+                made = made + (key to name)
+                // Done may have come while it was being made: then the songs go in now (Cancel leaves it empty).
+                if (committed && !cancelled) addToYouTube(key, name) else adding = adding + key
             }
         }
         return
@@ -842,67 +870,136 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     // A smart playlist (1.8.3) takes what its rules find, nothing added by hand.
     val mine = prismLists.filter { it.smart == null }.map { it.item() } +
         (if (signedIn) playlists.filterIsInstance<PlaylistItem>().filter { !it.id.startsWith("LM") && !it.isMix } else emptyList())
-    val shown = if (query.isBlank()) mine else mine.filter { it.title.contains(query.trim(), ignoreCase = true) }
     // #246 (1.8.1): the playlists that already have it, from what's on the phone (Prism playlists, the kept copies of
-    // playlists opened before, what was added since): nothing is asked from YouTube for the marks.
-    val holds by androidx.compose.runtime.produceState(emptyMap<String, Int>(), mine.map { it.id }, prismLists, ids) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    // playlists opened before, what was added since): nothing is asked from YouTube for the marks. Kept as it was while
+    // it's worked out again (a playlist made here), so the ones above don't drop down and back.
+    var holds by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    LaunchedEffect(mine.map { it.id }, prismLists, ids) {
+        holds = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val prism = prismLists.associate { l -> l.id to l.songs.map { it.id } }
             val known = com.prism.music.data.PlaylistMembership.known(mine, prism) { id -> c.offline.page(id)?.songs?.map { it.id } }
             com.prism.music.data.PlaylistMembership.counts(ids, known)
         }
     }
-    PrismSheet(onDismiss = onDismiss) { close ->
+    // Above New playlist when the songs will be in it: one that has them all and wasn't tapped off, or one tapped to
+    // add them to (a new one included).
+    fun full(p: PlaylistItem) = total > 0 && (holds[p.id] ?: 0) >= total
+    fun chosen(p: PlaylistItem) = p.id in adding || (p.id !in removing && full(p))
+    // What a tap plans: adding the ones not there, or taking out the ones there (one that has them all).
+    fun toggle(p: PlaylistItem) {
+        when {
+            p.id in adding -> adding = adding - p.id
+            p.id in removing -> removing = removing - p.id
+            full(p) -> removing = removing + p.id
+            else -> adding = adding + p.id
+        }
+    }
+    val above = mine.filter { chosen(it) }
+    val below = mine.filterNot { chosen(it) }.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
+    // Only Done does anything (the back button does Done too); Cancel leaves it all as it was.
+    fun commit() {
+        if (committed) return
+        committed = true
+        val titles = made.toMap() + mine.associate { it.id to it.title }
+        adding.forEach { id ->
+            val title = titles[id] ?: return@forEach
+            if (com.prism.music.data.PrismLibrary.isPrismList(id)) {
+                val added = c.prismLibrary.add(id, songs)
+                toast(
+                    when {
+                        added == 0 -> tr(R.string.already_in, title)
+                        many || added > 1 -> tr(R.string.added_to_2, com.prism.music.data.model.songCount(added), title)
+                        else -> tr(R.string.added_to, title)
+                    },
+                )
+                return@forEach
+            }
+            addToYouTube(id, title)
+        }
+        removing.forEach { id ->
+            val title = titles[id] ?: return@forEach
+            if (com.prism.music.data.PrismLibrary.isPrismList(id)) {
+                ids.forEach { c.prismLibrary.remove(id, it) }
+                toast(tr(R.string.removed_from, title))
+                return@forEach
+            }
+            c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                val slots = runCatching { c.ytm.playlistSlots(id) }.getOrNull()
+                val items = slots?.let { s -> ids.mapNotNull { vid -> s[vid]?.let { vid to it } } }
+                if (items.isNullOrEmpty()) {
+                    toast(tr(R.string.couldn_t_remove_it, tr(R.string.try_again_in_a_moment)))
+                    return@launch
+                }
+                runCatching { c.ytm.removeAllFromPlaylist(id, items) }
+                    .onSuccess {
+                        com.prism.music.data.PlaylistMembership.noteRemoved(id, ids)
+                        c.library.playlistChanged(id)
+                        toast(tr(R.string.removed_from, title))
+                    }
+                    .onFailure { toast(tr(R.string.couldn_t_remove_it, tr(R.string.try_again_in_a_moment))) }
+            }
+        }
+    }
+    PrismSheet(
+        onDismiss = {
+            if (!cancelled) commit()
+            onDismiss()
+        },
+    ) { close ->
         Column(Modifier.padding(bottom = 20.dp).testTag("playlistPicker")) {
-            Text(tr(R.string.add_to_playlist), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 20.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                PrismTextButton(onClick = { cancelled = true; close {} }) { Text(tr(R.string.cancel)) }
+                Text(
+                    tr(R.string.add_to_playlist), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                PrismTextButton(onClick = { commit(); close {} }) { Text(tr(R.string.done)) }
+            }
             Text(
                 if (many) "$what · ${com.prism.music.data.model.songCount(songs.size)}" else what,
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 20.dp),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
-            Spacer(Modifier.height(10.dp))
-            SheetAction(PrismIcons.Add, tr(R.string.new_playlist)) { creating = true }
-            if (mine.size > 8) SearchField(query, tr(R.string.find_a_playlist), { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-            if (mine.isEmpty()) Text(
-                if (signedIn) tr(R.string.your_playlists_show_up_here_once) else tr(R.string.make_your_first_playlist_it_s), style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp),
-            )
+            Spacer(Modifier.height(6.dp))
+            // One list, so a playlist picked moves above New playlist with an animation (and back down when unpicked).
             // #401: a fast fling's leftover at the list's end stays with the list (it pushed the sheet past its top).
             androidx.compose.foundation.lazy.LazyColumn(
                 Modifier.heightIn(max = 440.dp).nestedScroll(KeepUpwardScroll).testTag("playlistPickerList"),
             ) {
-                items(shown, key = { it.id }) { p ->
+                items(above, key = { it.id }) { p ->
                     val has = holds[p.id] ?: 0
                     // #246: says when it's in there already (or how many of several are).
                     val line = when {
                         has == 0 -> p.subtitle.removePrefix("Playlist • ").takeIf { it.isNotBlank() }
-                        !many -> tr(R.string.already_has_this_song)
-                        has >= ids.distinct().size -> tr(R.string.already_has_all_of_these)
-                        else -> tr(R.string.already_has_n_of_these, has, ids.distinct().size)
+                        has >= total -> if (many) tr(R.string.already_has_all_of_these) else tr(R.string.already_has_this_song)
+                        else -> tr(R.string.already_has_n_of_these, has, total)
                     }
-                    PickerRow(c.covers.art(p), p.title, line, has > 0, if (has > 0) tr(R.string.already_in, p.title) else null, p.id) {
-                        close {
-                            if (com.prism.music.data.PrismLibrary.isPrismList(p.id)) {
-                                val added = c.prismLibrary.add(p.id, songs)
-                                toast(
-                                    when {
-                                        added == 0 -> tr(R.string.already_in, p.title)
-                                        many -> tr(R.string.added_to_2, com.prism.music.data.model.songCount(added), p.title)
-                                        else -> tr(R.string.added_to, p.title)
-                                    },
-                                )
-                                return@close
-                            }
-                            c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                                // Only what YouTube says went in is called added (Reddit, 1.7.9: "Added" for songs
-                                // that never got there).
-                                val result = runCatching { c.ytm.addSongsToPlaylist(p.id, ids) }
-                                toast(addedMessage(result.getOrNull(), p.title, many))
-                                // #246: the next time the sheet opens it says they're in, though the kept copy predates them.
-                                result.getOrNull()?.takeIf { it.added + it.alreadyThere > 0 }?.let { com.prism.music.data.PlaylistMembership.noteAdded(p.id, ids) }
-                                if ((result.getOrNull()?.added ?: 0) > 0) c.library.playlistChanged(p.id)
-                            }
-                        }
+                    Box(Modifier.animateItem()) {
+                        PickerRow(c.covers.art(p), p.title, line, has > 0, if (has >= total) tr(R.string.already_in, p.title) else tr(R.string.add_to_playlist), p.id) { toggle(p) }
                     }
+                }
+                item("new") { SheetAction(PrismIcons.Add, tr(R.string.new_playlist)) { creating = true } }
+                if (mine.size > 8) item("find") {
+                    SearchField(query, tr(R.string.find_a_playlist), { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+                }
+                items(below, key = { it.id }) { p ->
+                    val has = holds[p.id] ?: 0
+                    val inIt = has >= total && total > 0
+                    // A playlist that has them all but was tapped off shows its own line until Done takes them out.
+                    val line = when {
+                        inIt || has == 0 -> p.subtitle.removePrefix("Playlist • ").takeIf { it.isNotBlank() }
+                        many -> tr(R.string.already_has_n_of_these, has, total)
+                        else -> tr(R.string.already_has_this_song)
+                    }
+                    Box(Modifier.animateItem()) {
+                        PickerRow(c.covers.art(p), p.title, line, has > 0 && !inIt, null, p.id) { toggle(p) }
+                    }
+                }
+                if (mine.isEmpty()) item("empty") {
+                    Text(
+                        if (signedIn) tr(R.string.your_playlists_show_up_here_once) else tr(R.string.make_your_first_playlist_it_s), style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp),
+                    )
                 }
             }
         }
@@ -911,7 +1008,8 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
 
 /**
  * One playlist in [PlaylistPicker]: its cover, its name, [line] under it (null: none; [strong] when it says the songs are
- * in there), and a ✓ described as [mark] (tagged with the playlist's [id]) when they are.
+ * in there), and on the right a ✓ described as [mark] (tagged with the playlist's [id]) when they are (or will be, on
+ * Done), else a + in a circle: a tap anywhere on the row picks it or unpicks it.
  */
 @Composable
 internal fun PickerRow(art: String?, title: String, line: String?, strong: Boolean, mark: String?, id: String, onClick: () -> Unit) {
@@ -935,6 +1033,9 @@ internal fun PickerRow(art: String?, title: String, line: String?, strong: Boole
         if (mark != null) Icon(
             PrismIcons.Check, mark,
             Modifier.padding(start = 8.dp).size(20.dp).testTag("inPlaylist:$id"), tint = MaterialTheme.colorScheme.onSurface,
+        ) else Icon(
+            PrismIcons.AddCircle, null,
+            Modifier.padding(start = 8.dp).size(22.dp).testTag("notInPlaylist:$id"), tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

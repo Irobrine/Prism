@@ -276,6 +276,7 @@ object PrismIcons {
     val Logout = drawn("Logout")
     val Check = drawn("Check")
     val CheckCircle = drawn("CheckCircle")
+    val AddCircle = drawn("AddCircle")
     val DoneAll = drawn("DoneAll")
     val Close = drawn("Close")
     val Add = drawn("Add")
