@@ -2,6 +2,7 @@ package com.prism.music.ui.components
 
 import com.prism.music.R
 import com.prism.music.tr
+import com.prism.music.trp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,11 +39,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * What a cover is picked for (#305): a song, or an album (whose songs show it too). [original] is its own picture.
+ * What a cover is picked for (#305): a song, an album (whose songs show it too), or several songs at once (Select many,
+ * each keeping its own cover). [original] is its own picture.
  */
 sealed class CoverFor(val key: String, val title: String, val original: String?) {
+    /** Every cover this one change makes (a whole album's is one; several songs are one each). */
+    open val keys: List<String> get() = listOf(key)
     class OfSong(val song: Song, key: String) : CoverFor(key, song.title, song.thumbnail)
     class OfAlbum(val id: String, title: String, thumbnail: String?, key: String) : CoverFor(key, title, thumbnail)
+    /** [songs], with each one's cover [keys] (episodes and live songs are left out by the caller). */
+    class OfSongs(val songs: List<Song>, val songKeys: List<String>) :
+        CoverFor(songKeys.firstOrNull().orEmpty(), trp(R.plurals.n_songs, songs.size), songs.firstOrNull()?.thumbnail) {
+        override val keys: List<String> get() = songKeys
+    }
 }
 
 /** The covers of [song]'s other recordings with the same title, as YouTube lists them: square album covers, no repeats. */
@@ -67,26 +76,38 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
     val c = LocalContainer.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val own = c.covers.custom(target.key)
+    val many = target.keys.size > 1
+    val own = if (many) null else c.covers.custom(target.key)
+    val anyOwn = if (many) target.keys.any { c.covers.custom(it) != null } else own != null
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     fun refresh() {
         when (target) {
             is CoverFor.OfSong -> c.player.refreshCovers { it.id == target.song.id }
             is CoverFor.OfAlbum -> c.player.refreshCovers { it.album?.id == target.id }
+            is CoverFor.OfSongs -> {
+                val ids = target.songs.map { it.id }.toSet()
+                c.player.refreshCovers { it.id in ids }
+            }
         }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val ok = c.covers.usePhoto(target.key, uri)
+            val ok = c.covers.usePhoto(target.keys, uri)
             if (ok) refresh()
             toast(if (ok) tr(R.string.cover_changed) else tr(R.string.couldn_t_use_that_picture))
             onDismiss()
         }
     }
-    // Other recordings' covers, for a song (a lyric video's or a fan upload's picture swapped for the album's).
-    val others by produceState<List<String>?>(null, target.key) {
-        val song = (target as? CoverFor.OfSong)?.song?.takeIf { !it.isLocal && !it.isEpisode } ?: run { value = emptyList(); return@produceState }
+    // Other recordings' covers, for a song (a lyric video's or a fan upload's picture swapped for the album's). Several
+    // songs at once have no one set of versions: only a photo, or back to each one's own.
+    val otherFrom = when (target) {
+        is CoverFor.OfSong -> target.song
+        is CoverFor.OfSongs -> target.songs.singleOrNull()
+        is CoverFor.OfAlbum -> null
+    }?.takeIf { !it.isLocal && !it.isEpisode }
+    val others by produceState<List<String>?>(null, target.key, otherFrom?.id) {
+        val song = otherFrom ?: run { value = emptyList(); return@produceState }
         value = withContext(Dispatchers.IO) {
             runCatching {
                 val found = c.ytm.search("${song.title} ${song.primaryArtist}".trim(), SearchFilter.SONGS).items.filterIsInstance<SongItem>().map { it.song }
@@ -98,7 +119,7 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(bottom = 20.dp).navigationBarsPadding()) {
             Text(tr(R.string.change_cover), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp))
             Text(target.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp), maxLines = 1)
-            Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!many) Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column {
                     Artwork(target.original, Modifier.size(72.dp), LocalUi.current.smallArt, size = 226)
                     Text(tr(R.string.its_own_cover), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -112,7 +133,7 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
             val list = others
-            if (target is CoverFor.OfSong && list == null) PrismSpinner(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).size(20.dp), stroke = 2.dp)
+            if (otherFrom != null && list == null) PrismSpinner(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).size(20.dp), stroke = 2.dp)
             if (!list.isNullOrEmpty()) {
                 Text(
                     tr(R.string.covers_of_other_versions), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -125,7 +146,7 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
                             Modifier.size(84.dp).testTag("otherCover").then(
                                 if (url == own) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, LocalUi.current.smallArt) else Modifier
                             ).clickable {
-                                c.covers.useImage(target.key, url)
+                                target.keys.forEach { c.covers.useImage(it, url) }
                                 refresh()
                                 toast(tr(R.string.cover_changed))
                                 close {}
@@ -135,8 +156,8 @@ fun CoverPickSheet(target: CoverFor, onDismiss: () -> Unit) {
                     }
                 }
             }
-            if (own != null) SheetAction(PrismIcons.Undo, tr(R.string.use_the_original)) {
-                c.covers.reset(target.key)
+            if (anyOwn) SheetAction(PrismIcons.Undo, tr(R.string.use_the_original)) {
+                target.keys.forEach { c.covers.reset(it) }
                 refresh()
                 toast(tr(R.string.its_own_cover_again))
                 close {}

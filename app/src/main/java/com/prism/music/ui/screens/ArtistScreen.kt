@@ -331,9 +331,19 @@ private fun ArtistContent(opened: ArtistOpened, bottomPadding: Dp) {
     val ownColors by c.artistPrefs.colors.collectAsState()
     val ownColor = ownColors[page.id]?.let { Color(it) }
 
+    // Select many: the songs this page shows — their top songs, essentials, and the first six of each song shelf under them.
+    val pageSongs = remember(topSongs, essentials, phoneReady, sections.others, offline, reachable) {
+        val shelves = sections.others
+            .map { s -> if (!offline) s else s.copy(items = s.items.filter { it.id in reachable }) }
+            .filter { s -> s.items.isNotEmpty() && s.items.all { it is SongItem } && s.items.none { (it as SongItem).song.isVideo } }
+            .flatMap { s -> s.items.filterIsInstance<SongItem>().map { it.song }.take(6) }
+        (topSongs + essentials + phoneReady + shelves).distinctBy { it.id }
+    }
+
     ArtworkAccent(palette, override = ownColor) {
         Box(Modifier.fillMaxSize().onSizeChanged { with(density) { pageHeight = it.height.toDp(); pageWidth = it.width.toDp() } }) {
             FrostedBackdrop(frost, palette, heroHeight, heroScroll, bleed = true)
+            com.prism.music.ui.components.SelectableSongs(pageSongs) {
             LazyColumn(state = list, contentPadding = PaddingValues(bottom = bottomPadding + 32.dp)) {
                 item("hero") {
                     Hero(
@@ -397,6 +407,7 @@ private fun ArtistContent(opened: ArtistOpened, bottomPadding: Dp) {
                 sections.similar?.let { s -> item("similar") { AppleHeader(tr(R.string.similar_artists), more(s)); CardRow(s.items, 128.dp, round = true, open = open, dim = dimmed) } }
                 bio?.let { b -> item("bio") { ArtistBioPanel(b) } }
                 item("about") { AboutCard(page, genre) { showInfo = true } }
+            }
             }
 
             // Content melts away under the bar into the page's own frost.
@@ -682,16 +693,18 @@ private fun TopSongsGrid(songs: List<Song>, title: String, ready: Set<String>? =
                     val index = col * 4 + i
                     // Offline: only what's on the phone plays, and only that goes in the queue; the rest is dimmed.
                     val out = ready != null && s.id !in ready
+                    val play: () -> Unit = {
+                        if (ready == null) c.player.playQueue(songs, index, QueueSource(QueueKind.OTHER, title))
+                        else if (out) android.widget.Toast.makeText(context, tr(R.string.you_re_offline_and_this_song), android.widget.Toast.LENGTH_SHORT).show()
+                        else songs.filter { it.id in ready }.let { q -> c.player.playQueue(q, q.indexOfFirst { it.id == s.id }.coerceAtLeast(0), QueueSource(QueueKind.OTHER, title)) }
+                    }
+                    // Select many: held, a top song picks (the page takes part); elsewhere it offers the menu as before.
+                    val pick = com.prism.music.ui.components.rememberSongPick(s, play)
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).then(if (out) Modifier.alpha(0.4f) else Modifier)
                             .combinedClickable(
-                                onClick = {
-                                    if (ready == null) c.player.playQueue(songs, index, QueueSource(QueueKind.OTHER, title))
-                                    else if (out) android.widget.Toast.makeText(context, tr(R.string.you_re_offline_and_this_song), android.widget.Toast.LENGTH_SHORT).show()
-                                    else songs.filter { it.id in ready }.let { q -> c.player.playQueue(q, q.indexOfFirst { it.id == s.id }.coerceAtLeast(0), QueueSource(QueueKind.OTHER, title)) }
-                                },
-                                // Held, a top song offers the same menu as a song anywhere else.
-                                onLongClick = { menuFor = s },
+                                onClick = { if (pick != null) pick.tap() else play() },
+                                onLongClick = { if (pick != null) pick.hold() else menuFor = s },
                             )
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -708,7 +721,8 @@ private fun TopSongsGrid(songs: List<Song>, title: String, ready: Set<String>? =
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(onClick = { menuFor = s }, Modifier.size(36.dp)) {
+                        if (pick?.picked != null) com.prism.music.ui.components.SongPickMark(pick.picked, Modifier.size(36.dp))
+                        else IconButton(onClick = { menuFor = s }, Modifier.size(36.dp)) {
                             Icon(PrismIcons.More, tr(R.string.more), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -986,7 +1000,16 @@ fun BrowseScreen(id: String, params: String?, title: String, bottomPadding: Dp) 
     }
     val onSong: (SongItem) -> Unit = { c.player.playSingle(it.song) }
     var sort by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ReleaseSort.NEWEST) }
-    com.prism.music.ui.components.SubPage(title.ifBlank { tr(R.string.browse) }, bottomPadding) {
+    // Select many: the song rows this page draws (a shelf of songs, up to its six, or all of it when it's the page).
+    val shelves = (load.state as? Load.Ok)?.value.orEmpty()
+    val pickSongs = remember(shelves) {
+        val whole = shelves.size == 1
+        shelves
+            .filter { s -> s.items.isNotEmpty() && s.items.all { it is SongItem } && s.items.none { (it as SongItem).song.isVideo } }
+            .flatMap { s -> s.items.filterIsInstance<SongItem>().map { it.song }.let { if (whole) it else it.take(6) } }
+            .distinctBy { it.id }
+    }
+    com.prism.music.ui.components.SubPage(title.ifBlank { tr(R.string.browse) }, bottomPadding, selectableSongs = pickSongs) {
         when (val s = load.state) {
             Load.Loading -> item { LoadingState() }
             is Load.Err -> item { ErrorState(s.message) { load.reload(false) } }

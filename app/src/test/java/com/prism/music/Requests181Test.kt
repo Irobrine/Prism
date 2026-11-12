@@ -257,6 +257,24 @@ class Requests181Test {
         covers.reset(covers.songKey("c"))
     }
 
+    @Test fun aCoverPickedForSeveralSongsIsSharedUntilTheLastGoes() {
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        app.getSharedPreferences("playlist_covers", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        val covers = com.prism.music.data.PlaylistCovers(app)
+        val file = java.io.File(covers.dir, "several-songs.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        val url = android.net.Uri.fromFile(file).toString()
+        covers.useImage(covers.songKey("a"), url)
+        covers.useImage(covers.songKey("b"), url)
+        covers.reset(covers.songKey("a"))
+        assertTrue("the other song still shows it", file.exists())
+        assertEquals(url, covers.custom(covers.songKey("b")))
+        covers.reset(covers.songKey("b"))
+        assertTrue("the last one going takes the file", !file.exists())
+    }
+
     @Test fun pickedCoversGoInBackupsWithTheLibrary() {
         assertEquals(com.prism.music.data.BackupPart.LIBRARY, com.prism.music.data.Backup.prefsPart("playlist_covers"))
         assertEquals(com.prism.music.data.BackupPart.LIBRARY, com.prism.music.data.Backup.filePart("covers"))

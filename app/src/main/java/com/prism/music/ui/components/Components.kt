@@ -321,10 +321,18 @@ fun SongRowLayout(
             color = pageMark ?: Color.White, spectrum = pageMark == null,
         )
         if (pick == null) IconButton(onClick = onMore) { Icon(PrismIcons.More, tr(R.string.more), Modifier.size(20.dp), tint = scheme.ink3) }
-        else Box(Modifier.size(48.dp).testTag("pick"), contentAlignment = Alignment.Center) {
-            if (pick) Icon(PrismIcons.CheckCircle, tr(R.string.picked), Modifier.size(22.dp), tint = scheme.onSurface)
-            else Box(Modifier.size(20.dp).border(1.5.dp, scheme.ink3, androidx.compose.foundation.shape.CircleShape))
-        }
+        else SongPickMark(pick)
+    }
+}
+
+/** Select many's mark where a row's ⋯ is: a check when picked, an empty circle when not (and [picked] null when not picking). */
+@Composable
+fun SongPickMark(picked: Boolean?, modifier: Modifier = Modifier) {
+    if (picked == null) return
+    val scheme = MaterialTheme.colorScheme
+    Box(modifier.size(48.dp).testTag("pick"), contentAlignment = Alignment.Center) {
+        if (picked) Icon(PrismIcons.CheckCircle, tr(R.string.picked), Modifier.size(22.dp), tint = scheme.onSurface)
+        else Box(Modifier.size(20.dp).border(1.5.dp, scheme.ink3, CircleShape))
     }
 }
 
