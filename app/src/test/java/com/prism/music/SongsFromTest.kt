@@ -1,9 +1,14 @@
 package com.prism.music
 
+import com.prism.music.data.PlaylistRead
 import com.prism.music.data.PlaylistSongs
 import com.prism.music.data.SongsFrom
+import com.prism.music.data.innertube.YouTubeMusic
 import com.prism.music.data.model.ArtistRef
+import com.prism.music.data.model.CollectionKind
+import com.prism.music.data.model.CollectionPage
 import com.prism.music.data.model.Song
+import com.prism.music.data.readPlaylist
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -41,7 +46,7 @@ class SongsFromTest {
 
     @Test fun aPlaylistIsReadOnceUntilRefreshed() = runBlocking {
         var reads = 0
-        val lists = PlaylistSongs { id -> reads++; if (id == "bad") error("offline") else listOf(s("$id-1")) }
+        val lists = PlaylistSongs { id -> reads++; if (id == "bad") error("offline") else PlaylistRead(listOf(s("$id-1")), complete = true) }
         assertEquals("x-1", lists.songs("x")!!.single().id)
         lists.songs("x")
         assertEquals(1, reads)
@@ -50,4 +55,79 @@ class SongsFromTest {
         assertEquals(2, reads)
         assertNull("a playlist that won't load shows nothing, no crash", lists.songs("bad"))
     }
+
+    @Test fun aReadThatStoppedShortIsReadAgainNextTime() = runBlocking {
+        var reads = 0
+        val lists = PlaylistSongs { id ->
+            reads++
+            if (reads == 1) PlaylistRead(listOf(s("$id-1")), complete = false)
+            else PlaylistRead(listOf(s("$id-1"), s("$id-2"), s("$id-3")), complete = true)
+        }
+        assertEquals("the page that came shows meanwhile", listOf("x-1"), lists.songs("x")!!.map { it.id })
+        assertFalse("but it isn't kept as the whole playlist", lists.isComplete("x"))
+        assertEquals("the rest comes next time", listOf("x-1", "x-2", "x-3"), lists.songs("x")!!.map { it.id })
+        assertTrue(lists.isComplete("x"))
+        lists.songs("x")
+        assertEquals("then it's kept whole", 2, reads)
+    }
+
+    @Test fun everyPageOfAPlaylistIsRead() = runBlocking {
+        val first = page(listOf("a", "b"), continuation = "next")
+        val read = readPlaylist(first, page = { token ->
+            assertEquals("next", token)
+            YouTubeMusic.PlaylistChunk(listOf(s("c"), s("d")), next = null, setVideoIds = emptyMap())
+        }, retryMs = 0)
+        assertEquals(listOf("a", "b", "c", "d"), read.songs.map { it.id })
+        assertTrue(read.complete)
+    }
+
+    @Test fun aPageThatFailsIsAskedAgain() = runBlocking {
+        var tries = 0
+        val read = readPlaylist(page(listOf("a"), continuation = "next"), page = {
+            if (++tries < 3) throw java.io.IOException("busy")
+            YouTubeMusic.PlaylistChunk(listOf(s("b")), next = null, setVideoIds = emptyMap())
+        }, retryMs = 0)
+        assertEquals("a page lost once doesn't leave the rest out", listOf("a", "b"), read.songs.map { it.id })
+        assertTrue(read.complete)
+        assertEquals(3, tries)
+    }
+
+    @Test fun aPageThatNeverComesLeavesTheReadShortAndUnkept() = runBlocking {
+        val read = readPlaylist(page(listOf("a"), continuation = "next"), page = { throw java.io.IOException("offline") }, retryMs = 0)
+        assertEquals(listOf("a"), read.songs.map { it.id })
+        assertFalse("shown, but not as the whole playlist", read.complete)
+    }
+
+    @Test fun leavingTheScreenDoesNotLeaveAShortListKept() = runBlocking {
+        var reads = 0
+        val lists = PlaylistSongs { id ->
+            reads++
+            // The first read is cancelled midway (the screen was left): it mustn't be kept as if it were whole.
+            if (reads == 1) throw kotlinx.coroutines.CancellationException("the screen was left")
+            PlaylistRead(listOf(s("$id-1"), s("$id-2")), complete = true)
+        }
+        try {
+            lists.songs("x")
+            throw AssertionError("the read should have been cancelled")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+        }
+        assertEquals("the cancelled read kept nothing", listOf("x-1", "x-2"), lists.songs("x")!!.map { it.id })
+        assertEquals(2, reads)
+    }
+
+    @Test fun leavingTheScreenStopsTheRead() = runBlocking {
+        try {
+            readPlaylist(page(listOf("a"), continuation = "next"), page = {
+                throw kotlinx.coroutines.CancellationException("the screen was left")
+            }, retryMs = 0)
+            throw AssertionError("the read should have been cancelled, not returned short")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // Passed on: the caller keeps nothing, so the next visit reads it all again.
+        }
+    }
+
+    private fun page(songs: List<String>, continuation: String?) = CollectionPage(
+        id = "playlist", kind = CollectionKind.PLAYLIST, title = "Playlist", subtitle = "", thumbnail = null,
+        songs = songs.map(::s), continuation = continuation,
+    )
 }
