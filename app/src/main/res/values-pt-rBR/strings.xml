@@ -2918,6 +2918,7 @@
     <string name="lost_the_connection_to">A conexão com %1$s caiu</string>
     <string name="listening_with">Ouvindo com %1$s</string>
     <string name="this_phone_can_t_play_apple">Este celular não consegue tocar arquivos Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Arquivo %1$s: este celular não consegue decodificá-lo, então toca o stream</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, então o som do videoclipe toca no lugar</string>
     <string name="playback_failed">A reprodução falhou</string>
     <string name="the_live_video_didn_t_load">O vídeo ao vivo não carregou, então está tocando como áudio. Toque no botão de vídeo para tentar de novo.</string>
