@@ -4,6 +4,7 @@ import com.prism.music.data.lyrics.RubySpan
 import com.prism.music.data.lyrics.roman.Cyrillic
 import com.prism.music.data.lyrics.roman.Greek
 import com.prism.music.data.lyrics.roman.Hangul
+import com.prism.music.data.lyrics.roman.JapaneseCounters
 import com.prism.music.data.lyrics.roman.Kana
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -191,6 +192,35 @@ class RomanizeTest {
         // A number in the middle of another one is left alone.
         assertEquals("1,000nin", ja.romanize("1,000人"))
         assertEquals("3.5fun", ja.romanize("3.5分"))
+    }
+
+    @Test
+    fun countersFollowTheNumberBeforeThem() {
+        val ja = com.prism.music.data.lyrics.roman.Japanese.bundled()
+        assertEquals("nijuppun", ja.romanize("20分"))
+        assertEquals("ippun", ja.romanize("1分"))
+        assertEquals("sanbon", ja.romanize("3本"))
+        assertEquals("futari", ja.romanize("2人"))
+        assertEquals("hatachi", ja.romanize("20歳"))
+        assertEquals("shigatsu", ja.romanize("4月"))
+        assertEquals("futsuka", ja.romanize("2日"))
+        assertEquals("nisennijuuyonen", ja.romanize("2024年"))
+        assertEquals("nijuppun", ja.romanize("二十分"))
+    }
+
+    @Test
+    fun counterRunsReadSplitAndFusedTokens() {
+        fun read(text: String, vararg tokens: JapaneseCounters.Token): String {
+            val runs = JapaneseCounters.runs(text, tokens.toList())
+            val out = MutableList(text.length) { text[it].toString() }
+            JapaneseCounters.apply(out, text, runs)
+            return out.joinToString("")
+        }
+        // Sudachi may give a number and its counter as separate words, or as one word.
+        assertEquals("nijuppun", read("20分", JapaneseCounters.Token(0, "20"), JapaneseCounters.Token(2, "分")))
+        assertEquals("nijuppun", read("20分", JapaneseCounters.Token(0, "20分")))
+        assertEquals("futari", read("2人", JapaneseCounters.Token(0, "2"), JapaneseCounters.Token(1, "人")))
+        assertEquals("hatachi", read("二十歳", JapaneseCounters.Token(0, "二十歳")))
     }
 
     @Test
