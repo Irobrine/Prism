@@ -605,8 +605,36 @@ fun PrismSheet(
         }
     }
     ModalBottomSheet(onDismissRequest = finish, sheetState = state, containerColor = containerColor, contentColor = contentColor, dragHandle = dragHandle) {
-        content(close)
+        val keep = remember { KeepFlingsOffSheet() }
+        Column(Modifier.fillMaxWidth().nestedScroll(keep)) { content(close) }
     }
+}
+
+/**
+ * Between a sheet and the lists in it (#401, #147): Material hands the sheet whatever a fling leaves over at a list's
+ * end, and a sheet resting open sprang with that speed although it was already in place (up past its top, or down and
+ * back), while Material gave the next swipe to the moving sheet instead of the list. A leftover reaches the sheet only
+ * when the finger pulled the sheet down in that swipe, so a pull and a flick still close it.
+ */
+internal class KeepFlingsOffSheet : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+    private var pulled = false
+    private var pulledThisFling = false
+
+    override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+        // What a finger's drag leaves over downward moves the sheet (Material's pull to close).
+        if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput && available.y > 0f) pulled = true
+        return androidx.compose.ui.geometry.Offset.Zero
+    }
+
+    override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+        pulledThisFling = pulled
+        pulled = false
+        return androidx.compose.ui.unit.Velocity.Zero
+    }
+
+    override suspend fun onPostFling(consumed: androidx.compose.ui.unit.Velocity, available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity =
+        if (available.y < 0f || (available.y > 0f && !pulledThisFling)) androidx.compose.ui.unit.Velocity(0f, available.y)
+        else androidx.compose.ui.unit.Velocity.Zero
 }
 
 // ---------------------------------------------------------------- Song actions

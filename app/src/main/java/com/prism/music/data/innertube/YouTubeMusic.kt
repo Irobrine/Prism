@@ -89,6 +89,101 @@ class YouTubeMusic(
             fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
             return norm(a).isNotEmpty() && norm(a) == norm(b)
         }
+
+        /**
+         * #383 (1.8.4.1): a film song's soundtrack tag, '(From "Sarrainodu")', names where the song is from, not another
+         * recording: "Private Party (From "Sarrainodu")"'s video is the song "Private Party", and the video "Yeshanagula" is
+         * the song 'Yeshanagula (From "The Paradise") (Telugu)'. Quoted, as the labels write it (the film's name may hold
+         * brackets of its own: 'Dheema (From "Love Insurance Kompany (Telugu)")').
+         */
+        private val FROM_TAG = Regex("""\s*[(\[]\s*from\s+["“”][^"“”]*["“”]\s*[)\]]""", RegexOption.IGNORE_CASE)
+        /** Languages a film song is dubbed into: '(Telugu)' tells the dub apart, so two different ones never match. */
+        private val LANGUAGES = setOf(
+            "telugu", "tamil", "hindi", "malayalam", "kannada", "bengali", "marathi", "punjabi", "gujarati", "odia", "bhojpuri",
+        )
+        private val VARIOUS = setOf("variousartist", "variousartists")
+
+        private fun matchNorm(s: String) = s.lowercase()
+            .replace(FROM_TAG, " ")
+            .replace(SONG_FOR_VIDEO_BRACKETS) { m ->
+                val words = m.value.trim('(', ')', '[', ']', ' ').split(Regex("\\s+"))
+                // "(Official Video)" is the video's; "(Telugu)" / "(Telugu Version)" the dub's language, checked apart.
+                if (words.all { it in VIDEO_WORDS } || (words.any { it in LANGUAGES } && words.all { it in LANGUAGES || it == "version" })) " " else m.value
+            }
+            .replace(Regex("\\b(${VIDEO_WORDS.joinToString("|")})\\b"), " ")
+            .replace(Regex("[^\\p{L}\\p{N}]"), "")
+
+        /** The dub languages a title names in its brackets (its soundtrack tag's included). */
+        private fun languages(title: String): Set<String> =
+            Regex("[(\\[][^)\\]]*[)\\]]").findAll(title.lowercase()).flatMap { Regex("\\p{L}+").findAll(it.value).map { w -> w.value } }
+                .filter { it in LANGUAGES }.toSet()
+
+        /** The song's title and artist as a video's title and channel give them ([songForVideo]). */
+        private fun videoParts(video: Song): Pair<String, String> {
+            // "Artist - Title (Live at …)" videos put the artist in the title.
+            val channel = matchNorm(video.primaryArtist)
+            val head = video.title.substringBefore(" - ", "")
+            val headIsChannel = head.isNotEmpty() && matchNorm(head).let { a -> channel.isBlank() || a.contains(channel) || channel.contains(a) }
+            // A label's or a music channel's upload (#202: 'Meg & Dia - "Monster" Doghouse Records' by BlankTV): the artist
+            // before the dash, the song's name in quotes, the rest the label's.
+            val quoted = if (head.isNotEmpty() && !headIsChannel) QUOTED_TITLE.find(video.title.substringAfter(" - "))?.groupValues?.get(1)?.trim() else null
+            val artistName = if (quoted != null) head.trim() else video.primaryArtist
+            val rawTitle = when {
+                quoted != null -> quoted
+                headIsChannel -> video.title.substringAfter(" - ")
+                else -> video.title
+            }
+            return rawTitle to artistName
+        }
+
+        /** What's searched for a video's song: its title without brackets, and its artist. Null: no title to search with. */
+        internal fun songForVideoQuery(video: Song): String? {
+            val (rawTitle, artistName) = videoParts(video)
+            if (matchNorm(rawTitle).isBlank()) return null
+            return "${rawTitle.replace(FROM_TAG, " ").replace(Regex("\\(.*?\\)|\\[.*?]"), " ").trim()} $artistName".trim()
+        }
+
+        /**
+         * The song among search [results] that [video] is of, or null. Without YouTube's own pairing it must be the same
+         * recording (GitHub #113: a live album's track, "Nos siguen pegando abajo (Pecado mortal)", played as the studio
+         * song from another album). So only the video's own words go ("Official Video", "(Lyric Video)", "HD"), and a film
+         * song's soundtrack and language tags (#383); anything else in brackets, and live or session takes, tell recordings
+         * apart; and the lengths must agree.
+         */
+        internal fun pickSongForVideo(video: Song, results: List<Song>, anyLength: Boolean = false): Song? {
+            val (rawTitle, artistName) = videoParts(video)
+            val title = matchNorm(rawTitle)
+            if (title.isBlank()) return null
+            val artist = matchNorm(artistName)
+            val videoLanguages = languages(video.title)
+            // An artist's own music video often runs longer than the song (an intro, a scene after it: "bad guy", 206 s for a
+            // 194 s song), so it may be up to a minute and a half longer, never much shorter. A live or acoustic take is told apart by
+            // its title, so the lengths only matter beyond that.
+            val ownTake = !MusicVideoMatch.otherTake(video.title)
+            fun lengthFits(s: Song): Boolean {
+                // [anyLength]: only its cover is wanted (Reddit 1.7.9: "Carl Sagan"'s video is a 3:29 edit of the 3:53 song),
+                // never its sound, so another length of the same title by the same artist is the same release.
+                if (anyLength || video.durationSec <= 0 || s.durationSec <= 0) return true
+                val longer = video.durationSec - s.durationSec
+                return if (ownTake) longer in -SONG_FOR_VIDEO_SLACK_SEC..LONGER_VIDEO_SEC else kotlin.math.abs(longer) <= SONG_FOR_VIDEO_SLACK_SEC
+            }
+            fun byArtist(s: Song, a: String) = s.artists.any { x -> matchNorm(x.name).let { it.isNotBlank() && (it.contains(a) || a.contains(it)) } }
+            // Only an exact title counts; a near miss would put the wrong song's lyrics on the video. A Telugu dub isn't the Tamil song.
+            val titled = results.filter { s ->
+                !s.isVideo && matchNorm(s.title) == title && languages(s.title).let { l -> l.isEmpty() || videoLanguages.isEmpty() || l.any { it in videoLanguages } }
+            }
+            val fits = titled.filter { s -> (artist.isBlank() || byArtist(s, artist)) && lengthFits(s) }
+            // #383: a label's upload ("Junglee Music Telugu") of a soundtrack YouTube credits to "Various Artists" names no
+            // singer to compare: it counts only as the one song of that title the search gives, and of a fitting length.
+            val chosen = fits.ifEmpty {
+                titled.singleOrNull()?.takeIf { s -> s.artists.isNotEmpty() && s.artists.all { matchNorm(it.name) in VARIOUS } && lengthFits(s) }?.let(::listOf).orEmpty()
+            }
+            // The one crediting more of the video's artists first (the Telugu dub names its Telugu lyricist), then the nearest length.
+            val credited = video.artists.map { matchNorm(it.name) }.filter { it.isNotBlank() }
+            return chosen.minWithOrNull(
+                compareBy<Song>({ s -> -credited.count { byArtist(s, it) } }, { s -> if (video.durationSec > 0 && s.durationSec > 0) kotlin.math.abs(s.durationSec - video.durationSec) else 0 }),
+            )
+        }
     }
 
     private suspend fun browse(browseId: String, params: String? = null): JsonObject {
@@ -656,50 +751,8 @@ class YouTubeMusic(
             r.counterpartSongs[video.id]?.takeIf { !it.isVideo }?.let { return it }
             r.songs.firstOrNull { !it.isVideo && r.counterparts[it.id] == video.id }?.let { return it }
         }
-        // Without YouTube's own pairing it must be the same recording (GitHub #113: a live album's track,
-        // "Nos siguen pegando abajo (Pecado mortal)", played as the studio song from another album). So only the video's
-        // own words go ("Official Video", "(Lyric Video)", "HD"); anything else in brackets, and live or session takes,
-        // tell recordings apart; and the lengths must agree.
-        fun norm(s: String) = s.lowercase()
-            .replace(SONG_FOR_VIDEO_BRACKETS) { m -> if (m.value.trim('(', ')', '[', ']', ' ').split(Regex("\\s+")).all { it in VIDEO_WORDS }) " " else m.value }
-            .replace(Regex("\\b(${VIDEO_WORDS.joinToString("|")})\\b"), " ")
-            .replace(Regex("[^\\p{L}\\p{N}]"), "")
-        // "Artist - Title (Live at …)" videos put the artist in the title.
-        val channel = norm(video.primaryArtist)
-        val head = video.title.substringBefore(" - ", "")
-        val headIsChannel = head.isNotEmpty() && norm(head).let { a -> channel.isBlank() || a.contains(channel) || channel.contains(a) }
-        // A label's or a music channel's upload (#202: 'Meg & Dia - "Monster" Doghouse Records' by BlankTV): the artist
-        // before the dash, the song's name in quotes, the rest the label's.
-        val quoted = if (head.isNotEmpty() && !headIsChannel) QUOTED_TITLE.find(video.title.substringAfter(" - "))?.groupValues?.get(1)?.trim() else null
-        val artistName = if (quoted != null) head.trim() else video.primaryArtist
-        val artist = norm(artistName)
-        val rawTitle = when {
-            quoted != null -> quoted
-            headIsChannel -> video.title.substringAfter(" - ")
-            else -> video.title
-        }
-        val title = norm(rawTitle)
-        if (title.isBlank()) return null
-        val query = "${rawTitle.replace(Regex("\\(.*?\\)|\\[.*?]"), " ").trim()} $artistName".trim()
-        // An artist's own music video often runs longer than the song (an intro, a scene after it: "bad guy", 206 s for a
-        // 194 s song), so it may be up to a minute and a half longer, never much shorter. A live or acoustic take is told apart by
-        // its title, so the lengths only matter beyond that.
-        val ownTake = !MusicVideoMatch.otherTake(video.title)
-        fun lengthFits(s: Song): Boolean {
-            // [anyLength]: only its cover is wanted (Reddit 1.7.9: "Carl Sagan"'s video is a 3:29 edit of the 3:53 song),
-            // never its sound, so another length of the same title by the same artist is the same release.
-            if (anyLength || video.durationSec <= 0 || s.durationSec <= 0) return true
-            val longer = video.durationSec - s.durationSec
-            return if (ownTake) longer in -SONG_FOR_VIDEO_SLACK_SEC..LONGER_VIDEO_SEC else kotlin.math.abs(longer) <= SONG_FOR_VIDEO_SLACK_SEC
-        }
-        // Only an exact title by the same artist counts; a near miss would put the wrong song's lyrics on the video.
-        return search(query, SearchFilter.SONGS).items.filterIsInstance<SongItem>().map { it.song }
-            .filter { s ->
-                !s.isVideo && norm(s.title) == title &&
-                    (artist.isBlank() || s.artists.any { a -> norm(a.name).let { it.isNotBlank() && (it.contains(artist) || artist.contains(it)) } }) &&
-                    lengthFits(s)
-            }
-            .minByOrNull { s -> if (video.durationSec > 0 && s.durationSec > 0) kotlin.math.abs(s.durationSec - video.durationSec) else 0 }
+        val query = songForVideoQuery(video) ?: return null
+        return pickSongForVideo(video, search(query, SearchFilter.SONGS).items.filterIsInstance<SongItem>().map { it.song }, anyLength)
     }
 
     /**
