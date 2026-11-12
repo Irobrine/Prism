@@ -1,7 +1,10 @@
 package com.prism.music.data
 
 import android.content.SharedPreferences
+import com.prism.music.data.innertube.SearchFilter
+import com.prism.music.data.innertube.TopSearch
 import com.prism.music.data.model.Song
+import com.prism.music.data.model.SongItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -112,25 +115,31 @@ class SongVersions(private val prefs: SharedPreferences) {
             title.replace(BRACKETS, " ").replace(DASH, "").lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
 
         /**
-         * The other recordings of [song] among search [results]: the same title (brackets and tails aside), not the song
-         * itself, one of each; the song's own artist first, slowed / sped-up / karaoke edits last, songs before videos.
-         * At most [max].
+         * The songs and videos a Top search (the app's own Search results) offers, best first: its top card when it is
+         * one, then its Songs and Videos rows in Search's order, each once. Its Live row stays out: a stream on air
+         * isn't a recording to play in a song's place.
          */
-        fun candidates(song: Song, results: List<Song>, max: Int = 12): List<Song> {
-            val want = bare(song.title)
-            if (want.isEmpty()) return emptyList()
-            val mine = song.artists.map { it.name.lowercase() }.filter { it.isNotBlank() }.toSet()
-            fun byArtist(s: Song) = s.artists.any { a -> a.name.lowercase().let { n -> mine.any { it in n || n in it } } }
-            val asked = com.prism.music.data.innertube.SearchRank.norm(song.title)
-            // "sped up//nightcore": slashes would join the words, so they part them first.
-            fun knockoff(s: Song) = com.prism.music.data.innertube.SearchRank.knockoffMarks(s.title.replace(Regex("[/|]+"), " "), asked).isNotEmpty()
-            return results.asSequence()
-                .filter { it.id != song.id && !it.isLive && !it.isEpisode && bare(it.title) == want }
+        fun recordings(top: TopSearch): List<Song> =
+            (listOfNotNull(top.top as? SongItem) +
+                top.sections
+                    .filter { it.first == SearchFilter.SONGS || it.first == SearchFilter.VIDEOS }
+                    .flatMap { (_, items) -> items.filterIsInstance<SongItem>() })
+                .map { it.song }
                 .distinctBy { it.id }
-                .sortedWith(compareBy({ knockoff(it) }, { !byArtist(it) }, { it.isVideo }))
-                .take(max)
-                .toList()
-        }
+
+        /**
+         * [songs] as [filter] offers them: Top results keep songs and videos, Songs only songs, Videos only videos; a
+         * live stream or podcast episode is never a version. One of each.
+         */
+        fun offered(filter: SearchFilter, songs: List<Song>): List<Song> = songs
+            .filter { s ->
+                !s.isLive && !s.isEpisode && when (filter) {
+                    SearchFilter.SONGS -> !s.isVideo
+                    SearchFilter.VIDEOS -> s.isVideo
+                    else -> true
+                }
+            }
+            .distinctBy { it.id }
 
         /** [v] is [song]'s own recording put up again (same album and length): "Another upload" in the list. */
         fun sameRecording(song: Song, v: Song): Boolean =

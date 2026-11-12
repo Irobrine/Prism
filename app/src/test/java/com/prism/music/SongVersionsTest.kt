@@ -4,9 +4,12 @@ import com.prism.music.data.SongVersions
 import com.prism.music.data.shown
 import com.prism.music.playback.toMediaItem
 import com.prism.music.playback.toSong
+import com.prism.music.data.innertube.SearchFilter
+import com.prism.music.data.innertube.TopSearch
 import com.prism.music.data.model.AlbumRef
 import com.prism.music.data.model.ArtistRef
 import com.prism.music.data.model.Song
+import com.prism.music.data.model.SongItem
 import com.prism.music.ui.screens.phoneMatchesForVersions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -25,33 +28,50 @@ class SongVersionsTest {
     private fun song(id: String, title: String, artist: String, video: Boolean = false, album: String? = null) =
         Song(id, title, listOf(ArtistRef(artist)), album?.let { AlbumRef(it) }, 200, isVideo = video)
 
+    /** The versions come from the same Top search Search shows: its best match, then Songs and Videos, but not Live. */
     @Test
-    fun otherRecordingsOfTheSameTitleAreOffered() {
-        val mine = song("a", "Night Drive", "The Band", album = "Roads")
-        val results = listOf(
-            mine,
-            song("b", "Night Drive (Acoustic Guitar Cover)", "Some Guy"),
-            song("c", "Night Drive - Remastered 2011", "The Band", album = "Roads (Deluxe)"),
-            song("d", "Night Drive (Official Video)", "The Band", video = true),
-            song("e", "Night Drives Home", "The Band"),
-            song("c", "Night Drive - Remastered 2011", "The Band", album = "Roads (Deluxe)"),
+    fun topResultsOfferTheSameSongsAndVideosAsSearch() {
+        val topVideo = song("top", "Night Drive (Official Video)", "The Band", video = true)
+        val first = song("s1", "Night Drive", "The Band")
+        val second = song("s2", "Night Drive (Remastered)", "The Band")
+        val video = song("v1", "The Band - Night Drive (Official Video)", "The Band", video = true)
+        val live = song("l1", "Night Drive radio", "The Band", video = true)
+        val found = TopSearch(
+            SongItem(topVideo),
+            listOf(
+                SearchFilter.SONGS to listOf(SongItem(first), SongItem(second), SongItem(first)),
+                SearchFilter.VIDEOS to listOf(SongItem(video), SongItem(topVideo)),
+                SearchFilter.LIVE to listOf(SongItem(live)),
+            ),
         )
-        // Not the song itself, nor another title; one of each; its own artist first, songs before videos.
-        assertEquals(listOf("c", "d", "b"), SongVersions.candidates(mine, results).map { it.id })
+        // The top card first, then the rows in Search's order, each once; the Live row stays out.
+        assertEquals(listOf("top", "s1", "s2", "v1"), SongVersions.recordings(found).map { it.id })
+        // Without a top card, the Videos row still offers the video that was the card.
+        assertEquals(listOf("s1", "s2", "v1", "top"), SongVersions.recordings(found.copy(top = null)).map { it.id })
+    }
+
+    /** The sheet's chips: Top keeps both, Songs only songs, Videos only videos; live and episodes are never versions. */
+    @Test
+    fun filtersOfferOnlySongsOrOnlyVideos() {
+        val songs = listOf(
+            song("s", "Night Drive", "The Band"),
+            song("v", "Night Drive (Official Video)", "The Band", video = true),
+            song("l", "Night Drive radio", "The Band", video = true).copy(isLive = true),
+            song("e", "Night Drive episode", "The Band").copy(isEpisode = true),
+            song("s", "Night Drive", "The Band"),
+        )
+        assertEquals(listOf("s", "v"), SongVersions.offered(SearchFilter.TOP, songs).map { it.id })
+        assertEquals(listOf("s"), SongVersions.offered(SearchFilter.SONGS, songs).map { it.id })
+        assertEquals(listOf("v"), SongVersions.offered(SearchFilter.VIDEOS, songs).map { it.id })
     }
 
     @Test
-    fun editsComeLastAndReuploadsAreNamed() {
+    fun aReuploadOfTheSameRecordingIsNamed() {
         val mine = song("a", "Night Drive", "The Band", album = "Roads")
-        val results = listOf(
-            song("s", "Night Drive (Slowed + Reverb)", "The Band", video = true),
-            song("n", "night drive - sped up//nightcore", "Someone", video = true),
-            song("x", "Night Drive", "Another Band"),
-            song("r", "Night Drive", "The Band", album = "Roads"),
-        )
-        assertEquals(listOf("r", "x", "s", "n"), SongVersions.candidates(mine, results).map { it.id })
-        assertTrue(SongVersions.sameRecording(mine, results[3]))
-        assertFalse(SongVersions.sameRecording(mine, results[2]))
+        val reupload = song("r", "Night Drive", "The Band", album = "Roads")
+        val cover = song("x", "Night Drive", "Another Band")
+        assertTrue(SongVersions.sameRecording(mine, reupload))
+        assertFalse(SongVersions.sameRecording(mine, cover))
     }
 
     @Test
