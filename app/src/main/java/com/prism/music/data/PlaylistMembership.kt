@@ -12,6 +12,9 @@ object PlaylistMembership {
     /** Songs added to a YouTube Music playlist from this phone since Prism started (its kept copy may not have them yet). */
     private val added = ConcurrentHashMap<String, MutableSet<String>>()
 
+    /** Songs taken out of a YouTube Music playlist from this phone since Prism started (its kept copy may still hold them). */
+    private val removed = ConcurrentHashMap<String, MutableSet<String>>()
+
     /** One playlist, however its id is written ("VLPL…" opened from the library, "PL…" for adding). */
     internal fun key(id: String): String = id.removePrefix("VL")
 
@@ -19,20 +22,32 @@ object PlaylistMembership {
     fun noteAdded(playlistId: String, ids: Collection<String>) {
         if (ids.isEmpty()) return
         added.getOrPut(key(playlistId)) { ConcurrentHashMap.newKeySet() }.addAll(ids)
+        removed[key(playlistId)]?.removeAll(ids.toSet())
     }
 
-    /** Forgets this session's additions (signing out, switching accounts; tests). */
-    fun forget() = added.clear()
+    /** [ids] were taken out of the playlist [playlistId]. */
+    fun noteRemoved(playlistId: String, ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        removed.getOrPut(key(playlistId)) { ConcurrentHashMap.newKeySet() }.addAll(ids)
+        added[key(playlistId)]?.removeAll(ids.toSet())
+    }
+
+    /** Forgets this session's additions and removals (signing out, switching accounts; tests). */
+    fun forget() {
+        added.clear()
+        removed.clear()
+    }
 
     /**
-     * How many of [ids] each playlist in [contents] (playlist id → its songs' ids) holds, with this session's additions;
-     * playlists holding none are left out.
+     * How many of [ids] each playlist in [contents] (playlist id → its songs' ids) holds, with this session's additions
+     * and taking out what was removed from this phone since; playlists holding none are left out.
      */
     fun counts(ids: Collection<String>, contents: Map<String, Collection<String>>): Map<String, Int> {
         val wanted = ids.toSet()
         if (wanted.isEmpty()) return emptyMap()
         return contents.keys.mapNotNull { id ->
-            val has = (contents[id].orEmpty().toSet() + added[key(id)].orEmpty()).count { it in wanted }
+            val inIt = contents[id].orEmpty().toSet() + added[key(id)].orEmpty() - removed[key(id)].orEmpty()
+            val has = inIt.count { it in wanted }
             if (has > 0) id to has else null
         }.toMap()
     }
