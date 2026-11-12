@@ -39,18 +39,25 @@ object PlaylistMembership {
     }
 
     /**
-     * How many of [ids] each playlist in [contents] (playlist id → its songs' ids) holds, with this session's additions
+     * The songs of [ids] each playlist in [contents] (playlist id → its songs' ids) holds, with this session's additions
      * and taking out what was removed from this phone since; playlists holding none are left out.
      */
-    fun counts(ids: Collection<String>, contents: Map<String, Collection<String>>): Map<String, Int> {
+    fun held(ids: Collection<String>, contents: Map<String, Collection<String>>): Map<String, Set<String>> {
         val wanted = ids.toSet()
         if (wanted.isEmpty()) return emptyMap()
         return contents.keys.mapNotNull { id ->
-            val inIt = contents[id].orEmpty().toSet() + added[key(id)].orEmpty() - removed[key(id)].orEmpty()
-            val has = inIt.count { it in wanted }
-            if (has > 0) id to has else null
+            val inIt = (contents[id].orEmpty().toSet() + added[key(id)].orEmpty() - removed[key(id)].orEmpty())
+                .filterTo(HashSet()) { it in wanted }
+            if (inIt.isNotEmpty()) id to inIt else null
         }.toMap()
     }
+
+    /**
+     * How many of [ids] each playlist in [contents] holds, with this session's additions and taking out what was removed
+     * from this phone since; playlists holding none are left out.
+     */
+    fun counts(ids: Collection<String>, contents: Map<String, Collection<String>>): Map<String, Int> =
+        held(ids, contents).mapValues { it.value.size }
 
     /**
      * The songs the phone knows each of [playlists] to hold: a Prism playlist's own, else the copy kept when it was last

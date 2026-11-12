@@ -24,4 +24,16 @@ class PlaylistMembershipRemovalTest {
         PlaylistMembership.noteAdded("PL1", listOf("a"))
         assertEquals(mapOf("VLPL1" to 2), PlaylistMembership.counts(listOf("a", "b"), contents))
     }
+
+    /** Done adds only what's missing, so the songs each playlist holds are needed, not just how many. */
+    @Test fun theSongsEachPlaylistHoldsAreKnown() {
+        PlaylistMembership.forget()
+        val contents = mapOf("VLPL1" to listOf("a", "b", "c"), "prism:x" to listOf("c"))
+        assertEquals(
+            mapOf("VLPL1" to setOf("a", "c"), "prism:x" to setOf("c")),
+            PlaylistMembership.held(listOf("a", "c", "z"), contents),
+        )
+        PlaylistMembership.noteRemoved("PL1", listOf("a"))
+        assertEquals(mapOf("VLPL1" to setOf("c"), "prism:x" to setOf("c")), PlaylistMembership.held(listOf("a", "c"), contents))
+    }
 }
