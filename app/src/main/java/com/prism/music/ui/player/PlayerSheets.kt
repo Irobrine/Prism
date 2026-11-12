@@ -61,6 +61,13 @@ fun codecName(codec: String): String = when {
     else -> codec.substringBefore('.').uppercase()
 }
 
+/**
+ * Stats for nerds' line for a song whose file on the phone this phone can't decode (1.8.4.1, #135): "ALAC file: this
+ * phone can't decode it, so the stream plays instead". Null when its file played, or it has none.
+ */
+fun undecodedFileNote(stats: com.prism.music.playback.NerdStats): String? =
+    stats.undecodedFile.takeIf { it.isNotBlank() }?.let { tr(R.string.file_can_t_be_decoded_stream_plays, it) }
+
 fun sampleRateText(hz: Int): String = if (hz <= 0) "—" else if (hz % 1000 == 0) "${hz / 1000} kHz" else tr(R.string.t_1f_khz).format(hz / 1000f)
 
 /**
@@ -73,6 +80,11 @@ fun NerdStatsPanel(modifier: Modifier = Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
         Text(tr(R.string.stats_for_nerds), color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(10.dp))
+        // The song's file on the phone won't decode here, so the stream plays (1.8.4.1): said where the source is read.
+        undecodedFileNote(stats)?.let {
+            Text(it, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(10.dp))
+        }
         // Nothing has been decoded yet (e.g. a restored queue that hasn't started).
         if (stats.codec.isBlank() && stats.streamBitrateKbps <= 0) {
             Text(tr(R.string.play_the_song_to_see_its), color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyMedium)
