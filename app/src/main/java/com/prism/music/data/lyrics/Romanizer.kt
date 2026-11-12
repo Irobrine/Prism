@@ -343,7 +343,9 @@ class Romanizer(
         /** Bumped when an engine changes, so songs romanized the old way are romanized again. */
         // 3 (1.7.9.1, #256): Japanese songs spelled by Android's transliterator as Chinese are spelled again.
         // 4 (1.8.2.1, #370): Japanese songs with kanji read as Chinese are spelled again.
-        private const val VERSION = 4
+        // 5: counters change with the number before them (20分 is にじゅっぷん, 3本 さんぼん) and the romanization spells
+        // the whole number and counter (futari, not "2futari"): those songs are spelled again.
+        private const val VERSION = 5
         private const val RELEASE_AFTER_MS = 3 * 60_000L
         /** Line-by-line requests are only made for this many lines (a long song's worth). */
         private const val MAX_SINGLE = 80

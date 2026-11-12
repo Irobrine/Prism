@@ -34,6 +34,7 @@ class SudachiJapanese private constructor(
             }
         }
         val out = MutableList(text.length) { text[it].toString() }
+        val runs = JapaneseCounters.runs(text, tokens.map { JapaneseCounters.Token(it.begin(), it.surface()) })
         var first = true
         // A word whose reading ends in っ (だっ, 分かっ) doubles the consonant of the next one: "datta", "wakatta".
         var doubling = false
@@ -57,6 +58,7 @@ class SudachiJapanese private constructor(
             for (k in 1 until len) out[at + k] = ""
             first = false
         }
+        JapaneseCounters.apply(out, text, runs)
         return out
     }
 
@@ -76,8 +78,19 @@ class SudachiJapanese private constructor(
                 return emptyList()
             }
         }
+        val runs = JapaneseCounters.runs(text, tokens.map { JapaneseCounters.Token(it.begin(), it.surface()) })
+        val runByStart = runs.associateBy { it.start }
+        var coveredUntil = -1
         for (t in tokens) {
             val at = t.begin()
+            if (at < coveredUntil) continue
+            val run = runByStart[at]
+            if (run != null) {
+                val reading = toHiragana(run.reading.all)
+                if (reading.isNotEmpty()) out += RubySpan(run.start, run.end, reading)
+                coveredUntil = run.end
+                continue
+            }
             val surface = t.surface()
             if (at < 0 || at + surface.length > text.length) continue
             if (surface.none(::isKanji)) continue
@@ -98,8 +111,8 @@ class SudachiJapanese private constructor(
                 readingKana = readingKana.dropLast(1)
             }
             if (readingKana.isBlank()) continue
-            // A number on screen stays a number: its furigana goes above the kanji the line actually has (2人's ふたり
-            // above 人), not above the digit.
+            // A number outside a counter run stays a number: its reading goes above the kanji the line actually has,
+            // not above the digit.
             var firstKanji = -1
             var lastKanji = -1
             for (i in at + start until at + end) {

@@ -25,6 +25,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseR
     override fun pieces(text: String): List<String> {
         val out = MutableList(text.length) { text[it].toString() }
         val tokens = tokenizer.tokenize(text)
+        val runs = JapaneseCounters.runs(text, tokens.map { JapaneseCounters.Token(it.position, it.surface) })
         var first = true
         // A word whose reading ends in っ (だっ, 分かっ) doubles the consonant of the next one: "datta", "wakatta".
         var doubling = false
@@ -47,6 +48,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseR
             for (k in 1 until len) out[at + k] = ""
             first = false
         }
+        JapaneseCounters.apply(out, text, runs)
         return out
     }
 
