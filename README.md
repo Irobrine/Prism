@@ -2,7 +2,9 @@
 
 <img src="docs/screenshots/icon.png" width="96" alt="Prism app icon">
 
-# Prism
+# Prismatica
+
+**Prismatica, a fork of [Prism](https://github.com/Yigder/Prism).**
 
 **Your music, refracted.**<br>
 A free YouTube Music app for Android phones and TVs.<br>
@@ -13,7 +15,7 @@ Lyrics that light up word by word, mixes made on your phone, and no ads or track
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support%20Prism-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yigder)
 
-### [⬇ Download Prism.apk](../../releases/latest/download/Prism.apk)
+### [⬇ Download Prismatica.apk](../../releases/latest/download/Prismatica.apk)
 
 [What's new](../../releases/latest) · [All changes](CHANGELOG.md) · [Watch the film](../../releases/download/v1.7.0/Prism-1.7-film.mp4)
 
@@ -27,11 +29,11 @@ Lyrics that light up word by word, mixes made on your phone, and no ads or track
 </div>
 
 > [!NOTE]
-> Prism is an independent, unofficial app. It is not affiliated with, endorsed by, or connected to Google, YouTube or YouTube Music.
+> Prismatica is a fork of Prism. It is an independent, unofficial app. It is not affiliated with, endorsed by, or connected to Google, YouTube or YouTube Music.
 
 ## Install
 
-1. Download **[Prism.apk](../../releases/latest/download/Prism.apk)** on your phone (Android 8.0 or newer).
+1. Download **[Prismatica.apk](../../releases/latest/download/Prismatica.apk)** on your phone (Android 8.0 or newer).
 2. Open it. Android will ask you to allow installs from your browser or file manager.
 3. That's it. You can sign in with your YouTube Music account to sync your library, or skip that.
 
