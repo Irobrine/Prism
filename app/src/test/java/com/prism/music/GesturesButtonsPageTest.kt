@@ -54,6 +54,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
     private val cover = t(R.string.gb_on_the_cover)
     private val mini = t(R.string.gb_on_the_mini_player)
     private val touch = t(R.string.gb_swipes_and_touch)
+    private val songs = t(R.string.songs)
     private val outside = t(R.string.notification_and_car)
     private val screen = t(R.string.screen)
 
@@ -143,8 +144,8 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         show()
         budgets("defaults")
         // The ledger's layout with a fresh install's settings: 7 · 4 · 5 · 2 · 2.
-        assertEquals(listOf(cover, mini, touch, outside, screen), groupTitles())
-        assertEquals(listOf(7, 4, 5, 2, 2), sizes())
+        assertEquals(listOf(cover, mini, touch, songs, outside, screen), groupTitles())
+        assertEquals(listOf(7, 4, 5, 3, 2, 2), sizes())
         assertEquals("nothing differs from how Prism comes", 0, changedRows())
         assertFalse(listNode().config[SettingsRowChanged])
         assertTrue(groupTitles().none { it == SettingsPageId.GESTURES_BUTTONS.title })
@@ -261,7 +262,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
 
         // Every row now differs from how Prism comes, says so, and the page still fits.
         budgets("everything changed")
-        assertEquals(listOf(6, 4, 5, 2, 2), sizes())
+        assertEquals(listOf(6, 4, 5, 3, 2, 2), sizes())
         assertEquals(18, changedRows())
         // The root's line is live.
         val line = SettingsPageId.GESTURES_BUTTONS.value(stored)
@@ -280,7 +281,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
                 it.carLyricsOnPhone == d.carLyricsOnPhone
         }
         assertEquals(0, changedRows())
-        assertEquals(listOf(7, 4, 5, 2, 2), sizes())
+        assertEquals(listOf(7, 4, 5, 3, 2, 2), sizes())
     }
 
     /**
@@ -390,7 +391,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         val mine = SettingsIndex.entries.filter { it.page == SettingsPageId.GESTURES_BUTTONS && !it.isPage }
         val lost = mine.filter { it.group !in drawn }
         assertTrue("search lines in groups the page doesn't have: ${lost.map { it.group + " › " + it.title }}", lost.isEmpty())
-        assertEquals("a line a row (7 + 4 + 5 + 2 + 2)", 20, mine.size)
+        assertEquals("a line a row (7 + 4 + 5 + 3 + 2 + 2)", 23, mine.size)
     }
 
     @Test fun atLargeTextNothingIsCutOff() {

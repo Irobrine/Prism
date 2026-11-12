@@ -169,12 +169,14 @@ fun SongRow(
     extraActions: List<SheetItem> = emptyList(),
     /** The album's name after the artist when there's no [trailingInfo] (#310: Downloads can leave it out). */
     showAlbum: Boolean = true,
+    /** 1.8.3.2: sideways swipes on the row (off in a list that scrolls sideways, and in Library until asked for). */
+    swipe: Boolean = true,
     onClick: () -> Unit,
 ) {
     // The likes, downloads and saved videos, collected once for the whole app (PrismRoot) rather than by each row: a
     // row coming into view during a fling started four collectors of its own (1.8.1).
     val marks = LocalRowMarks.current ?: LocalContainer.current.let { c ->
-        rememberRowMarks(c.library.likedIds, c.downloadState, c.downloadStandIns, c.videoState) { s -> c.downloads.playsFromPhone(s) }
+        rememberRowMarks(c.library.likedIds, c.downloadState, c.downloadStandIns, c.videoState, disliked = c.library.dislikedIds) { s -> c.downloads.playsFromPhone(s) }
     }
     var menu by remember { mutableStateOf(false) }
     val done = androidx.media3.exoplayer.offline.Download.STATE_COMPLETED
@@ -186,14 +188,18 @@ fun SongRow(
     // the downloads change, which they do as lossless sync finds files).
     val downloaded by remember(song.id, marks) { derivedStateOf { com.prism.music.download.rowDownloaded(song, marks.downloads.value, marks.standIns.value, marks.fromPhone) } }
     val videoSaved by remember(song.id, marks) { derivedStateOf { marks.videos.value[song.id]?.state == done } }
+    // 1.8.3.2: a swipe's "Not for me" / "Remove from not for me" says which way it goes.
+    val disliked by remember(song.id, marks) { derivedStateOf { song.id in marks.disliked.value } }
     // Select many (1.8.3): in a list that takes part, long-press starts picking and a tap picks; elsewhere as before.
     val selection = LocalSongSelection.current
     val selectScope = LocalSelectScope.current
     val pickable = selection != null && selectScope != null && onLongClick == null
     val pick by remember(song.id, selection, pickable) { derivedStateOf { if (pickable) selection?.picked?.let { song.id in it } else null } }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-    SongRowLayout(
-        song, modifier, index, playing, trailingInfo, starred,
+
+    @Composable
+    fun Row(rowModifier: Modifier) = SongRowLayout(
+        song, rowModifier, index, playing, trailingInfo, starred,
         liked = liked, downloaded = downloaded, videoSaved = videoSaved, showAlbum = showAlbum,
         onLongClick = when {
             pick != null -> ({ selection!!.toggle(song) })
@@ -203,6 +209,12 @@ fun SongRow(
         onMore = { menu = true }, onClick = if (pick != null) ({ selection!!.toggle(song) }) else onClick,
         pick = pick,
     )
+
+    // A list that wraps its rows itself (SwipeToQueue) has the one swipe; without the app around it (a preview, a test)
+    // a row doesn't take one.
+    if (swipe && com.prism.music.ui.theme.LocalAppRunning.current && LocalSongSwipeAllowed.current && !LocalSongSwipeWrapped.current) {
+        SongSwipe(song, liked, downloaded, disliked, modifier = modifier) { Row(Modifier) }
+    } else Row(modifier)
     if (menu) SongActionsSheet(song, extraActions) { menu = false }
 }
 
@@ -218,6 +230,8 @@ class RowMarks(
     val videos: androidx.compose.runtime.State<Map<String, com.prism.music.download.VideoDownload>>,
     /** #385 (1.8.3): the song plays from a file on the phone (lossless sync's matcher, as playback asks it). */
     val fromPhone: (Song) -> Boolean = { false },
+    /** 1.8.3.2: the songs said "not for me", for what their rows' swipes show. */
+    val disliked: androidx.compose.runtime.State<Set<String>> = androidx.compose.runtime.mutableStateOf(emptySet()),
 )
 
 /** The app's [RowMarks], provided once at its root; null (a TV, a test) makes each row collect its own. */
@@ -230,14 +244,20 @@ fun rememberRowMarks(
     downloads: kotlinx.coroutines.flow.StateFlow<Map<String, com.prism.music.download.DownloadInfo>>,
     standIns: kotlinx.coroutines.flow.StateFlow<Map<String, String>>,
     videos: kotlinx.coroutines.flow.StateFlow<Map<String, com.prism.music.download.VideoDownload>>,
+    /** 1.8.3.2: said "not for me", for the swipes on song rows. */
+    disliked: kotlinx.coroutines.flow.StateFlow<Set<String>> = NoDislikes,
     fromPhone: (Song) -> Boolean = { false },
 ): RowMarks {
     val l = liked.collectAsState()
     val d = downloads.collectAsState()
     val s = standIns.collectAsState()
     val v = videos.collectAsState()
-    return remember(l, d, s, v) { RowMarks(l, d, s, v, fromPhone) }
+    val n = disliked.collectAsState()
+    return remember(l, d, s, v, n) { RowMarks(l, d, s, v, fromPhone, n) }
 }
+
+/** A row outside the app's root (a preview, a test) with no likes: nothing is said "not for me". */
+private val NoDislikes = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
 
 /** [SongRow]'s look, given what it shows (so it can be drawn without the app around it: the Design gallery, tests). */
 @OptIn(ExperimentalFoundationApi::class)

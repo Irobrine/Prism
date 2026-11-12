@@ -606,7 +606,10 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
         val musicPlaying = c.player.isPlaying.collectAsState()
         val playingNow = remember(musicPlaying) { { musicPlaying.value } }
         // What the song rows mark (liked, downloaded, video saved): collected here once, not by every row in view.
-        val rowMarks = com.prism.music.ui.components.rememberRowMarks(c.library.likedIds, c.downloadState, c.downloadStandIns, c.videoState) { s -> c.downloads.playsFromPhone(s) }
+        val rowMarks = com.prism.music.ui.components.rememberRowMarks(
+            c.library.likedIds, c.downloadState, c.downloadStandIns, c.videoState,
+            disliked = c.library.dislikedIds,
+        ) { s -> c.downloads.playsFromPhone(s) }
         // Select many (1.8.3): the songs picked in a list, one selection for the app; Back ends it.
         val selection = remember { com.prism.music.ui.components.SongSelection() }
         androidx.activity.compose.BackHandler(selection.selecting && !playerOpen) { selection.clear() }
@@ -616,6 +619,7 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
             com.prism.music.ui.components.LocalPlayerCover provides playerCover,
             com.prism.music.ui.components.LocalMusicPlaying provides playingNow,
             LocalNavigator provides navigator,
+            com.prism.music.ui.theme.LocalAppRunning provides true,
             LocalHazeState provides haze,
             com.prism.music.ui.theme.LocalChromeStart provides railInset,
             com.prism.music.ui.components.LocalCustomize provides { t, k -> customizing = t to k },

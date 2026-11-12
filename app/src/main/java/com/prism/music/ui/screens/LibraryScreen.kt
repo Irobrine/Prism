@@ -638,7 +638,7 @@ fun LibraryScreen(bottomPadding: Dp) {
                             }) { songSort = it; c.library.setSort("library:songs", it.name) }
                         }
                         items(shownSongs, key = { "s" + it.id }, span = { GridItemSpan(maxLineSpan) }) { s ->
-                            SongRow(s, Modifier.locatePulse(locate, s.id)) { c.player.playQueue(shownSongs, shownSongs.indexOf(s), source) }
+                            SongRow(s, Modifier.locatePulse(locate, s.id), swipe = settings.behavior.songSwipeLibrary) { c.player.playQueue(shownSongs, shownSongs.indexOf(s), source) }
                         }
                         if (songsBase.isNotEmpty() && shownSongs.isEmpty() && songQuery.isNotBlank()) nothingFound(tr(R.string.songs), songQuery)
                     }
@@ -692,7 +692,7 @@ fun LibraryScreen(bottomPadding: Dp) {
                                 else -> sections.forEachIndexed { si, (title, songs) ->
                                     if (title.isNotBlank()) item(key = "ah$si", span = { GridItemSpan(maxLineSpan) }) { HistoryHeading(title) }
                                     items(songs.size, key = { "a$si-$it" }, span = { GridItemSpan(maxLineSpan) }) { i ->
-                                        SongRow(songs[i]) { c.player.playSingle(songs[i]) }
+                                        SongRow(songs[i], swipe = settings.behavior.songSwipeLibrary) { c.player.playSingle(songs[i]) }
                                     }
                                 }
                             }
@@ -707,7 +707,10 @@ fun LibraryScreen(bottomPadding: Dp) {
                                 items(entries.size, key = { "p$di-${entries[it].at}" }, span = { GridItemSpan(maxLineSpan) }) { i ->
                                     val e = entries[i]
                                     val at = time.format(java.util.Date(e.at))
-                                    SongRow(e.song, trailingInfo = if (e.times > 1) "$at · ${e.times}×" else at) { c.player.playSingle(e.song) }
+                                    SongRow(
+                                        e.song, trailingInfo = if (e.times > 1) "$at · ${e.times}×" else at,
+                                        swipe = settings.behavior.songSwipeLibrary,
+                                    ) { c.player.playSingle(e.song) }
                                 }
                             }
                             if (count >= historyLimit) item(span = { GridItemSpan(maxLineSpan) }) {
