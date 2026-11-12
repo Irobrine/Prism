@@ -74,6 +74,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -853,6 +855,10 @@ fun PlaylistPicker(song: Song, onDismiss: () -> Unit) = PlaylistPicker(listOf(so
  * them all starts above: tapping it takes them out. One holding some is only sent the songs it doesn't have. A playlist
  * never opened here is asked from YouTube on Done, so what's in it isn't added twice. A new playlist is made straight
  * away (it shows above), its songs go in on Done.
+ *
+ * Picking a playlist to add to jumps the list back to the top, where it moves above New playlist. The grabber (the bar
+ * above the title) opens the list taller as it's pulled up, and sliding it back down to where it started puts it back to
+ * its old size: that pull doesn't close the sheet.
  */
 @Composable
 fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
@@ -874,6 +880,17 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     var made by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     // Cancel, the back button and a swipe down leave it all as it was; only Done does what the taps planned.
     var committed by remember { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // A playlist picked to add songs to moves above New playlist; go back to the top then, so it's in view.
+    var topJumps by remember { mutableStateOf(0) }
+    // A playlist just moved above New playlist; wait for that order to be laid out before going to the top, or the
+    // list keeps the old first row in view and the new one stays just above it.
+    LaunchedEffect(topJumps) {
+        if (topJumps > 0) {
+            androidx.compose.runtime.withFrameNanos { }
+            listState.scrollToItem(0)
+        }
+    }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     // Only what YouTube says went in is called added (Reddit, 1.7.9: "Added" for songs that never got there).
     fun addToYouTube(id: String, title: String, wanted: List<String>, checkLive: Boolean) {
@@ -900,6 +917,7 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
                 val id = c.prismLibrary.create(name)
                 made = made + (id to name)
                 adding = adding + id
+                topJumps++
                 return@NewPlaylistDialog
             }
             c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
@@ -909,7 +927,10 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
                 c.library.created(key, name, 0)
                 made = made + (key to name)
                 // Done may have come while it was being made: then the songs go in now (Cancel leaves it empty).
-                if (committed) addToYouTube(key, name, ids.distinct(), checkLive = false) else adding = adding + key
+                if (committed) addToYouTube(key, name, ids.distinct(), checkLive = false) else {
+                    adding = adding + key
+                    topJumps++
+                }
             }
         }
         return
@@ -943,6 +964,12 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
         knownLists = read.first
         held = read.second
     }
+    // The playlists that already have the songs move above New playlist once the phone works them out: go back to the
+    // top then, so they're in view (and after a new playlist is made, which moves up too).
+    LaunchedEffect(held) {
+        androidx.compose.runtime.withFrameNanos { }
+        listState.scrollToItem(0)
+    }
     fun has(p: PlaylistItem) = held[p.id]?.size ?: 0
     // Above New playlist when the songs will be in it: one that has them all and wasn't tapped off, or one tapped to
     // add them to (a new one included).
@@ -954,7 +981,10 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
             p.id in adding -> adding = adding - p.id
             p.id in removing -> removing = removing - p.id
             full(p) -> removing = removing + p.id
-            else -> adding = adding + p.id
+            else -> {
+                adding = adding + p.id
+                topJumps++
+            }
         }
     }
     // The songs each playlist would still need (it already has the others).
@@ -1008,52 +1038,68 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
             }
         }
     }
-    // The list opens at 440 dp; pulling the grabber up (the bar above the title) opens it taller.
-    var expanded by remember { mutableStateOf(false) }
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    // The playlists that already have the songs move above New playlist once the phone works them out: go back to the
-    // top then, so they're in view (and after a new playlist is made, which moves up too).
-    LaunchedEffect(held) { listState.scrollToItem(0) }
-    val listCap by androidx.compose.animation.core.animateDpAsState(
-        if (expanded) (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp else 440.dp,
-        label = "playlistPickerHeight",
-    )
+    // The list opens at 440 dp. Pulling the grabber (the bar above the title) makes it taller as the finger moves, so
+    // the bar follows the hand; a tap on it does nothing. Pulling back to 440 dp returns it there, and pulling below
+    // that closes the sheet, so one slide can go from tall to gone. Letting go snaps to the nearest of closed, 440 dp
+    // and tall.
+    val baseCap = 440.dp
+    val screenCap = maxOf(baseCap, (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val maxExtra = with(density) { (screenCap - baseCap).toPx() }.coerceAtLeast(0f)
+    val closeAt = with(density) { 96.dp.toPx() }
+    var extraPx by remember(maxExtra) { mutableStateOf(0f) }
+    var settle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val dragScope = rememberCoroutineScope()
+    // Where the grabber is on screen, so a slide is measured from the finger's own place even as the bar moves with it.
+    val grabberTop = remember { mutableStateOf(0f) }
+    val listCap = baseCap + with(density) { extraPx.coerceIn(0f, maxExtra).toDp() }
     PrismSheet(
         // Putting the sheet away leaves it all as it was, like Cancel.
         onDismiss = onDismiss,
-        dragHandle = {
+        dragHandle = { close ->
             Box(
-                Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp).pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var travel = 0f
-                        var ours = false
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            travel += change.position.y - change.previousPosition.y
-                            if (!ours) when {
-                                // Up: open the list taller.
-                                travel < -viewConfiguration.touchSlop -> {
-                                    ours = true
-                                    expanded = true
-                                    change.consume()
-                                }
-                                // Down: left to the sheet, so pulling the bar down still puts it away.
-                                travel > viewConfiguration.touchSlop -> break
-                                else -> Unit
-                            } else {
-                                // Back down while it's open: back to the 440 dp it opened at.
-                                if (travel > viewConfiguration.touchSlop && expanded) {
-                                    expanded = false
-                                    ours = false
+                Modifier.fillMaxWidth().height(44.dp)
+                    .onGloballyPositioned { grabberTop.value = it.positionInRoot().y }
+                    .pointerInput(maxExtra, closeAt) {
+                        if (maxExtra > 0f) awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            // A tap on the bar stays with the bar: it mustn't reach the sheet and close it.
+                            down.consume()
+                            // A new slide takes over from where the last one was settling.
+                            settle?.cancel()
+                            settle = null
+                            val startFinger = grabberTop.value + down.position.y
+                            val startExtra = extraPx
+                            var lastY = down.position.y
+                            var moved = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                val travel = lastY - change.position.y
+                                lastY = change.position.y
+                                if (travel != 0f) moved = true
+                                if (moved) {
+                                    // Measured from the bar's place on screen, since the bar moves with the finger.
+                                    val open = startExtra + (startFinger - (grabberTop.value + change.position.y))
+                                    extraPx = open.coerceIn(-closeAt, maxExtra)
                                 }
                                 change.consume()
                             }
+                            if (moved) {
+                                when {
+                                    extraPx <= -closeAt / 2f -> close()
+                                    extraPx < maxExtra / 2f -> settle = dragScope.launch {
+                                        androidx.compose.animation.core.animate(extraPx, 0f, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                                    }
+                                    else -> settle = dragScope.launch {
+                                        androidx.compose.animation.core.animate(extraPx, maxExtra, animationSpec = tween(180)) { value, _ -> extraPx = value }
+                                    }
+                                }
+                            }
                         }
                     }
-                },
+                    .testTag("playlistPickerHandle"),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(36.dp, 4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)))
