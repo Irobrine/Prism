@@ -36,6 +36,7 @@ What changed in each release. Older releases are described on the [Releases page
 
 ### Fixes
 
+- **Library → Songs → Songs from shows every song of a big playlist, also after reopening Prism** (#473). A page that didn't come, or a read the screen's leaving cancelled, used to leave the playlist short for the session; it's asked again now, and only a whole read is kept. A whole playlist is also kept on the phone between starts, and each start reads only the songs added since (its "Newest first" page), instead of the whole playlist again.
 - **Seeking no longer loses a song's crossfade** (#432). Move the progress bar back and the crossfade is planned again; land just before its mark and it starts a moment later.
 - **Text no longer shows through Liquid Glass bars** (#429). A title scrolled under the tab bar or the mini player can't be read through them, Clear included.
 - **Immersive lyrics no longer jump** at each new line.

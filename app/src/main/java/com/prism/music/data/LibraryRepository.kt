@@ -112,7 +112,7 @@ class LibraryRepository(private val c: AppContainer) {
         synchronized(this) { keptLoad.cancel() }
         synchronized(pending) { pending.clear(); followUps?.cancel() }
         playlists.value = emptyList(); albums.value = emptyList(); artists.value = emptyList()
-        c.scope.launch(Dispatchers.IO) { c.offline.clear(); c.homeCache.clear() }
+        c.scope.launch(Dispatchers.IO) { c.offline.clear(); c.homeCache.clear(); c.playlistSongs.clear() }
     }
 
     /**

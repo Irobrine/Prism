@@ -248,6 +248,10 @@ data class CollectionPage(
     /** For albums: the playlist id the page's own library button saves (can differ from [playlistId]). */
     val libraryId: String? = null,
     val explicit: Boolean = false,
+    /** A playlist's "Newest first" page (newest song first), for reading only what was added since the last read. */
+    val newestContinuation: String? = null,
+    /** A playlist's song count from its header ("1,000 tracks"), when YouTube gives one. */
+    val trackCount: Int? = null,
 ) {
     /** An album's second line, "Album • 2026", split up. */
     private val typeParts: List<String> get() = if (kind == CollectionKind.ALBUM) secondSubtitle.split(" • ").map { it.trim() } else emptyList()
