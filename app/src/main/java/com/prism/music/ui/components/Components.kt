@@ -21,6 +21,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +69,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -808,10 +811,11 @@ fun PlaylistPicker(song: Song, onDismiss: () -> Unit) = PlaylistPicker(listOf(so
  * Adds [songs] (a song, or a whole album or playlist: Reddit R8) to one of the listener's playlists, or to a new one.
  * [what] names them under the sheet's title.
  *
- * Nothing is added or taken out until Done (the back button is Done too). A tap only moves a playlist above New
- * playlist when the songs will be in it, or back below when they won't; Done does what the taps planned, and Cancel
- * leaves it all as it was. One already holding them all starts above: tapping it takes them out. One holding some is
- * added to without doubling what's there. A new playlist is made straight away (it shows above), its songs go in on Done.
+ * Nothing is added or taken out until Done; Cancel, the back button and a swipe down leave it all as it was. A tap only
+ * moves a playlist above New playlist when the songs will be in it, or back below when they won't. One already holding
+ * them all starts above: tapping it takes them out. One holding some is only sent the songs it doesn't have. A playlist
+ * never opened here is asked from YouTube on Done, so what's in it isn't added twice. A new playlist is made straight
+ * away (it shows above), its songs go in on Done.
  */
 @Composable
 fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
@@ -831,15 +835,21 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     var removing by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Playlists made from here (id to name): they show above straight away; their songs go in on Done.
     var made by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    // Cancel does nothing; Done (or the back button, a swipe down) does what the taps planned.
-    var cancelled by remember { mutableStateOf(false) }
+    // Cancel, the back button and a swipe down leave it all as it was; only Done does what the taps planned.
     var committed by remember { mutableStateOf(false) }
     fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
     // Only what YouTube says went in is called added (Reddit, 1.7.9: "Added" for songs that never got there).
-    fun addToYouTube(id: String, title: String) {
+    fun addToYouTube(id: String, title: String, wanted: List<String>, checkLive: Boolean) {
         c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            val result = runCatching { c.ytm.addSongsToPlaylist(id, ids) }.getOrNull()
-            toast(addedMessage(result, title, many))
+            // Never opened here, so the phone doesn't know what's in it: ask YouTube before adding, and only add what
+            // isn't there (it may have songs added elsewhere since).
+            val missing = if (!checkLive) wanted else {
+                val slots = runCatching { c.ytm.playlistSlots(id) }.getOrNull()
+                if (slots == null) wanted else wanted.filterNot { it in slots.keys }
+            }
+            if (missing.isEmpty()) { toast(tr(R.string.already_in, title)); return@launch }
+            val result = runCatching { c.ytm.addSongsToPlaylist(id, missing) }.getOrNull()
+            toast(addedMessage(result, title, many || missing.size > 1))
             // #246: the next time the sheet opens it says they're in, though the kept copy predates them.
             result?.takeIf { it.added + it.alreadyThere > 0 }?.let { com.prism.music.data.PlaylistMembership.noteAdded(id, ids) }
             if ((result?.added ?: 0) > 0) c.library.playlistChanged(id)
@@ -862,7 +872,7 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
                 c.library.created(key, name, 0)
                 made = made + (key to name)
                 // Done may have come while it was being made: then the songs go in now (Cancel leaves it empty).
-                if (committed && !cancelled) addToYouTube(key, name) else adding = adding + key
+                if (committed) addToYouTube(key, name, ids.distinct(), checkLive = false) else adding = adding + key
             }
         }
         return
@@ -871,19 +881,35 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
     val mine = prismLists.filter { it.smart == null }.map { it.item() } +
         (if (signedIn) playlists.filterIsInstance<PlaylistItem>().filter { !it.id.startsWith("LM") && !it.isMix } else emptyList())
     // #246 (1.8.1): the playlists that already have it, from what's on the phone (Prism playlists, the kept copies of
-    // playlists opened before, what was added since): nothing is asked from YouTube for the marks. Kept as it was while
-    // it's worked out again (a playlist made here), so the ones above don't drop down and back.
-    var holds by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    // playlists opened before, what was added since): nothing is asked from YouTube for the marks. The songs themselves
+    // are kept (not just a count): Done adds only the ones missing from each playlist. Kept as it was while it's worked
+    // out again (a playlist made here), so the ones above don't drop down and back.
+    var held by remember { mutableStateOf<Map<String, Set<String>>>(emptyMap()) }
+    // The playlists whose songs the phone knows (opened here, or Prism's): the others are asked from YouTube on Done.
+    var knownLists by remember { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(mine.map { it.id }, prismLists, ids) {
-        holds = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val read = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val prism = prismLists.associate { l -> l.id to l.songs.map { it.id } }
-            val known = com.prism.music.data.PlaylistMembership.known(mine, prism) { id -> c.offline.page(id)?.songs?.map { it.id } }
-            com.prism.music.data.PlaylistMembership.counts(ids, known)
+            val contents = mutableMapOf<String, List<String>>()
+            val known = mutableSetOf<String>()
+            mine.forEach { p ->
+                val key = com.prism.music.data.PlaylistMembership.key(p.id)
+                val kept = c.offline.page(p.id)?.songs?.map { it.id }
+                    ?: c.offline.page(key)?.songs?.map { it.id }
+                    ?: c.offline.page("VL$key")?.songs?.map { it.id }
+                val has = prism[p.id] ?: kept
+                if (has != null) known += p.id
+                contents[p.id] = has.orEmpty()
+            }
+            known.toSet() to com.prism.music.data.PlaylistMembership.held(ids, contents)
         }
+        knownLists = read.first
+        held = read.second
     }
+    fun has(p: PlaylistItem) = held[p.id]?.size ?: 0
     // Above New playlist when the songs will be in it: one that has them all and wasn't tapped off, or one tapped to
     // add them to (a new one included).
-    fun full(p: PlaylistItem) = total > 0 && (holds[p.id] ?: 0) >= total
+    fun full(p: PlaylistItem) = total > 0 && has(p) >= total
     fun chosen(p: PlaylistItem) = p.id in adding || (p.id !in removing && full(p))
     // What a tap plans: adding the ones not there, or taking out the ones there (one that has them all).
     fun toggle(p: PlaylistItem) {
@@ -894,17 +920,22 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
             else -> adding = adding + p.id
         }
     }
+    // The songs each playlist would still need (it already has the others).
+    fun missing(p: PlaylistItem) = ids.distinct().filterNot { it in held[p.id].orEmpty() }
     val above = mine.filter { chosen(it) }
     val below = mine.filterNot { chosen(it) }.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
-    // Only Done does anything (the back button does Done too); Cancel leaves it all as it was.
+    // Only Done does anything; Cancel, the back button and a swipe down leave it all as it was.
     fun commit() {
         if (committed) return
         committed = true
         val titles = made.toMap() + mine.associate { it.id to it.title }
         adding.forEach { id ->
             val title = titles[id] ?: return@forEach
+            val p = mine.firstOrNull { it.id == id }
+            val wanted = if (p != null) missing(p) else ids.distinct()
             if (com.prism.music.data.PrismLibrary.isPrismList(id)) {
-                val added = c.prismLibrary.add(id, songs)
+                if (wanted.isEmpty()) { toast(tr(R.string.already_in, title)); return@forEach }
+                val added = c.prismLibrary.add(id, songs.filter { it.id in wanted }.distinctBy { it.id })
                 toast(
                     when {
                         added == 0 -> tr(R.string.already_in, title)
@@ -914,7 +945,7 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
                 )
                 return@forEach
             }
-            addToYouTube(id, title)
+            addToYouTube(id, title, wanted, checkLive = id !in knownLists && made.none { it.first == id })
         }
         removing.forEach { id ->
             val title = titles[id] ?: return@forEach
@@ -940,15 +971,61 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
             }
         }
     }
+    // The list opens at 440 dp; pulling the grabber up (the bar above the title) opens it taller.
+    var expanded by remember { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The playlists that already have the songs move above New playlist once the phone works them out: go back to the
+    // top then, so they're in view (and after a new playlist is made, which moves up too).
+    LaunchedEffect(held) { listState.scrollToItem(0) }
+    val listCap by androidx.compose.animation.core.animateDpAsState(
+        if (expanded) (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp else 440.dp,
+        label = "playlistPickerHeight",
+    )
     PrismSheet(
-        onDismiss = {
-            if (!cancelled) commit()
-            onDismiss()
+        // Putting the sheet away leaves it all as it was, like Cancel.
+        onDismiss = onDismiss,
+        dragHandle = {
+            Box(
+                Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp).pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var travel = 0f
+                        var ours = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            travel += change.position.y - change.previousPosition.y
+                            if (!ours) when {
+                                // Up: open the list taller.
+                                travel < -viewConfiguration.touchSlop -> {
+                                    ours = true
+                                    expanded = true
+                                    change.consume()
+                                }
+                                // Down: left to the sheet, so pulling the bar down still puts it away.
+                                travel > viewConfiguration.touchSlop -> break
+                                else -> Unit
+                            } else {
+                                // Back down while it's open: back to the 440 dp it opened at.
+                                if (travel > viewConfiguration.touchSlop && expanded) {
+                                    expanded = false
+                                    ours = false
+                                }
+                                change.consume()
+                            }
+                        }
+                    }
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(36.dp, 4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)))
+            }
         },
     ) { close ->
         Column(Modifier.padding(bottom = 20.dp).testTag("playlistPicker")) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                PrismTextButton(onClick = { cancelled = true; close {} }) { Text(tr(R.string.cancel)) }
+                PrismTextButton(onClick = { close {} }) { Text(tr(R.string.cancel)) }
                 Text(
                     tr(R.string.add_to_playlist), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -964,18 +1041,19 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
             // One list, so a playlist picked moves above New playlist with an animation (and back down when unpicked).
             // #401: a fast fling's leftover at the list's end stays with the list (it pushed the sheet past its top).
             androidx.compose.foundation.lazy.LazyColumn(
-                Modifier.heightIn(max = 440.dp).nestedScroll(KeepUpwardScroll).testTag("playlistPickerList"),
+                Modifier.heightIn(max = listCap).nestedScroll(KeepUpwardScroll).testTag("playlistPickerList"),
+                state = listState,
             ) {
                 items(above, key = { it.id }) { p ->
-                    val has = holds[p.id] ?: 0
+                    val count = has(p)
                     // #246: says when it's in there already (or how many of several are).
                     val line = when {
-                        has == 0 -> p.subtitle.removePrefix("Playlist • ").takeIf { it.isNotBlank() }
-                        has >= total -> if (many) tr(R.string.already_has_all_of_these) else tr(R.string.already_has_this_song)
-                        else -> tr(R.string.already_has_n_of_these, has, total)
+                        count == 0 -> p.subtitle.removePrefix("Playlist • ").takeIf { it.isNotBlank() }
+                        count >= total -> if (many) tr(R.string.already_has_all_of_these) else tr(R.string.already_has_this_song)
+                        else -> tr(R.string.already_has_n_of_these, count, total)
                     }
                     Box(Modifier.animateItem()) {
-                        PickerRow(c.covers.art(p), p.title, line, has > 0, if (has >= total) tr(R.string.already_in, p.title) else tr(R.string.add_to_playlist), p.id) { toggle(p) }
+                        PickerRow(c.covers.art(p), p.title, line, count > 0, if (count >= total) tr(R.string.already_in, p.title) else tr(R.string.add_to_playlist), p.id) { toggle(p) }
                     }
                 }
                 item("new") { SheetAction(PrismIcons.Add, tr(R.string.new_playlist)) { creating = true } }
@@ -983,16 +1061,16 @@ fun PlaylistPicker(songs: List<Song>, what: String, onDismiss: () -> Unit) {
                     SearchField(query, tr(R.string.find_a_playlist), { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
                 }
                 items(below, key = { it.id }) { p ->
-                    val has = holds[p.id] ?: 0
-                    val inIt = has >= total && total > 0
+                    val count = has(p)
+                    val inIt = count >= total && total > 0
                     // A playlist that has them all but was tapped off shows its own line until Done takes them out.
                     val line = when {
-                        inIt || has == 0 -> p.subtitle.removePrefix("Playlist • ").takeIf { it.isNotBlank() }
-                        many -> tr(R.string.already_has_n_of_these, has, total)
+                        inIt || count == 0 -> p.subtitle.removePrefix("Playlist • ").takeIf { it.isNotBlank() }
+                        many -> tr(R.string.already_has_n_of_these, count, total)
                         else -> tr(R.string.already_has_this_song)
                     }
                     Box(Modifier.animateItem()) {
-                        PickerRow(c.covers.art(p), p.title, line, has > 0 && !inIt, null, p.id) { toggle(p) }
+                        PickerRow(c.covers.art(p), p.title, line, count > 0 && !inIt, null, p.id) { toggle(p) }
                     }
                 }
                 if (mine.isEmpty()) item("empty") {
