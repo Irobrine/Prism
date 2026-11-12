@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">Utracono połączenie z: %1$s</string>
     <string name="listening_with">Słuchasz z: %1$s</string>
     <string name="this_phone_can_t_play_apple">Ten telefon nie może odtwarzać plików Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Plik %1$s: ten telefon nie potrafi go zdekodować, więc gra strumień</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, więc gra dźwięk teledysku</string>
     <string name="playback_failed">Odtwarzanie nie powiodło się</string>
     <string name="the_live_video_didn_t_load">Wideo na żywo się nie wczytało, więc gra jako dźwięk. Kliknij przycisk wideo, by spróbować ponownie.</string>

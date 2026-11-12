@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">Koneksi ke %1$s terputus</string>
     <string name="listening_with">Mendengarkan bersama %1$s</string>
     <string name="this_phone_can_t_play_apple">Ponsel ini tidak dapat memutar file Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">File %1$s: ponsel ini tidak dapat mendekodenya, jadi stream yang diputar</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, jadi suara video musiknya yang diputar</string>
     <string name="playback_failed">Pemutaran gagal</string>
     <string name="the_live_video_didn_t_load">Video live tidak dimuat, jadi diputar sebagai audio. Ketuk tombol video untuk mencoba lagi.</string>

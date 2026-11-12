@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">Perdeu-se a ligação a %1$s</string>
     <string name="listening_with">A ouvir com %1$s</string>
     <string name="this_phone_can_t_play_apple">Este telemóvel não consegue reproduzir ficheiros Apple Lossless (ALAC)</string>
+    <string name="file_can_t_be_decoded_stream_plays">Ficheiro %1$s: este telemóvel não consegue descodificá-lo, por isso é reproduzido o stream</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, por isso toca o som do vídeo de música</string>
     <string name="playback_failed">A reprodução falhou</string>
     <string name="the_live_video_didn_t_load">O vídeo em direto não carregou, por isso está a tocar como áudio. Toca no botão de vídeo para tentar de novo.</string>

@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">Megszakadt a kapcsolat vele: %1$s</string>
     <string name="listening_with">Közös hallgatás vele: %1$s</string>
     <string name="this_phone_can_t_play_apple">Ez a telefon nem tud Apple Lossless (ALAC) fájlokat lejátszani</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s-fájl: ez a telefon nem tudja dekódolni, ezért helyette a stream szól</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, ezért a zenei videó hangja szól</string>
     <string name="playback_failed">A lejátszás sikertelen</string>
     <string name="the_live_video_didn_t_load">Az élő videó nem töltődött be, ezért hangként szól. Koppints a videó gombra az újrapróbáláshoz.</string>

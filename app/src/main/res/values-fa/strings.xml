@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">اتصال به %1$s قطع شد</string>
     <string name="listening_with">در حال گوش دادن با %1$s</string>
     <string name="this_phone_can_t_play_apple">این گوشی نمی‌تواند فایل‌های Apple Lossless ‏(ALAC) را پخش کند</string>
+    <string name="file_can_t_be_decoded_stream_plays">فایل %1$s: این گوشی نمی‌تواند آن را رمزگشایی کند، پس به‌جایش جریان پخش می‌شود</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s، پس صدای موزیک‌ویدیویش پخش می‌شود</string>
     <string name="playback_failed">پخش ناموفق بود</string>
     <string name="the_live_video_didn_t_load">ویدیوی زنده بارگیری نشد، پس به‌صورت صوتی پخش می‌شود. برای تلاش دوباره دکمه ویدیو را بزنید.</string>

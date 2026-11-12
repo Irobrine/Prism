@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">Verbinding met %1$s verbroken</string>
     <string name="listening_with">Luisteren met %1$s</string>
     <string name="this_phone_can_t_play_apple">Deze telefoon kan geen Apple Lossless-bestanden (ALAC) afspelen</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s-bestand: deze telefoon kan het niet decoderen, dus speelt de stream</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, dus het geluid van de muziekvideo speelt</string>
     <string name="playback_failed">Afspelen mislukt</string>
     <string name="the_live_video_didn_t_load">De livevideo is niet geladen, dus hij speelt als audio. Tik op de videoknop om het opnieuw te proberen.</string>

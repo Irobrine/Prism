@@ -2919,6 +2919,7 @@
     <string name="lost_the_connection_to">%1$s ile bağlantı koptu</string>
     <string name="listening_with">Birlikte dinleniyor: %1$s</string>
     <string name="this_phone_can_t_play_apple">Bu telefon Apple Lossless (ALAC) dosyalarını çalamıyor</string>
+    <string name="file_can_t_be_decoded_stream_plays">%1$s dosyası: bu telefon onu çözemiyor, bu yüzden onun yerine yayın çalıyor</string>
     <string name="so_its_music_video_s_sound">%1$s %2$s, bu yüzden müzik videosunun sesi çalıyor</string>
     <string name="playback_failed">Oynatma başarısız</string>
     <string name="the_live_video_didn_t_load">Canlı video yüklenmedi, bu yüzden ses olarak çalıyor. Tekrar denemek için video düğmesine dokun.</string>
