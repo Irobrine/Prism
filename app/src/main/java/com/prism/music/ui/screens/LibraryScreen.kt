@@ -250,9 +250,19 @@ fun LibraryScreen(bottomPadding: Dp) {
     val albumsSeen by c.library.albumsSeen.times.collectAsState()
     var artistSort by remember { mutableStateOf(ArtistSort.entries.firstOrNull { it.name == c.library.sortOf("library:artists") } ?: ArtistSort.LIBRARY) }
     // Songs "From" (1.8.3, #382): liked songs and the songs of playlists the listener picks, once each. Prism's own
-    // lists are read as they are now; YouTube's are loaded whole once per session, again if a page didn't come.
+    // lists are read as they are now; YouTube's are kept whole (also between starts) and each start reads only the songs
+    // added since.
     var songsFrom by remember { mutableStateOf(com.prism.music.data.SongsFrom.decode(c.library.sortOf(com.prism.music.data.SongsFrom.KEY))) }
-    val fromLoaded by androidx.compose.runtime.produceState(emptyMap<String, List<com.prism.music.data.model.Song>>(), songsFrom.playlists) {
+    // Songs went into a picked playlist from Prism: it's refreshed now, not at the next start.
+    val playlistEdits by c.library.playlistEdits.collectAsState()
+    val fromEdits = remember(songsFrom.playlists, playlistEdits) {
+        songsFrom.playlists.mapNotNull { id -> playlistEdits[id.removePrefix("VL")]?.let { id to it } }
+    }
+    val handledEdits = remember { HashMap<String, Long>() }
+    val fromLoaded by androidx.compose.runtime.produceState(emptyMap<String, List<com.prism.music.data.model.Song>>(), songsFrom.playlists, fromEdits) {
+        fromEdits.forEach { (id, at) ->
+            if (handledEdits[id] != at) { handledEdits[id] = at; c.playlistSongs.refresh(id) }
+        }
         val lists = songsFrom.playlists.filter { !com.prism.music.data.PrismLibrary.isPrismList(it) }
         var tries = 0
         while (true) {

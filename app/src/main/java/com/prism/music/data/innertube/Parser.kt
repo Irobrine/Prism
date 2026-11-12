@@ -398,6 +398,34 @@ object Parser {
             ?: root.findFirst("nextRadioContinuationData").str("continuation")
             ?: root.findFirst("continuationCommand").str("token")
 
+    /**
+     * A playlist's sort continuation ("NEWEST_ADDED", "OLDEST_ADDED"…): the page's command entities keep, for each
+     * sort option, the continuation that lists its songs. Null when YouTube sends none (an old page, a mix).
+     */
+    fun sortContinuation(root: JsonElement?, option: String): String? =
+        root.findAll("commandEntity").firstOrNull { entity ->
+            val key = entity.str("key") ?: return@firstOrNull false
+            runCatching {
+                // The key is base64 of a protobuf with the option's name in it ("…_NEWEST_ADDED"); %3D for "=".
+                val encoded = key.replace("%2B", "+", true).replace("%2F", "/", true).replace("%3D", "=", true)
+                    .replace('-', '+').replace('_', '/')
+                val padded = encoded + "=".repeat((4 - encoded.length % 4) % 4)
+                String(java.util.Base64.getDecoder().decode(padded), Charsets.UTF_8).contains("_$option")
+            }.getOrDefault(false)
+        }?.str("command", "browseSectionListReloadEndpoint", "continuation", "reloadContinuationData", "continuation")
+
+    /** A playlist header's song count ("1,000 tracks", "1.000 Titel"), when it gives one. */
+    fun trackCount(header: JsonElement?): Int? {
+        val runs = header.obj("secondSubtitle").runs().map { it.str("text") ?: "" }
+        val countText = when {
+            runs.size > 3 -> runs[2]
+            runs.isNotEmpty() -> runs[0]
+            else -> return null
+        }
+        // The digits alone: "1,000 tracks", "1.000 Titel" and "812 曲" are all counts, the words around them localized.
+        return countText.filter(Char::isDigit).toIntOrNull()?.takeIf { it > 0 }
+    }
+
     // ---------------------------------------------------------------- The listener's uploads (#332, #101)
     //
     // Written from ytmusicapi's own reading of these answers (sigma67/ytmusicapi at 488dbf3: mixins/uploads.py,
