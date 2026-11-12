@@ -447,6 +447,8 @@ class YouTubeMusic(
             privacy = if (owned) editable.findFirst("musicPlaylistEditHeaderRenderer").str("privacy") else null,
             savedToLibrary = if (owned) null else libraryToggle(header),
             setVideoIds = if (owned) setVideoIdsIn(shelf) else emptyMap(),
+            newestContinuation = Parser.sortContinuation(res, "NEWEST_ADDED"),
+            trackCount = Parser.trackCount(header),
         )
     }
 

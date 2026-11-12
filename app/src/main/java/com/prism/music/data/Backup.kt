@@ -361,6 +361,8 @@ class Backup(private val c: AppContainer) {
             listOf(STAGING, "models", "stems", REDOWNLOAD, RESTORED_SETTINGS).forEach { put(it, null) }
             // Lyric translations (1.7.8) are a cache of Google's answers, asked for again when missing.
             put("translations", null)
+            // Songs' "From" whole playlists (1.8.4, #473): read again from YouTube when missing, nothing to carry over.
+            put("songs_from", null)
         }
 
         internal fun prefsPart(name: String): BackupPart? = if (name in PREFS_PARTS) PREFS_PARTS[name] else BackupPart.SETTINGS

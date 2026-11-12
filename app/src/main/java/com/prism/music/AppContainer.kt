@@ -494,18 +494,32 @@ class AppContainer(val app: Application) {
     /**
      * Whole playlists for Library → Songs' "From" (1.8.3, #382): Prism's own from the phone, YouTube's page after page
      * (the copy kept on the phone without a network). Only a whole read is kept ([com.prism.music.data.PlaylistSongs]):
-     * a page that doesn't come, or a read the screen's leaving cancels, is read again rather than left short.
+     * a page that doesn't come, or a read the screen's leaving cancels, is read again rather than left short. A whole
+     * read is also kept between starts ([com.prism.music.data.PlaylistSongsCache]); each start asks YouTube for the
+     * playlist page and reads only the songs added since, not all of them again.
      */
+    private val playlistSongsCache by lazy { com.prism.music.data.PlaylistSongsCache(app.filesDir) }
     val playlistSongs by lazy {
-        com.prism.music.data.PlaylistSongs { id ->
-            prismLibrary.list(id)?.let { return@PlaylistSongs com.prism.music.data.PlaylistRead(it.songs, complete = true) }
-            val page = try { ytm.playlist(id) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
-                val kept = offline.page(id) ?: offline.page("VL$id") ?: throw e
-                // The copy on the phone may be shorter than the playlist: show it, but read it live again next time.
-                return@PlaylistSongs com.prism.music.data.PlaylistRead(kept.songs, complete = false)
-            }
-            com.prism.music.data.readPlaylist(page, ytm::playlistPage)
-        }
+        com.prism.music.data.PlaylistSongs(
+            load = { id, cached ->
+                prismLibrary.list(id)?.let { return@PlaylistSongs com.prism.music.data.PlaylistRead(it.songs, complete = true, count = it.songs.size) }
+                val first = try { ytm.playlist(id) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+                    // Offline: a whole copy from an earlier start is all of the playlist this session has.
+                    cached?.let { return@PlaylistSongs com.prism.music.data.PlaylistRead(it.songs, complete = true, count = it.count) }
+                    // A short offline page is shown, but read live again next time.
+                    val songs = offline.page(id)?.songs ?: offline.page("VL$id")?.songs ?: throw e
+                    return@PlaylistSongs com.prism.music.data.PlaylistRead(songs, complete = false)
+                }
+                if (cached == null) com.prism.music.data.readPlaylist(first, ytm::playlistPage)
+                else com.prism.music.data.refreshPlaylist(
+                    first = first,
+                    cached = cached,
+                    newestPage = ytm::playlistPage,
+                    readAll = { com.prism.music.data.readPlaylist(first, ytm::playlistPage) },
+                )
+            },
+            cache = playlistSongsCache,
+        )
     }
     /** "Measure now" on a smart playlist: the songs its Sound rules can't see yet, scanned one by one (Wi-Fi for streams). */
     val smartMeasure by lazy {

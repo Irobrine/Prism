@@ -46,7 +46,7 @@ class SongsFromTest {
 
     @Test fun aPlaylistIsReadOnceUntilRefreshed() = runBlocking {
         var reads = 0
-        val lists = PlaylistSongs { id -> reads++; if (id == "bad") error("offline") else PlaylistRead(listOf(s("$id-1")), complete = true) }
+        val lists = PlaylistSongs(load = { id, _ -> reads++; if (id == "bad") error("offline") else PlaylistRead(listOf(s("$id-1")), complete = true) })
         assertEquals("x-1", lists.songs("x")!!.single().id)
         lists.songs("x")
         assertEquals(1, reads)
@@ -58,11 +58,11 @@ class SongsFromTest {
 
     @Test fun aReadThatStoppedShortIsReadAgainNextTime() = runBlocking {
         var reads = 0
-        val lists = PlaylistSongs { id ->
+        val lists = PlaylistSongs(load = { id, _ ->
             reads++
             if (reads == 1) PlaylistRead(listOf(s("$id-1")), complete = false)
             else PlaylistRead(listOf(s("$id-1"), s("$id-2"), s("$id-3")), complete = true)
-        }
+        })
         assertEquals("the page that came shows meanwhile", listOf("x-1"), lists.songs("x")!!.map { it.id })
         assertFalse("but it isn't kept as the whole playlist", lists.isComplete("x"))
         assertEquals("the rest comes next time", listOf("x-1", "x-2", "x-3"), lists.songs("x")!!.map { it.id })
@@ -100,12 +100,12 @@ class SongsFromTest {
 
     @Test fun leavingTheScreenDoesNotLeaveAShortListKept() = runBlocking {
         var reads = 0
-        val lists = PlaylistSongs { id ->
+        val lists = PlaylistSongs(load = { id, _ ->
             reads++
             // The first read is cancelled midway (the screen was left): it mustn't be kept as if it were whole.
             if (reads == 1) throw kotlinx.coroutines.CancellationException("the screen was left")
             PlaylistRead(listOf(s("$id-1"), s("$id-2")), complete = true)
-        }
+        })
         try {
             lists.songs("x")
             throw AssertionError("the read should have been cancelled")
