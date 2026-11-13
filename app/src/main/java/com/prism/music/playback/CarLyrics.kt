@@ -28,7 +28,9 @@ import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import coil3.imageLoader
@@ -82,7 +84,19 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     /** The placeholder item: no URI, only what the controls show. */
     var placeholderItem: MediaItem? = null
         private set
+    /**
+     * OriginOS/Funtouch hide a paused media session's card, including on the lock screen. There the placeholder reports
+     * playing and has no play/pause button; its first button is Library songs instead.
+     */
+    var placeholderAsPlaying: Boolean = false
+        private set
     private var placeholderTimeline: Timeline? = null
+
+    fun setPlaceholderAsPlaying(on: Boolean) {
+        if (placeholderAsPlaying == on) return
+        placeholderAsPlaying = on
+        if (placeholder) invalidateState()
+    }
     /** The placeholder card's play button: shuffle the listener's Library songs. */
     var onPlaceholderPlay: (() -> Unit)? = null
 
@@ -150,7 +164,7 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): com.google.common.util.concurrent.ListenableFuture<*> {
         if (placeholder) {
-            if (playWhenReady) onPlaceholderPlay?.invoke()
+            if (playWhenReady && !placeholderAsPlaying) onPlaceholderPlay?.invoke()
             return com.google.common.util.concurrent.Futures.immediateVoidFuture()
         }
         if (gentle?.invoke(playWhenReady) == true) return com.google.common.util.concurrent.Futures.immediateVoidFuture()
@@ -212,6 +226,7 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     private fun placeholderState(s: State): State {
         val item = placeholderItem ?: return s
         val timeline = placeholderTimeline ?: PlaceholderTimeline(item).also { placeholderTimeline = it }
+        val asPlaying = placeholderAsPlaying
         val commands = s.availableCommands.buildUpon().apply {
             remove(Player.COMMAND_SEEK_TO_PREVIOUS)
             remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
@@ -222,20 +237,22 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
             remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             remove(Player.COMMAND_PREPARE)
             remove(Player.COMMAND_STOP)
+            if (asPlaying) remove(Player.COMMAND_PLAY_PAUSE)
         }.build()
-        return s.buildUpon()
+        val out = s.buildUpon()
             .setPlaylist(timeline, androidx.media3.common.Tracks.EMPTY, item.mediaMetadata)
             .setPlaybackState(Player.STATE_READY)
             .setPlayerError(null)
-            .setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
-            .setContentPositionMs(0)
+            .setPlayWhenReady(asPlaying, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+            .setPlaybackParameters(if (asPlaying) PlaybackParameters(0.5f) else s.playbackParameters)
             .setCurrentMediaItemIndex(0)
             .setCurrentAd(C.INDEX_UNSET, C.INDEX_UNSET)
             .setIsLoading(false)
             .setAvailableCommands(commands)
             .setShuffleModeEnabled(false)
             .setRepeatMode(Player.REPEAT_MODE_OFF)
-            .build()
+        if (asPlaying) out.setContentPositionMs(SimpleBasePlayer.PositionSupplier.getConstant(0)) else out.setContentPositionMs(0)
+        return out.build()
     }
 
     private companion object {

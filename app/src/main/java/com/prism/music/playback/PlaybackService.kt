@@ -241,6 +241,11 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         lockScreen = com.prism.music.ui.lockscreen.LockScreenGate(this, c.settings.flow, player, scope).also { it.start() }
 
         sessionPlayer = LyricsOverlayPlayer(player)
+        // OriginOS/Funtouch hide a paused media session's card (lockscreen included): there the placeholder reports
+        // playing instead, and its first button becomes Library songs.
+        sessionPlayer.setPlaceholderAsPlaying(
+            listOf(Build.MANUFACTURER, Build.BRAND).any { it.equals("vivo", true) || it.equals("iqoo", true) }
+        )
         // The persistent card's own item: no URI, only the title, subtitle and the app's icon. (Android needs a window
         // in the session's timeline to show controls at all.)
         sessionPlayer.setPlaceholderItem(placeholderItem())
@@ -2358,7 +2363,16 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             val buttons = c.settings.current.persistent.buttons.take(PersistentAction.SLOTS).mapIndexed { i, action ->
                 persistentButton(action, slots.getOrElse(i) { CommandButton.SLOT_OVERFLOW })
             }
-            session.setMediaButtonPreferences(buttons)
+            // On phones that hide paused controls, the placeholder reports playing and has no play/pause button: Library
+            // songs takes the central place (with a Play icon), so the play action is still there.
+            val central = CommandButton.Builder(CommandButton.ICON_PLAY)
+                .setDisplayName(tr(R.string.persistent_library_songs))
+                .setSessionCommand(persistentCommands.getValue(PersistentAction.LIBRARY_SONGS))
+                .setSlots(CommandButton.SLOT_CENTRAL)
+                .build()
+            session.setMediaButtonPreferences(
+                if (sessionPlayer.placeholderAsPlaying) listOf(central) + buttons else buttons
+            )
             return
         }
         val id = player.currentMediaItem?.mediaId
