@@ -12,7 +12,7 @@ import androidx.media3.common.util.UnstableApi
  * a window even though there is no song.
  */
 @OptIn(UnstableApi::class)
-internal class PlaceholderTimeline(private val item: MediaItem) : Timeline() {
+internal class PlaceholderTimeline(private val item: MediaItem, private val durationUs: Long = C.TIME_UNSET) : Timeline() {
 
     override fun getWindowCount(): Int = 1
 
@@ -22,7 +22,7 @@ internal class PlaceholderTimeline(private val item: MediaItem) : Timeline() {
             Window.SINGLE_WINDOW_UID, item, /* manifest= */ null,
             C.TIME_UNSET, C.TIME_UNSET, C.TIME_UNSET,
             /* isSeekable= */ false, /* isDynamic= */ false, /* liveConfiguration= */ null,
-            /* defaultPositionUs= */ 0, /* durationUs= */ C.TIME_UNSET,
+            /* defaultPositionUs= */ 0, /* durationUs= */ durationUs,
             /* firstPeriodIndex= */ 0, /* lastPeriodIndex= */ 0, /* positionInFirstPeriodUs= */ 0,
         )
         return window
@@ -36,7 +36,7 @@ internal class PlaceholderTimeline(private val item: MediaItem) : Timeline() {
             /* id= */ if (setIds) Window.SINGLE_WINDOW_UID else null,
             /* uid= */ Window.SINGLE_WINDOW_UID,
             /* windowIndex= */ 0,
-            /* durationUs= */ C.TIME_UNSET,
+            /* durationUs= */ durationUs,
             /* positionInWindowUs= */ 0,
             AdPlaybackState.NONE,
             /* isPlaceholder= */ false,

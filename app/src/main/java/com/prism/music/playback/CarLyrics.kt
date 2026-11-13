@@ -95,6 +95,7 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     fun setPlaceholderAsPlaying(on: Boolean) {
         if (placeholderAsPlaying == on) return
         placeholderAsPlaying = on
+        placeholderTimeline = null
         if (placeholder) invalidateState()
     }
     /** The placeholder card's play button: shuffle the listener's Library songs. */
@@ -225,8 +226,11 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
      */
     private fun placeholderState(s: State): State {
         val item = placeholderItem ?: return s
-        val timeline = placeholderTimeline ?: PlaceholderTimeline(item).also { placeholderTimeline = it }
         val asPlaying = placeholderAsPlaying
+        val timeline = placeholderTimeline ?: PlaceholderTimeline(
+            item,
+            if (asPlaying) 3_600_000_000L else C.TIME_UNSET,
+        ).also { placeholderTimeline = it }
         val commands = s.availableCommands.buildUpon().apply {
             remove(Player.COMMAND_SEEK_TO_PREVIOUS)
             remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)

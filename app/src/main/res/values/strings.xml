@@ -5397,6 +5397,8 @@
     <string name="persistent_battery">Battery usage</string>
     <string name="persistent_notifications">Notifications</string>
     <string name="persistent_notifications_info">The persistent controls need Prism\'s notifications allowed. Turn them on here if they are off or the permission was denied.</string>
+    <string name="persistent_compatibility">Compatibility mode</string>
+    <string name="persistent_compatibility_info">Reports the controls as playing, so phones that hide paused media sessions (OriginOS, Funtouch) still show them. The play/pause button is left out.</string>
     <string name="persistent_battery_allowed">Unrestricted</string>
     <string name="persistent_battery_ask">Allow background use</string>
     <string name="persistent_battery_info">Android needs Prism unrestricted to bring the controls back after it has been closed. Some phones call this Autostart.</string>

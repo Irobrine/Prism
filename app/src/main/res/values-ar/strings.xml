@@ -5648,4 +5648,6 @@
     <string name="persistent_getting_library_songs">Getting Library songs…</string>
     <string name="persistent_notifications">Notifications</string>
     <string name="persistent_notifications_info">The persistent controls need Prism\'s notifications allowed. Turn them on here if they are off or the permission was denied.</string>
+    <string name="persistent_compatibility">Compatibility mode</string>
+    <string name="persistent_compatibility_info">Reports the controls as playing, so phones that hide paused media sessions (OriginOS, Funtouch) still show them. The play/pause button is left out.</string>
 </resources>
