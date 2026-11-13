@@ -182,6 +182,29 @@ class SongVersionsTest {
         }
     }
 
+    /**
+     * The lyrics of a picked version are looked up under its own title and artist (a cover, a live take or a file on the
+     * phone has them under its name), and under the song's own again when the song plays as itself.
+     */
+    @Test
+    fun aPickedVersionsLyricsAreLookedUpUnderItsOwnName() {
+        val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("song_versions_test", 0)
+        prefs.edit().clear().commit()
+        val v = SongVersions(prefs)
+        val mine = song("a", "Night Drive", "The Band", album = "Roads")
+        val live = song("live42", "Night Drive (Live)", "Another Band", album = "Roads Live")
+        try {
+            assertNull(v.lyricsNames(mine))
+            v.set("a", SongVersions.Pick(live.id, "Another Band · Roads Live · 4:00", live))
+            assertEquals("Night Drive (Live)" to "Another Band", v.lyricsNames(mine))
+            // No version: the song's own title and artist again.
+            v.set("a", null)
+            assertNull(v.lyricsNames(mine))
+        } finally {
+            v.set("a", null)
+        }
+    }
+
     /** A pick kept before 1.8.1.1 (id and label only) still plays, and shows as the song. */
     @Test
     fun anOlderPickShowsAsTheSong() {

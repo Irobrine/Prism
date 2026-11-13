@@ -85,6 +85,15 @@ class SongVersions(private val prefs: SharedPreferences) {
     /** The picked version's cover for song [songId], if it has one (#328). */
     fun coverOf(songId: String): String? = shownPicks.value.takeIf { it.isNotEmpty() }?.get(songId)?.song?.thumbnail
 
+    /**
+     * The title and artist a picked version's lyrics are looked up by: the version's own (a cover, a live take or a file
+     * on the phone has its lyrics under its name), or null when the song plays as itself or the pick has no details.
+     */
+    fun lyricsNames(song: Song): Pair<String, String>? {
+        val v = shownPicks.value[song.id]?.song ?: return null
+        return v.title.ifBlank { song.title } to v.artistText
+    }
+
     private fun encode(pick: Pick): String = listOfNotNull(
         pick.id, pick.label,
         pick.song?.let { com.prism.music.data.innertube.InnerTube.json.encodeToString(Song.serializer(), it) },

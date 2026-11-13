@@ -779,6 +779,13 @@ class AppContainer(val app: Application) {
     fun pickVersion(song: com.prism.music.data.model.Song, pick: com.prism.music.data.SongVersions.Pick?) {
         if (versions.of(song.id) == pick?.id?.takeIf { it != song.id }) return
         versions.set(song.id, pick)
+        // The lyrics are looked up under the version's own title and artist from now on (the song's own again when no
+        // version is picked); a lyrics page open on it asks again, its state noticing the pick. A pick kept before
+        // versions carried their details has no name to search under, so the listener's own stays.
+        if (pick == null || pick.song != null) {
+            lyrics.setSearchAs(song, pick?.song?.title.orEmpty(), pick?.song?.artistText.orEmpty())
+            lyrics.forgetChoice(song)
+        }
         soundFrom.remove(song.id)
         com.prism.music.playback.AudioDiagnostics.log("song", "${song.id} plays as ${pick?.id ?: "itself"} from now on (picked by the listener)")
         scope.launch(Dispatchers.Main) {

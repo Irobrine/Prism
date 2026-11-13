@@ -1050,7 +1050,16 @@ class LyricsRepository(
 
     private fun searchSong(song: Song): Song = searchAs(song)?.let { (t, a) ->
         song.copy(title = t, artists = if (a.isBlank()) song.artists else listOf(com.prism.music.data.model.ArtistRef(a)))
-    } ?: song
+    } ?: versionSong(song) ?: song
+
+    /**
+     * A version picked to play in [song]'s place is what the lyrics are under: its own title and artist, unless the
+     * listener named another pair in "Search as". Picks kept before versions carried their details have none, so the
+     * song's own names stay.
+     */
+    private fun versionSong(song: Song): Song? = com.prism.music.data.SongVersions.shared?.lyricsNames(song)?.let { (title, artist) ->
+        song.copy(title = title, artists = if (artist.isBlank()) song.artists else listOf(com.prism.music.data.model.ArtistRef(artist)))
+    }
 
     fun choose(song: Song, source: LyricsSource) {
         choices?.edit()?.putString(song.id, source.name)?.apply()
