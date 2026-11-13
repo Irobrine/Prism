@@ -151,7 +151,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private var extrasJob: Job? = null
 
     private lateinit var lockScreen: com.prism.music.ui.lockscreen.LockScreenGate
-    private val silentKeepAlive by lazy { SilentKeepAlive() }
+    private val silentKeepAlive by lazy { SilentKeepAlive(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -252,7 +252,9 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         // The persistent card's own item: no URI, only the title, subtitle and the app's icon. (Android needs a window
         // in the session's timeline to show controls at all.)
         sessionPlayer.setPlaceholderItem(placeholderItem())
-        sessionPlayer.onPlaceholderPlay = { scope.launch { runPersistentAction(PersistentAction.LIBRARY_SONGS) } }
+        sessionPlayer.onPlaceholderPlay = {
+            scope.launch { if (!playLastPlayed()) runPersistentAction(PersistentAction.LIBRARY_SONGS) }
+        }
         carLyrics = CarLyrics(this, c, player, sessionPlayer, scope)
         // The lyrics button works the car's switch in a car and the notification's elsewhere (#392).
         carLyrics.onPlaceChange = { updateButtons() }
@@ -382,6 +384,19 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 if (++tick % 5 == 0 && player.isPlaying) saveEpisodePosition()
                 // The persistent card's notification was swiped away: put it back (the listener asked for it always).
                 if (tick % 30 == 0 && ::sessionPlayer.isInitialized && sessionPlayer.placeholder) triggerNotificationUpdate()
+                // A song's card swiped away: Android/OriginOS often just pauses it and leaves no notification. Switch to
+                // the persistent controls instead (the notification is the app's own, so its absence is visible here).
+                if (tick % 2 == 0 && ::sessionPlayer.isInitialized && !sessionPlayer.placeholder && player.mediaItemCount > 0) {
+                    val nm = getSystemService(android.app.NotificationManager::class.java)
+                    val active = nm?.activeNotifications?.any {
+                        it.id == DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID
+                    } == true
+                    if (active) notificationMissingTicks = 0
+                    else if (++notificationMissingTicks >= 2) {
+                        notificationMissingTicks = 0
+                        stopForPersistentControls()
+                    }
+                } else notificationMissingTicks = 0
                 // Widgets' progress bars move on every 15 s (more often would cost battery for little); with the screen
                 // off nobody sees them, so they catch up the moment it's back on instead.
                 if (tick % 15 == 0 && player.isPlaying) pushWidgets(progressOnly = true)
@@ -922,6 +937,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     /** The song that just came up and when, until it's heard: how long starting a song takes (logcat tag PrismStream). */
     private var startedLoading: Pair<String, Long>? = null
+    /** Consecutive ticks in which a song's media notification was missing (swiped away). */
+    private var notificationMissingTicks = 0
 
     /** Whether the listener swiped the notification away and nothing has played since. */
     private fun notificationClosed() = getSharedPreferences("playback_service", MODE_PRIVATE).getBoolean("notification_closed", false)
@@ -944,14 +961,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         if (c.settings.current.persistent.controls) {
             // Dismissing a song's card ends it and leaves the persistent controls (rather than keeping the paused song).
             android.util.Log.i("PrismControl", "the card was dismissed: stopping the song and showing the persistent controls")
-            flushPlayTime()
-            saveEpisodePosition()
-            saveQueue(now = true)
-            player.pause()
-            player.stop()
-            setNotificationClosed(false)
-            syncPlaceholder()
-            triggerNotificationUpdate()
+            stopForPersistentControls()
             return
         }
         if (player.isPlaying) return
@@ -962,6 +972,18 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         saveEpisodePosition()
         saveQueue(now = true)
         pauseAllPlayersAndStopSelf()
+    }
+
+    /** Ends the song (paused or not) and puts the persistent controls up; the queue is saved to resume later. */
+    private fun stopForPersistentControls() {
+        flushPlayTime()
+        saveEpisodePosition()
+        saveQueue(now = true)
+        player.pause()
+        player.stop()
+        setNotificationClosed(false)
+        syncPlaceholder()
+        triggerNotificationUpdate()
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -2375,22 +2397,27 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         if (::sessionPlayer.isInitialized && sessionPlayer.placeholder) {
             // The persistent card: four buttons the listener picked. The back/forward places are free because the
             // placeholder player takes previous/next away (see LyricsOverlayPlayer).
-            val slots = intArrayOf(
-                CommandButton.SLOT_BACK, CommandButton.SLOT_FORWARD, CommandButton.SLOT_OVERFLOW, CommandButton.SLOT_OVERFLOW,
-            )
-            val buttons = c.settings.current.persistent.buttons.take(PersistentAction.SLOTS).mapIndexed { i, action ->
-                persistentButton(action, slots.getOrElse(i) { CommandButton.SLOT_OVERFLOW })
+            val buttons = if (sessionPlayer.placeholderAsPlaying) {
+                // Compatibility mode: no play/pause command is exposed, so the first slot is a Play button that resumes
+                // the last song; the next three slots are the listener's first three buttons.
+                val play = CommandButton.Builder(CommandButton.ICON_PLAY)
+                    .setDisplayName(tr(R.string.persistent_last_played))
+                    .setSessionCommand(persistentCommands.getValue(PersistentAction.LAST_PLAYED))
+                    .setSlots(CommandButton.SLOT_BACK)
+                    .build()
+                val rest = c.settings.current.persistent.buttons.take(3).mapIndexed { i, action ->
+                    persistentButton(action, intArrayOf(CommandButton.SLOT_FORWARD, CommandButton.SLOT_OVERFLOW, CommandButton.SLOT_OVERFLOW)[i])
+                }
+                listOf(play) + rest
+            } else {
+                val slots = intArrayOf(
+                    CommandButton.SLOT_BACK, CommandButton.SLOT_FORWARD, CommandButton.SLOT_OVERFLOW, CommandButton.SLOT_OVERFLOW,
+                )
+                c.settings.current.persistent.buttons.take(PersistentAction.SLOTS).mapIndexed { i, action ->
+                    persistentButton(action, slots.getOrElse(i) { CommandButton.SLOT_OVERFLOW })
+                }
             }
-            // On phones that hide paused controls, the placeholder reports playing and has no play/pause button: Library
-            // songs takes the central place (with a Play icon), so the play action is still there.
-            val central = CommandButton.Builder(CommandButton.ICON_PLAY)
-                .setDisplayName(tr(R.string.persistent_library_songs))
-                .setSessionCommand(persistentCommands.getValue(PersistentAction.LIBRARY_SONGS))
-                .setSlots(CommandButton.SLOT_CENTRAL)
-                .build()
-            session.setMediaButtonPreferences(
-                if (sessionPlayer.placeholderAsPlaying) listOf(central) + buttons else buttons
-            )
+            session.setMediaButtonPreferences(buttons)
             return
         }
         val id = player.currentMediaItem?.mediaId

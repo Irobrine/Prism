@@ -1,29 +1,41 @@
 package com.prism.music.playback
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 
 /**
  * Compatibility mode's silent playback: a zero-volume AudioTrack that keeps Android (and OriginOS/Funtouch) treating
- * Prism as a playing media app while the placeholder card is up. It takes no audio focus and makes no sound; it is
- * stopped as soon as a real song starts or the card goes away.
+ * Prism as a playing media app while the placeholder card is up. It makes no sound; it is stopped as soon as a real
+ * song starts or the card goes away.
  */
-internal class SilentKeepAlive {
+internal class SilentKeepAlive(context: Context) {
+    private val audioManager = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private var track: AudioTrack? = null
+    private var focus: AudioFocusRequest? = null
 
     fun start() {
         if (track != null) return
         runCatching {
             val samples = 8_000 // one second at 8 kHz
             val buffer = ShortArray(samples)
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            // The focus is what makes some phones treat Prism as the playing media app (not only the audio track).
+            runCatching {
+                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(attributes)
+                    .setOnAudioFocusChangeListener { }
+                    .build()
+                if (audioManager?.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) focus = request
+            }
             val t = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
+                .setAudioAttributes(attributes)
                 .setAudioFormat(
                     AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -49,5 +61,7 @@ internal class SilentKeepAlive {
             runCatching { t.release() }
         }
         track = null
+        focus?.let { request -> runCatching { audioManager?.abandonAudioFocusRequest(request) } }
+        focus = null
     }
 }
