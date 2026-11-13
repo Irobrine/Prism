@@ -751,10 +751,8 @@ internal fun sungChars(line: LyricLine, offsets: List<Pair<Int, Int>>, now: Long
     for ((i, w) in line.words.withIndex()) {
         val (s, e) = offsets[i]
         if (now >= w.endMs) sung = e.toFloat()
-        else if (now >= w.startMs) {
-            val f = ((now - w.startMs).toFloat() / (w.endMs - w.startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
-            return s + (w.text.trimEnd().length) * f
-        } else break
+        else if (now >= w.startMs) return s + w.sungLength(now)
+        else break
     }
     return sung
 }
@@ -975,37 +973,39 @@ fun WeightSweptLine(
     val steps = ((sungWeight - lightWeight) / WEIGHT_STEP).coerceAtLeast(0)
     val axisStyle = style.copy(fontFamily = axis, fontWeight = FontWeight(lightWeight))
     val fontPx = with(androidx.compose.ui.platform.LocalDensity.current) { style.fontSize.toPx() }
-    // For each word, at each weight step: the letter spacing (em) that brings it back to its light width.
-    val spacing = remember(line, axisStyle, fontPx, steps) { line.words.map { w -> weightSpacing(measurer, w.text.trimEnd(), axisStyle, fontPx, lightWeight, steps) } }
-    // Each word's weight step and brightness (0–10), recomposing only when one of them changes.
-    val marks by remember(line, steps) {
+    // The source's timed runs: a syllable at a time when it gives them, else a whole word.
+    val pieces = remember(line) { line.words.flatMap { it.sungPieces() } }
+    // For each run, at each weight step: the letter spacing (em) that brings it back to its light width.
+    val spacing = remember(pieces, axisStyle, fontPx, steps) { pieces.map { p -> weightSpacing(measurer, p.text.trimEnd(), axisStyle, fontPx, lightWeight, steps) } }
+    // Each run's weight step and brightness (0–10), recomposing only when one of them changes.
+    val marks by remember(pieces, steps) {
         derivedStateOf {
             val now = clock.value
-            line.words.map { w ->
+            pieces.map { p ->
                 val f = when {
-                    now >= w.endMs -> 1f
-                    now < w.startMs -> 0f
-                    else -> ((now - w.startMs).toFloat() / (w.endMs - w.startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
+                    now >= p.endMs -> 1f
+                    now < p.startMs -> 0f
+                    else -> ((now - p.startMs).toFloat() / (p.endMs - p.startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
                 }
                 (f * steps).roundToInt() to (f * 10).roundToInt()
             }
         }
     }
     val text = androidx.compose.ui.text.buildAnnotatedString {
-        line.words.forEachIndexed { i, w ->
+        pieces.forEachIndexed { i, p ->
             val (step, lit) = marks[i]
             val a = dimAlpha + (1f - dimAlpha) * lit / 10f
-            val core = w.text.trimEnd()
+            val core = p.text.trimEnd()
             val weight = FontWeight(lightWeight + step * WEIGHT_STEP)
             val ls = (spacing[i].getOrElse(step) { 0f }).em
-            // A colored fill comes in as the word is sung; until then the word is dim white.
+            // A colored fill comes in as the run is sung; until then the run is dim white.
             pushStyle(
                 if (litBrush != null && lit > 0) androidx.compose.ui.text.SpanStyle(brush = litBrush, alpha = a, fontWeight = weight, letterSpacing = ls)
                 else androidx.compose.ui.text.SpanStyle(color = Color.White.copy(alpha = a), fontWeight = weight, letterSpacing = ls),
             )
             append(core)
             pop()
-            append(w.text.substring(core.length))
+            append(p.text.substring(core.length))
         }
     }
     Text(text, modifier, style = axisStyle, onTextLayout = { onLayout?.invoke(it) })

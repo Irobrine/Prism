@@ -98,7 +98,13 @@ object WordTiming {
     fun shifted(lines: List<LyricLine>, byMs: Long): List<LyricLine> {
         if (byMs == 0L) return lines
         fun t(ms: Long) = if (ms < 0) ms else (ms + byMs).coerceAtLeast(0)
-        fun w(list: List<LyricWord>) = list.map { it.copy(startMs = t(it.startMs), endMs = t(it.endMs)) }
+        fun w(list: List<LyricWord>) = list.map { word ->
+            word.copy(
+                startMs = t(word.startMs),
+                endMs = t(word.endMs),
+                parts = word.parts.map { it.copy(startMs = t(it.startMs), endMs = t(it.endMs)) },
+            )
+        }
         return lines.map { l -> l.copy(timeMs = t(l.timeMs), endMs = t(l.endMs), words = w(l.words), background = w(l.background)) }
     }
 

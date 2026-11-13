@@ -23,8 +23,52 @@ import java.text.Normalizer
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+/**
+ * A timed run inside a [LyricWord]: [length] of the word's characters, from [startMs] to [endMs]. Word-by-word sources
+ * that stamp every character or syllable (KRC, QRC, YRC) keep those runs here while the word stays one word on screen.
+ */
+data class LyricPart(val startMs: Long, val endMs: Long, val length: Int)
+
 /** One sung word (or syllable) with its own timing, for word-by-word highlighting. */
-data class LyricWord(val startMs: Long, val endMs: Long, val text: String)
+data class LyricWord(val startMs: Long, val endMs: Long, val text: String, val parts: List<LyricPart> = emptyList()) {
+    /** [parts] when they cover exactly [text]; empty when the source timed the word only as a whole. */
+    val timedParts: List<LyricPart>
+        get() = parts.takeIf { it.isNotEmpty() && it.sumOf { part -> part.length } == text.length }.orEmpty()
+
+    /** How many of this word's characters are sung at [now], with a fraction inside the run being sung. */
+    fun sungLength(now: Long): Float {
+        val parts = timedParts
+        if (parts.isEmpty()) {
+            val f = ((now - startMs).toFloat() / (endMs - startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
+            return text.trimEnd().length * f
+        }
+        var at = 0
+        var done = 0
+        for (part in parts) {
+            if (now >= part.endMs) {
+                at += part.length
+                done = at
+                continue
+            }
+            if (now < part.startMs) return done.toFloat()
+            val f = ((now - part.startMs).toFloat() / (part.endMs - part.startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
+            return at + part.length * f
+        }
+        return done.toFloat()
+    }
+
+    /** When the character [offset] characters into this word starts being sung. */
+    fun startAt(offset: Int): Long {
+        val parts = timedParts
+        if (parts.isEmpty() || offset <= 0) return startMs
+        var at = 0
+        for (part in parts) {
+            if (offset < at + part.length) return part.startMs
+            at += part.length
+        }
+        return endMs
+    }
+}
 
 data class LyricLine(
     val timeMs: Long,
@@ -498,29 +542,25 @@ object WordFormat {
                 }
             }
             if (tokens.isEmpty()) continue
-            // Syllables are glued into words; a space (on a syllable or on its own) ends a word.
+            // Syllables are glued into words; a space (on a syllable or on its own) ends a word. Their own times stay
+            // as [LyricPart]s, so the word can be drawn as one but sung at the source's pace.
             val words = mutableListOf<LyricWord>()
-            val cur = StringBuilder()
-            var ws = 0L
-            var we = 0L
+            var cur = TimedWord()
             for ((t, d, text) in tokens) {
                 if (text.isEmpty()) continue
-                if (text.first().isWhitespace() && cur.isNotEmpty()) {
-                    words += LyricWord(ws, we, "$cur ")
-                    cur.setLength(0)
+                if (text.first().isWhitespace() && !cur.isEmpty) {
+                    cur.addSpace()
+                    words += cur.take()
+                    cur = TimedWord()
                 }
                 val word = text.trim()
-                if (word.isNotEmpty()) {
-                    if (cur.isEmpty()) ws = t
-                    cur.append(word)
-                    we = t + d
-                }
-                if (text.last().isWhitespace() && cur.isNotEmpty()) {
-                    words += LyricWord(ws, we, "$cur ")
-                    cur.setLength(0)
+                if (word.isNotEmpty()) cur.append(t, d, word, text.last().isWhitespace())
+                if (text.last().isWhitespace() && !cur.isEmpty) {
+                    words += cur.take()
+                    cur = TimedWord()
                 }
             }
-            if (cur.isNotEmpty()) words += LyricWord(ws, we, cur.toString())
+            if (!cur.isEmpty) words += cur.take()
             val text = words.joinToString("") { it.text }.decodeEntities().trim()
             if (text.isBlank() || creditLine.matches(text)) continue
             // QQ and KuGou open with a "Title - Artist" card before the song starts.
@@ -528,6 +568,33 @@ object WordFormat {
             out += LyricLine(start, text, start + dur, words.map { it.copy(text = it.text.decodeEntities()) })
         }
         return out.withInstrumentalGaps()
+    }
+
+    /** One word being built from timed syllables: its text, its span, and each syllable's own part of it. */
+    private class TimedWord {
+        private val text = StringBuilder()
+        private val parts = ArrayList<LyricPart>()
+        private var startMs = 0L
+        private var endMs = 0L
+        val isEmpty: Boolean get() = text.isEmpty()
+
+        fun append(t: Long, d: Long, word: String, trailingSpace: Boolean) {
+            if (text.isEmpty()) startMs = t
+            text.append(word)
+            var length = word.length
+            if (trailingSpace) { text.append(' '); length++ }
+            parts += LyricPart(t, t + d, length)
+            endMs = t + d
+        }
+
+        /** The space that ended the word had no syllable of its own: it stays at the word's end, without time. */
+        fun addSpace() {
+            if (text.isEmpty() || text.last() == ' ') return
+            text.append(' ')
+            parts += LyricPart(endMs, endMs, 1)
+        }
+
+        fun take() = LyricWord(startMs, endMs, text.toString(), parts.toList())
     }
 
     /** KuGou's KRC files: "krc1", then XOR with a fixed key, then zlib. */
