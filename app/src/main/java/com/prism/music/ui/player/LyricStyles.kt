@@ -192,6 +192,25 @@ internal fun LyricLine.upper(): LyricLine {
     return copy(text = up(text), words = words.map { it.copy(text = up(it.text)) }, background = background.map { it.copy(text = up(it.text)) })
 }
 
+/** A run of a word drawn with its own timing: [text] from [startMs] to [endMs]. */
+internal data class SungPiece(val text: String, val startMs: Long, val endMs: Long)
+
+/**
+ * [this] word as its source-timed runs, or as one piece when its source timed only the word. Words from KRC, QRC and YRC
+ * keep their syllables as `LyricPart`s, so their animations follow the source's own pace, not an even spread.
+ */
+internal fun LyricWord.sungPieces(): List<SungPiece> {
+    val parts = timedParts
+    if (parts.isEmpty()) return listOf(SungPiece(text, startMs, endMs))
+    var at = 0
+    return parts.map { part ->
+        val end = (at + part.length).coerceAtMost(text.length)
+        val piece = SungPiece(text.substring(at, end), part.startMs, part.endMs)
+        at = end
+        piece
+    }
+}
+
 /**
  * A line timed only as a whole, given words of its own: its time shared out by length, the way a karaoke screen fills a
  * line, over at most the time the words take to say (a line's time can run on through a pause). Word-timed lines,
@@ -355,18 +374,19 @@ private fun TypewriterLine(
     line: LyricLine, clock: State<Long>, style: TextStyle, look: LyricsLook, modifier: Modifier, maxLines: Int,
     onLayout: ((androidx.compose.ui.text.TextLayoutResult) -> Unit)? = null,
 ) {
-    // Each word's visibility in tenths, recomposing only when one changes.
-    val shown by remember(line) {
+    // Each run's visibility in tenths, recomposing only when one changes.
+    val pieces = remember(line) { line.words.flatMap { it.sungPieces() } }
+    val shown by remember(pieces) {
         derivedStateOf {
             val now = clock.value
-            line.words.map { w -> ((now - w.startMs).toFloat() / TYPE_IN_MS).coerceIn(0f, 1f).let { (it * 10).roundToInt() } }
+            pieces.map { p -> ((now - p.startMs).toFloat() / TYPE_IN_MS).coerceIn(0f, 1f).let { (it * 10).roundToInt() } }
         }
     }
     val text = buildAnnotatedString {
-        line.words.forEachIndexed { i, w ->
+        pieces.forEachIndexed { i, p ->
             val a = shown[i] / 10f
             if (look.sung != null) pushStyle(SpanStyle(brush = look.sung, alpha = a)) else pushStyle(SpanStyle(color = Color.White.copy(alpha = a)))
-            append(w.text)
+            append(p.text)
             pop()
         }
     }

@@ -252,7 +252,8 @@ private fun sungFraction(piece: RubyPiece, sung: Float): Float =
 private fun typewriterAlpha(line: LyricLine, offsets: List<Pair<Int, Int>>, now: Long, offset: Int): Float {
     val i = line.words.indices.firstOrNull { offset >= offsets[it].first && offset < offsets[it].second } ?: return 1f
     val w = line.words[i]
-    val shown = ((now - w.startMs).toFloat() / TYPE_IN_MS).coerceIn(0f, 1f)
+    val start = w.startAt(offset - offsets[i].first)
+    val shown = ((now - start).toFloat() / TYPE_IN_MS).coerceIn(0f, 1f)
     return (shown * 10).roundToInt() / 10f
 }
 

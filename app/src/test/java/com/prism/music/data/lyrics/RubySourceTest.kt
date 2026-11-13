@@ -66,6 +66,47 @@ class RubySourceTest {
     }
 
     @Test
+    fun aReadingKeepsItsTimeOnTheKanjiAndTheRestOnItsOwn() {
+        val line = WordFormat.parse(
+            WordFormat.Kind.KRC,
+            "[10000,3000]<0,500,0>向<500,200,0>（<700,100,0>む<800,100,0>）<900,200,0>か<1100,300,0>え",
+        ).last()
+        assertEquals("向（む）かえ", line.text)
+        assertEquals(1, line.words.size)
+        val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
+        assertEquals("向かえ", clean.text)
+        assertEquals(listOf(10_000L to 11_400L), clean.words.map { it.startMs to it.endMs })
+        val word = clean.words.single()
+        assertEquals(listOf(1, 1, 1), word.timedParts.map { it.length })
+        assertEquals(
+            listOf(10_000L to 10_900L, 10_900L to 11_100L, 11_100L to 11_400L),
+            word.timedParts.map { it.startMs to it.endMs },
+        )
+        assertEquals(0.5f, word.sungLength(10_450), 0.001f)
+        assertEquals(1f, word.sungLength(10_900), 0.001f)
+        assertEquals(1.5f, word.sungLength(11_000), 0.001f)
+        assertEquals(2f, word.sungLength(11_100), 0.001f)
+        assertEquals(3f, word.sungLength(11_400), 0.001f)
+        assertEquals(10_900L, word.startAt(1))
+    }
+
+    @Test
+    fun aReadingIsSharedByTheWholeKanjiRunItReads() {
+        val line = WordFormat.parse(
+            WordFormat.Kind.KRC,
+            "[0,2000]<0,100,0>本<100,100,0>当<200,100,0>（<300,100,0>ほ<400,100,0>ん<500,100,0>と<600,100,0>う<700,100,0>）<800,100,0>の",
+        ).last()
+        val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
+        assertEquals("本当の", clean.text)
+        val word = clean.words.single()
+        assertEquals(listOf(1, 1, 1), word.timedParts.map { it.length })
+        assertEquals(
+            listOf(0L to 400L, 400L to 800L, 800L to 900L),
+            word.timedParts.map { it.startMs to it.endMs },
+        )
+    }
+
+    @Test
     fun leavesWordTimingsAloneWhenTheWordsDontCoverTheLine() {
         val line = LyricLine(100, "君(きみ)の", 700, words = listOf(LyricWord(100, 500, "君(きみ)")))
         assertEquals(line, SourceFurigana.of(line.text)!!.cleanLine(line))

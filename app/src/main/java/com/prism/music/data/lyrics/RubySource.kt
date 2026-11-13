@@ -51,9 +51,81 @@ internal class SourceFurigana private constructor(
             for (i in 0 until length) {
                 if (at + i >= removed.size || !removed[at + i]) text.append(word.text[i])
             }
+            val parts = word.timedParts
+            val kept = if (parts.isEmpty()) emptyList() else cleanParts(parts, removed, at, word.text)
             at += length
-            out += if (text.length == length) word else word.copy(text = text.toString())
+            val wordText = text.toString()
+            out += when {
+                parts.isEmpty() -> if (wordText.length == length) word else word.copy(text = wordText)
+                wordText.length == length && kept == parts -> word
+                else -> word.copy(
+                    text = wordText,
+                    parts = kept.takeIf { runs -> runs.sumOf { it.length } == wordText.length }.orEmpty(),
+                )
+            }
         }
+        return out
+    }
+
+    /** [parts] with the annotation characters taken out; their time is shared by the kanji run they read. */
+    private fun cleanParts(parts: List<LyricPart>, removed: BooleanArray, wordAt: Int, text: String): List<LyricPart> {
+        val out = ArrayList<LyricPart>(parts.size)
+        /** Where each kept run sat in the word's own text, for finding the kanji a reading belongs to. */
+        val from = ArrayList<Int>(parts.size)
+        val to = ArrayList<Int>(parts.size)
+        var at = 0
+        var removedAt = -1
+        var removedEnd = 0L
+
+        fun finishRemoved() {
+            if (removedAt < 0) return
+            var kanjiAt = removedAt
+            while (kanjiAt > 0 && isKanji(text[kanjiAt - 1])) kanjiAt--
+            val run = out.indices.filter { to[it] > kanjiAt && from[it] < removedAt }
+            if (run.isNotEmpty() && removedEnd > out[run.last()].endMs) {
+                val extra = removedEnd - out[run.last()].endMs
+                val total = run.sumOf { runAt ->
+                    (minOf(to[runAt], removedAt) - maxOf(from[runAt], kanjiAt)).coerceAtLeast(0)
+                }
+                if (total <= 0) out[run.last()] = out[run.last()].copy(endMs = removedEnd)
+                else {
+                    var assigned = 0L
+                    var shift = 0L
+                    run.forEachIndexed { n, runAt ->
+                        val share = if (n == run.lastIndex) extra - assigned
+                        else extra * (minOf(to[runAt], removedAt) - maxOf(from[runAt], kanjiAt)).coerceAtLeast(0) / total
+                        val part = out[runAt]
+                        out[runAt] = part.copy(startMs = part.startMs + shift, endMs = part.endMs + shift + share)
+                        shift += share
+                        assigned += share
+                    }
+                }
+            } else if (run.isEmpty() && out.isNotEmpty()) {
+                // No kanji in this word to give it to (a reading that follows a word boundary): hold the word before it.
+                val last = out.removeAt(out.lastIndex)
+                out += if (removedEnd > last.endMs) last.copy(endMs = removedEnd) else last
+            }
+            removedAt = -1
+        }
+
+        for (part in parts) {
+            var kept = 0
+            for (i in 0 until part.length) {
+                val index = wordAt + at + i
+                if (index >= removed.size || !removed[index]) kept++
+            }
+            if (kept > 0) {
+                finishRemoved()
+                out += if (kept == part.length) part else part.copy(length = kept)
+                from += at
+                to += at + part.length
+            } else {
+                if (removedAt < 0) removedAt = at
+                if (part.endMs > removedEnd) removedEnd = part.endMs
+            }
+            at += part.length
+        }
+        finishRemoved()
         return out
     }
 

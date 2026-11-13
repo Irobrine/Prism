@@ -7,6 +7,7 @@ import com.prism.music.data.db.LyricsEntity
 import com.prism.music.data.innertube.InnerTube
 import com.prism.music.data.innertube.YouTubeMusic
 import com.prism.music.data.lyrics.LyricLine
+import com.prism.music.data.lyrics.LyricPart
 import com.prism.music.data.lyrics.LyricWord
 import com.prism.music.data.lyrics.LyricsRepository
 import com.prism.music.data.lyrics.WordTiming
@@ -68,6 +69,16 @@ class WordTimingTest {
         assertEquals(lines.map { it.timeMs }, moved.map { it.timeMs })
         assertEquals(10_000L, moved.first().words.first().startMs)
         assertTrue(moved.all { l -> l.words.all { it.startMs >= l.timeMs } })
+    }
+
+    @Test fun shiftingMovesThePartsInsideWordsToo() {
+        val line = LyricLine(
+            10_000, "abc", 11_000,
+            listOf(LyricWord(10_000, 11_000, "abc", listOf(LyricPart(10_000, 10_500, 1), LyricPart(10_500, 11_000, 2)))),
+        )
+        val moved = WordTiming.shifted(listOf(line), 500).single().words.single()
+        assertEquals(10_500L to 11_500L, moved.startMs to moved.endMs)
+        assertEquals(listOf(10_500L to 11_000L, 11_000L to 11_500L), moved.parts.map { it.startMs to it.endMs })
     }
 
     @Test fun wordsSharedOutEvenlyAreShownByTheirLines() {
