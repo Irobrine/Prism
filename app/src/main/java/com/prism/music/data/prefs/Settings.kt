@@ -619,6 +619,8 @@ enum class MenuAction(val group: MenuGroup, val fromPlayer: Boolean = false, val
     ADD_TO_PLAYLIST(MenuGroup.SONG),
     /** 1.8.3: the listener's own tags on the song. */
     TAGS(MenuGroup.SONG),
+    /** 1.8.3: the listener's own title, artist, album and genre for the song, kept on this phone. */
+    EDIT_METADATA(MenuGroup.SONG),
     RADIO(MenuGroup.SONG), DOWNLOAD(MenuGroup.SONG), ALBUM(MenuGroup.SONG), ARTIST(MenuGroup.SONG),
     CREDITS(MenuGroup.SONG),
     /** #211 (1.8.2): its plays and dates. */
