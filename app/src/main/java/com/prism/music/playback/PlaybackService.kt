@@ -58,6 +58,10 @@ import com.prism.music.data.model.quickPicks
 import com.prism.music.ui.screens.RecognizeActivity
 import com.prism.music.ui.theme.AppIcons
 import com.prism.music.ui.tv.TvDevice
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -147,6 +151,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private var extrasJob: Job? = null
 
     private lateinit var lockScreen: com.prism.music.ui.lockscreen.LockScreenGate
+    private val silentKeepAlive by lazy { SilentKeepAlive() }
 
     override fun onCreate() {
         super.onCreate()
@@ -586,6 +591,14 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             setNotificationClosed(false)
             syncPlaceholder()
             triggerNotificationUpdate()
+            // vivo can kill even a foreground service when its task is dismissed: let WorkManager bring it back.
+            runCatching {
+                WorkManager.getInstance(this).enqueueUniqueWork(
+                    "prism-persistent-restart",
+                    ExistingWorkPolicy.REPLACE,
+                    OneTimeWorkRequestBuilder<PersistentRestartWorker>().setInitialDelay(5, TimeUnit.SECONDS).build(),
+                )
+            }
             return
         }
         // Settings → Playback → "Stop when swiped away" (#45): closing Prism from Recents ends the music too (some
@@ -612,6 +625,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onDestroy() {
+        silentKeepAlive.stop()
         lockScreen.stop()
         if (PlaybackServices.running == this::class.java) PlaybackServices.running = null
         PlaybackServices.failForTest = null
@@ -897,14 +911,20 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      * Android's "background activity" until stopped there).
      */
     private fun closedFromNotification() {
-        if (player.isPlaying) return
         if (c.settings.current.persistent.controls) {
-            // "Always": the card is put back, and Prism keeps running to show it.
-            android.util.Log.i("PrismControl", "the card was swiped away: putting the persistent controls back")
+            // Dismissing a song's card ends it and leaves the persistent controls (rather than keeping the paused song).
+            android.util.Log.i("PrismControl", "the card was dismissed: stopping the song and showing the persistent controls")
+            flushPlayTime()
+            saveEpisodePosition()
+            saveQueue(now = true)
+            player.pause()
+            player.stop()
             setNotificationClosed(false)
+            syncPlaceholder()
             triggerNotificationUpdate()
             return
         }
+        if (player.isPlaying) return
         android.util.Log.i("PrismControl", "the notification was swiped away: stopping until something plays")
         AudioDiagnostics.log("control", "the notification was swiped away: Prism stops until something plays")
         setNotificationClosed(true)
@@ -2380,6 +2400,11 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private fun syncPlaceholder() {
         if (!::sessionPlayer.isInitialized || !::player.isInitialized) return
         sessionPlayer.setPlaceholderAsPlaying(c.settings.current.persistent.compatibility)
+        // Compatibility mode also keeps a silent audio track playing, so the phone sees a real playing app and keeps
+        // the card on the lock screen and after the app is dismissed.
+        if (c.settings.current.persistent.controls && c.settings.current.persistent.compatibility && placeholderWanted()) {
+            silentKeepAlive.start()
+        } else silentKeepAlive.stop()
         val on = placeholderWanted()
         if (sessionPlayer.placeholder == on) return
         sessionPlayer.setPlaceholder(on)
