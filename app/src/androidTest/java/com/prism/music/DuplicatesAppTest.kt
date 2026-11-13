@@ -48,8 +48,7 @@ class DuplicatesAppTest {
         val other = Song("dupe-other", "Another One", listOf(ArtistRef("Test Artist")), durationSec = 180)
         val id = Fixture.prismPlaylist("Twice over", listOf(video, other, song)).also { listId = it }
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         for (i in 0 until 8) {
             if (compose.onAllNodes(hasText("Playlists") and hasClickAction()).fetchSemanticsNodes().isNotEmpty()) break
             compose.onRoot().performTouchInput { swipeRight(startX = width * 0.15f, endX = width * 0.95f) }

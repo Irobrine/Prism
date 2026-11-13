@@ -143,6 +143,10 @@ class SettingsDesignTest {
     private val ownTags: Map<String, Map<String, String>> by lazy {
         mapOf(
             SettingsPageId.LOOKS.title to mapOf("settings:looks:now" to "the card of the look in use, above the groups"),
+            SettingsPageId.PLAYER.title to mapOf(
+                "settings:player:preview:live" to "the live small player in the pinned preview",
+                "settings:player:preview:plain" to "the still small player in the pinned preview, in Performance mode (1.8.5)",
+            ),
             SettingsPageId.LYRICS_SING.title to mapOf("lyricsSing:source:" to "a source's switch inside the source order list (the tag ends in the source's name)"),
             SettingsPageId.BACKUP_ABOUT.title to mapOf(
                 "backupAbout:foot" to "the \"not affiliated\" line under the groups",

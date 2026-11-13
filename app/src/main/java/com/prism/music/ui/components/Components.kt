@@ -753,9 +753,10 @@ fun SongActionsSheet(song: Song, extra: List<SheetItem> = emptyList(), onDismiss
         else ActionItem(PrismIcons.QueueMusic, tr(R.string.add_to_queue)) { c.player.addToQueue(song) },
         // A radio of a podcast episode is music radio: not offered for episodes.
         if (song.isEpisode || local) null else ActionItem(PrismIcons.Radio, tr(R.string.radio_2)) { c.player.playRadio(song) },
+        // #471: named for what a tap does once it's downloaded (it read "Downloaded", and nobody found how to remove one).
         if (local || rss) null else ActionItem(
-            if (downloaded) PrismIcons.DownloadDone else PrismIcons.Download, tr(R.string.download),
-            value = when { downloaded -> tr(R.string.downloaded); dl != null -> "${dl.percent.toInt().coerceAtLeast(0)}%"; else -> null },
+            if (downloaded) PrismIcons.DownloadDone else PrismIcons.Download, if (downloaded) tr(R.string.remove_download) else tr(R.string.download),
+            value = if (!downloaded && dl != null) "${dl.percent.toInt().coerceAtLeast(0)}%" else null,
             active = downloaded, keepOpen = true,
         ) { if (dl != null) c.downloads.remove(song.id) else c.downloads.download(song) },
     ).filterNotNull()

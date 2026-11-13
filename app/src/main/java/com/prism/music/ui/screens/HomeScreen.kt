@@ -321,6 +321,8 @@ private fun HomeContent(bottomPadding: androidx.compose.ui.unit.Dp) {
             .map { HomeSectionConfig(shelfKey(it.title), it.title) } else emptyList()
         HomeSections.inSeason(settings.homeLayout, today).filter { it.visible } + extra
     }
+    // Last month's recap (1.8.5), part of the Replay section: looked for once while Home is open.
+    val recap = rememberRecapCard(wanted = layout.any { it.key == HomeSections.REPLAY })
 
     // Worked out here rather than inside their rows: a LazyColumn row forgets its state when scrolled off, so these were
     // fetched again on the way back and the sections popped out and in, pushing everything under them.
@@ -501,7 +503,7 @@ private fun HomeContent(bottomPadding: androidx.compose.ui.unit.Dp) {
                         HomeSections.SEASONAL -> if (online) HolidaySection(cfg)
                         HomeSections.NEW_TO_YOU, HomeSections.DEEP_CUTS -> DiscoverMixSection(cfg, online)
                         HomeSections.ON_THIS_DAY -> OnThisDaySection(cfg, online)
-                        HomeSections.REPLAY -> ReplayTeaser(cfg)
+                        HomeSections.REPLAY -> ReplaySection(cfg, recap)
                         HomeSections.GENRES -> TopGenresSection(cfg)
                         HomeSections.MOODS -> if (online) {
                             val m = (moods.state as? Load.Ok)?.value?.picks?.take(12)
@@ -1213,11 +1215,14 @@ private class YearSoFar(
 )
 private val yearSoFar = MutableStateFlow<YearSoFar?>(null)
 
+/** Plays taken out of the history (#469): the card reads the year again rather than keep its count for minutes. */
+internal fun forgetYearSoFar() { yearSoFar.value = null }
+
 private suspend fun loadYearSoFar(
     c: com.prism.music.AppContainer, graph: com.prism.music.data.prefs.ReplayGraph, counted: Set<com.prism.music.data.imports.ImportSource>,
+    now: Long = System.currentTimeMillis(),
 ): YearSoFar = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-    val now = System.currentTimeMillis()
-    val start = Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0) }.timeInMillis
+    val start = Calendar.getInstance().apply { timeInMillis = now; set(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0) }.timeInMillis
     // 1.8.1: the sources Replay counts (Prism's own plays unless the listener counts an imported history too).
     val plays = c.imports.stats(counted)
     // This year's months, or (#286) the last weeks or days.
@@ -1227,24 +1232,41 @@ private suspend fun loadYearSoFar(
     YearSoFar(now, plays.totalMs(start, now), bars, top.first, top.second, graph, counted)
 }
 
+/**
+ * Home's Replay section: the Replay card (in December, once it's open, the Rewind's), then for a month's first week last
+ * month's recap card under it (1.8.5). The recap stands on its own: in early January the year so far may be too short
+ * for the Replay card, but December's recap still shows. [now] is the clock (tests set it).
+ */
 @Composable
-private fun ReplayTeaser(cfg: HomeSectionConfig) {
+internal fun ReplaySection(cfg: HomeSectionConfig, recap: RecapCardState, now: Long = System.currentTimeMillis()) {
+    val c = LocalContainer.current
+    val nav = LocalNavigator.current
+    Column {
+        ReplayTeaser(cfg, now)
+        recap.card?.let { r ->
+            RecapHomeCard(r, onOpen = { c.recapRequest.value = r.month; nav.go(Routes.REPLAY) }, onDismiss = recap::dismiss)
+        }
+    }
+}
+
+@Composable
+private fun ReplayTeaser(cfg: HomeSectionConfig, now: Long) {
     val c = LocalContainer.current
     val nav = LocalNavigator.current
     val graph = LocalAppSettings.current.view.replayGraph
     val counted by c.imports.counted.collectAsState()
     val kept by produceState(yearSoFar.value?.takeIf { it.graph == graph && it.counted == counted }, graph, counted) {
         val have = yearSoFar.value?.takeIf { it.graph == graph && it.counted == counted }
-        if (have != null && System.currentTimeMillis() - have.at < 5 * 60_000L) { value = have; return@produceState }
-        value = runCatching { loadYearSoFar(c, graph, counted) }.getOrNull()?.also { yearSoFar.value = it } ?: have
+        if (have != null && now - have.at in 0 until 5 * 60_000L) { value = have; return@produceState }
+        value = runCatching { loadYearSoFar(c, graph, counted, now) }.getOrNull()?.also { yearSoFar.value = it } ?: have
     }
     val soFar = kept ?: return
     val ms = soFar.ms
     if (ms < 60_000) return
     val total = listenTotal(ms)
-    val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
+    val year = remember { Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.YEAR) }
     // Through December (once this year's Rewind has opened), the teaser is the Rewind's own card and opens its story.
-    val rewind = remember { Calendar.getInstance().get(Calendar.MONTH) == Calendar.DECEMBER && c.rewind.isOpen(year) }
+    val rewind = remember { Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.MONTH) == Calendar.DECEMBER && c.rewind.isOpen(year, now) }
     val ui = com.prism.music.ui.theme.LocalUi.current
     // Spotlight (the default) is the big card below; the other styles show the year so far as a few cards or rows:
     // the time listened, the top song and the top artist, each opening Replay.

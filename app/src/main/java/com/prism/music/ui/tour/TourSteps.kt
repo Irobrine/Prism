@@ -62,6 +62,8 @@ private const val V1_8_2 = 57
 private const val V1_8_3 = 59
 /** Prism 1.8.4 (build 61): Settings, made simple, and your requests. */
 private const val V1_8_4 = 61
+/** Prism 1.8.5 (build 63): Replay & Rewind 2026. */
+private const val V1_8_5 = 63
 
     /** Every step, in the order they're shown. */
     val steps: List<TourStep> = listOf(
@@ -645,6 +647,49 @@ private const val V1_8_4 = 61
                 tr(R.string.tour_184_also_glass),
             ),
             listOf(PrismIcons.Shuffle, PrismIcons.Stats),
+        ),
+        TourStep(
+            // The listening clock, the calendar, milestones and the monthly recap. Opens Replay.
+            V1_8_5, PrismIcons.Stats, tr(R.string.tour_185_replay_title),
+            tr(R.string.tour_185_replay_body),
+            listOf(
+                tr(R.string.tour_185_replay_point_1),
+                tr(R.string.tour_185_replay_point_2),
+                tr(R.string.tour_185_replay_point_3),
+                tr(R.string.tour_185_replay_point_4),
+            ),
+            listOf(PrismIcons.Timer, PrismIcons.StarFilled),
+            showMe = Routes.REPLAY,
+        ),
+        TourStep(
+            V1_8_5, PrismIcons.ReplayFilled, tr(R.string.tour_185_rewind_title),
+            tr(R.string.tour_185_rewind_body),
+            listOf(tr(R.string.tour_185_rewind_point_1), tr(R.string.tour_185_rewind_point_2), tr(R.string.tour_185_rewind_point_3)),
+        ),
+        TourStep(
+            // The widgets, the two notices and Finish the lyric. Opens Recommendations & history at Replay, where the switches are.
+            V1_8_5, PrismIcons.Update, tr(R.string.tour_185_more_title),
+            tr(R.string.tour_185_more_body),
+            listOf(
+                tr(R.string.tour_185_more_point_1),
+                tr(R.string.tour_185_more_point_2, tr(R.string.replay_notices)),
+                tr(R.string.tour_185_more_point_3, tr(R.string.finish_lyric_title)),
+            ),
+            listOf(PrismIcons.Lyrics, PrismIcons.Home),
+            showMe = Routes.settings(SettingsPageId.RECOMMENDATIONS_HISTORY.key, find = tr(R.string.replay_2)),
+        ),
+        TourStep(
+            // #469, #477, face-down pause, #374, #481 and Open with Prism.
+            V1_8_5, PrismIcons.QueueMusic, tr(R.string.also_new),
+            tr(R.string.from_your_requests),
+            listOf(
+                tr(R.string.tour_185_also_history),
+                tr(R.string.tour_185_also_search),
+                tr(R.string.tour_185_also_face_down, tr(R.string.playback_face_down_pause)),
+                tr(R.string.tour_185_also_dj),
+                tr(R.string.tour_185_also_open_with),
+            ),
+            listOf(PrismIcons.Search, PrismIcons.Shuffle),
         ),
         TourStep(
             V1_7, PrismIcons.Update, tr(R.string.stay_in_the_loop),

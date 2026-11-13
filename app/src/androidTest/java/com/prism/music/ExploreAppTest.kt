@@ -120,8 +120,7 @@ class ExploreAppTest {
     }
 
     private fun openSearch() {
-        compose.waitUntil(20_000) { compose.onAllNodes(hasText("Search") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Search") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Search", 20_000)
         compose.waitForIdle()
     }
 

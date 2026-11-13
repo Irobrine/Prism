@@ -1072,6 +1072,8 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                     }
 
                     // ---- The sleeve (collapses to a header thumbnail)
+                    // #464: a play / pause tapped on the small cover over the lyrics shows its sign on it for a moment.
+                    var playFlash by remember { mutableStateOf<Long?>(null) }
                     Box(
                         Modifier
                             .offset { IntOffset(artStart().roundToPx(), artTop().roundToPx()) }
@@ -1082,8 +1084,10 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                                 scaleX = idle; scaleY = idle
                                 translationX = swipe.value * (1f - p())
                             }
-                            .then(
-                                if (lyricsOpen || queueOpen || statsOpen) Modifier.clickable { queueOpen = false; statsOpen = false; closeLyrics() } else Modifier
+                            .smallCoverTaps(
+                                lyricsOpen, queueOpen || statsOpen, settings.behavior.lyricsCoverPlays, isPlaying,
+                                onPlayPause = { pc.togglePlay(); playFlash = System.nanoTime() },
+                                onClose = { queueOpen = false; statsOpen = false; closeLyrics() },
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1148,6 +1152,13 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                         }
                         seekFlash?.takeIf { !collapsePastHalf }?.let { f ->
                             SeekLabel(f, Modifier.align(if (f.ahead) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 18.dp))
+                        }
+                        playFlash?.let { at ->
+                            LaunchedEffect(at) { delay(700); playFlash = null }
+                            // What the tap did: paused shows pause, playing shows play.
+                            Box(Modifier.matchParentSize().clip(artShape).background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                                Icon(if (isPlaying) PrismIcons.Play else PrismIcons.Pause, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
                         }
                     }
 
@@ -1604,6 +1615,40 @@ internal fun statusBarRoom(): WindowInsets = WindowInsets.statusBarsIgnoringVisi
 internal fun playerTitleStyle(type: androidx.compose.material3.Typography, settings: com.prism.music.data.prefs.AppSettings): androidx.compose.ui.text.TextStyle {
     val titleScale = settings.playerTitleSize.scale
     return type.headlineMedium.let { it.copy(fontSize = it.fontSize * 0.9f * titleScale, lineHeight = it.lineHeight * 0.9f * titleScale, fontWeight = settings.type.playerTitleWeight.title ?: it.fontWeight) }
+}
+
+/**
+ * What a tap does on the small cover beside the title while a panel is open. Over the queue or the stats, and over the
+ * lyrics with [tapPlays] off (Settings → Gestures & buttons, "Tap the small cover to play or pause", off by default), a
+ * tap closes the panels ([onClose]), as always. Over the lyrics with it on (#464, 1.8.5), [lyricsCoverTaps]. With no
+ * panel open, nothing (the big cover's own gestures are set elsewhere).
+ */
+@Composable
+internal fun Modifier.smallCoverTaps(
+    lyricsOpen: Boolean, otherPanelOpen: Boolean, tapPlays: Boolean, isPlaying: Boolean,
+    onPlayPause: () -> Unit, onClose: () -> Unit,
+): Modifier = when {
+    lyricsOpen && !otherPanelOpen && tapPlays -> lyricsCoverTaps(isPlaying, onPlayPause, onClose)
+    lyricsOpen || otherPanelOpen -> clickable { onClose() }
+    else -> this
+}
+
+/**
+ * #464 (1.8.5): the small cover beside the title while the lyrics are open, with "Tap the small cover to play or pause"
+ * on. A tap plays or pauses (the lyrics stay up); a long press closes the lyrics, as a tap on it does with the switch
+ * off. Nothing else is set on it there (the cover's own double tap, long press and swipes are for the big cover, and
+ * wait while a panel is open).
+ */
+@Composable
+internal fun Modifier.lyricsCoverTaps(isPlaying: Boolean, onPlayPause: () -> Unit, onClose: () -> Unit): Modifier {
+    val haptics = com.prism.music.ui.theme.rememberHaptics()
+    return combinedClickable(
+        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+        indication = null,
+        onClickLabel = if (isPlaying) tr(R.string.widget_pause) else tr(R.string.widget_play),
+        onLongClickLabel = tr(R.string.close_lyrics),
+        onLongClick = { haptics.click(); onClose() },
+    ) { haptics.click(); onPlayPause() }
 }
 
 /** The artists' line under the player's title, a size smaller than it (#41). */

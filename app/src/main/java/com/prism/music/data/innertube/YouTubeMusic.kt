@@ -65,6 +65,16 @@ class YouTubeMusic(
          * 1.7.9 (#202: "Punk Rocky"'s video runs 62 s past the song).
          */
         internal const val LONGER_VIDEO_SEC = 90
+        /**
+         * How much shorter than its song an artist's own video may run (#383, 1.8.5): a film song's video is the scene's
+         * cut of it, often 10 to 35 s short of the soundtrack's song ("Peniviti" 289 s for 310, "Kaun Tujhe" 216 for 242,
+         * "Hey Idi Nenena" 221 for 255); of 34 videos two playlists missed, 13 were only this. Title and artist must agree.
+         */
+        internal const val SHORTER_VIDEO_SEC = 35
+        /** "(feat. Dhanush & Samyuktha Menon)": who else is on it, written on the video or the song but rarely both. */
+        private val FEAT_TAG = Regex("""\s*[(\[]\s*(?:feat\.?|ft\.?|featuring)\s[^)\]]*[)\]]""", RegexOption.IGNORE_CASE)
+        /** What a label adds after the song's name: "… - Video Song", "… Full Video Song", "… Lyrical". */
+        private val LABEL_TAIL = Regex("""\s*[-–:]?\s*(?:(?:full|official|lyrical|lyric|video|song|audio|hd|4k)\b\s*)+$""", RegexOption.IGNORE_CASE)
         /** A song's name in quotes in a video's title ('Artist - "Song" Label'), any kind of double quotes. */
         private val QUOTED_TITLE = Regex("[\"“”]([^\"“”]+)[\"“”]")
 
@@ -105,6 +115,7 @@ class YouTubeMusic(
 
         private fun matchNorm(s: String) = s.lowercase()
             .replace(FROM_TAG, " ")
+            .replace(FEAT_TAG, " ")
             .replace(SONG_FOR_VIDEO_BRACKETS) { m ->
                 val words = m.value.trim('(', ')', '[', ']', ' ').split(Regex("\\s+"))
                 // "(Official Video)" is the video's; "(Telugu)" / "(Telugu Version)" the dub's language, checked apart.
@@ -118,20 +129,40 @@ class YouTubeMusic(
             Regex("[(\\[][^)\\]]*[)\\]]").findAll(title.lowercase()).flatMap { Regex("\\p{L}+").findAll(it.value).map { w -> w.value } }
                 .filter { it in LANGUAGES }.toSet()
 
+        /**
+         * [name] without a label's "Video Song" / "Lyrical" ([LABEL_TAIL]). A last "Song" or "Audio" alone stays when it's
+         * half the name and no dash sets it apart: "Love Song" and "Radio Audio" are names. ("Kesariya Song" is matched
+         * without it too: [pickSongForVideo].)
+         */
+        private fun withoutLabelTail(name: String): String {
+            val tail = LABEL_TAIL.find(name) ?: return name
+            val rest = name.removeRange(tail.range).trim()
+            val words = rest.split(Regex("\\s+")).count { it.isNotEmpty() }
+            val namelike = tail.value.none { it in "-–:" } &&
+                tail.value.trim().split(Regex("\\s+")).all { it.lowercase() in NAME_WORDS }
+            return if (words < 2 && namelike) name else rest
+        }
+        /** [LABEL_TAIL]'s words that are often a song's own name's too. */
+        private val NAME_WORDS = setOf("song", "audio")
+
         /** The song's title and artist as a video's title and channel give them ([songForVideo]). */
         private fun videoParts(video: Song): Pair<String, String> {
+            // #383 (1.8.5): a film label's title, "Chamkeela Angeelesi - Video Song | Dasara | Nani,Keerthy Suresh | …":
+            // the song's name is what comes before the first bar, without the label's "Video Song".
+            val full = video.title.takeIf { "| " in it }?.substringBefore("|")?.trim()?.let(::withoutLabelTail)
+                ?.takeIf { matchNorm(it).isNotBlank() } ?: video.title
             // "Artist - Title (Live at …)" videos put the artist in the title.
             val channel = matchNorm(video.primaryArtist)
-            val head = video.title.substringBefore(" - ", "")
+            val head = full.substringBefore(" - ", "")
             val headIsChannel = head.isNotEmpty() && matchNorm(head).let { a -> channel.isBlank() || a.contains(channel) || channel.contains(a) }
             // A label's or a music channel's upload (#202: 'Meg & Dia - "Monster" Doghouse Records' by BlankTV): the artist
             // before the dash, the song's name in quotes, the rest the label's.
-            val quoted = if (head.isNotEmpty() && !headIsChannel) QUOTED_TITLE.find(video.title.substringAfter(" - "))?.groupValues?.get(1)?.trim() else null
+            val quoted = if (head.isNotEmpty() && !headIsChannel) QUOTED_TITLE.find(full.substringAfter(" - "))?.groupValues?.get(1)?.trim() else null
             val artistName = if (quoted != null) head.trim() else video.primaryArtist
             val rawTitle = when {
                 quoted != null -> quoted
-                headIsChannel -> video.title.substringAfter(" - ")
-                else -> video.title
+                headIsChannel -> full.substringAfter(" - ")
+                else -> full
             }
             return rawTitle to artistName
         }
@@ -141,6 +172,25 @@ class YouTubeMusic(
             val (rawTitle, artistName) = videoParts(video)
             if (matchNorm(rawTitle).isBlank()) return null
             return "${rawTitle.replace(FROM_TAG, " ").replace(Regex("\\(.*?\\)|\\[.*?]"), " ").trim()} $artistName".trim()
+        }
+
+        /**
+         * Two artist names that are one person's: one inside the other ("MC Vickey" / "M.C. Vickey & Co"), or a letter
+         * apart, as names written from another script are ("Renjith" / "Ranjith", "Ram Miriyala" / "Ram Miryala",
+         * "Shefali Alvares" / "Shefali Alvaris": #383, 1.8.5). Short names must be the same.
+         */
+        internal fun sameArtistName(a: String, b: String): Boolean {
+            if (a.isBlank() || b.isBlank()) return false
+            if (a.contains(b) || b.contains(a)) return true
+            if (minOf(a.length, b.length) < 6 || kotlin.math.abs(a.length - b.length) > 1) return false
+            // One letter changed, added or left out.
+            var i = 0
+            while (i < a.length && i < b.length && a[i] == b[i]) i++
+            return when {
+                a.length == b.length -> a.regionMatches(i + 1, b, i + 1, a.length - i - 1)
+                a.length > b.length -> a.regionMatches(i + 1, b, i, b.length - i)
+                else -> b.regionMatches(i + 1, a, i, a.length - i)
+            }
         }
 
         /**
@@ -154,6 +204,8 @@ class YouTubeMusic(
             val (rawTitle, artistName) = videoParts(video)
             val title = matchNorm(rawTitle)
             if (title.isBlank()) return null
+            // A label's title whose last "Song" was kept as the name's ([withoutLabelTail]) may still mean the song without it.
+            val titles = setOfNotNull(title, matchNorm(rawTitle.replace(LABEL_TAIL, "")).takeIf { "| " in video.title && it.isNotBlank() })
             val artist = matchNorm(artistName)
             val videoLanguages = languages(video.title)
             // An artist's own music video often runs longer than the song (an intro, a scene after it: "bad guy", 206 s for a
@@ -165,21 +217,24 @@ class YouTubeMusic(
                 // never its sound, so another length of the same title by the same artist is the same release.
                 if (anyLength || video.durationSec <= 0 || s.durationSec <= 0) return true
                 val longer = video.durationSec - s.durationSec
-                return if (ownTake) longer in -SONG_FOR_VIDEO_SLACK_SEC..LONGER_VIDEO_SEC else kotlin.math.abs(longer) <= SONG_FOR_VIDEO_SLACK_SEC
+                return if (ownTake) longer in -SHORTER_VIDEO_SEC..LONGER_VIDEO_SEC else kotlin.math.abs(longer) <= SONG_FOR_VIDEO_SLACK_SEC
             }
-            fun byArtist(s: Song, a: String) = s.artists.any { x -> matchNorm(x.name).let { it.isNotBlank() && (it.contains(a) || a.contains(it)) } }
+            fun byArtist(s: Song, a: String) = s.artists.any { x -> sameArtistName(matchNorm(x.name), a) }
+            // Any of the video's artists will do (#383, 1.8.5): YouTube lists a film video's singers in another order than
+            // the song's, or leads with one the song doesn't credit ("Yuvakula": Ranjith, Remo Fernandes, Revathy).
+            val credited = video.artists.map { matchNorm(it.name) }.filter { it.isNotBlank() }
+            fun byAnyArtist(s: Song) = byArtist(s, artist) || credited.any { byArtist(s, it) }
             // Only an exact title counts; a near miss would put the wrong song's lyrics on the video. A Telugu dub isn't the Tamil song.
             val titled = results.filter { s ->
-                !s.isVideo && matchNorm(s.title) == title && languages(s.title).let { l -> l.isEmpty() || videoLanguages.isEmpty() || l.any { it in videoLanguages } }
+                !s.isVideo && matchNorm(s.title) in titles && languages(s.title).let { l -> l.isEmpty() || videoLanguages.isEmpty() || l.any { it in videoLanguages } }
             }
-            val fits = titled.filter { s -> (artist.isBlank() || byArtist(s, artist)) && lengthFits(s) }
+            val fits = titled.filter { s -> (artist.isBlank() || byAnyArtist(s)) && lengthFits(s) }
             // #383: a label's upload ("Junglee Music Telugu") of a soundtrack YouTube credits to "Various Artists" names no
             // singer to compare: it counts only as the one song of that title the search gives, and of a fitting length.
             val chosen = fits.ifEmpty {
                 titled.singleOrNull()?.takeIf { s -> s.artists.isNotEmpty() && s.artists.all { matchNorm(it.name) in VARIOUS } && lengthFits(s) }?.let(::listOf).orEmpty()
             }
             // The one crediting more of the video's artists first (the Telugu dub names its Telugu lyricist), then the nearest length.
-            val credited = video.artists.map { matchNorm(it.name) }.filter { it.isNotBlank() }
             return chosen.minWithOrNull(
                 compareBy<Song>({ s -> -credited.count { byArtist(s, it) } }, { s -> if (video.durationSec > 0 && s.durationSec > 0) kotlin.math.abs(s.durationSec - video.durationSec) else 0 }),
             )

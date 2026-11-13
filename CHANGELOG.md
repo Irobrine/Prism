@@ -2,6 +2,46 @@
 
 What changed in each release. Older releases are described on the [Releases page](https://github.com/Yigder/Prism/releases).
 
+## 1.8.5
+
+### Replay & Rewind 2026
+
+- **Listening clock.** Replay shows your week hour by hour and names your busiest hour and day. Tap an hour for its top songs.
+- **Listening calendar.** Every day with music, shaded by how much you listened. Tap a day for its time and plays.
+- **Milestones.** Your 25th, 100th or 1,000th play of a song, hours of music, different songs, days in a row. Worked out from the history on your phone.
+- **Monthly recap.** In a month's first week, Home shows last month at a glance; a tap opens that month's story. A notification for it is off until you turn it on.
+- **Rewind 2026** opens on December 1 with four new slides: your year day by day, your week hour by hour, the songs Prism found for you that you kept playing, and your milestones. Every slide you share now says Prism Rewind and the year. Rewinds of past years stay as they were.
+- **Replay on your home screen.** Two widgets: this week's top song, or the top song and artist.
+- **Finish the lyric** (off by default, Settings → Recommendations & history → Replay). Guess the last word of lines from your most played songs, from lyrics already saved on your phone.
+- **Share the clock and the calendar** as a picture.
+- **Notifications in one row.** Rewind's, the monthly recap's and the milestones' notifications sit together under Settings → Recommendations & history → Replay → Notifications. The two new ones are off by default.
+
+### New
+
+- **Search your history, and remove a play** (#469). Library → History has a search over everything you've played, and a row's menu has "Remove from history", with Undo.
+- **Recent searches** (#477): the last 30 are kept, with Show all and Clear all.
+- **Shuffle in DJ mode deals a new set** (#374) and DJ mode stays on, instead of Shuffle turning it off.
+- **Hold Previous for the song before** (#481), where holding doesn't seek.
+- **Pause when face down** (off by default, Settings → Playback). Lay the phone screen-down to pause; pick it up within five minutes and it plays on.
+- **Tap the small cover to play or pause** (#464, off by default, Settings → Gestures & buttons). With the lyrics open, a tap on the small cover plays or pauses and a long press closes the lyrics.
+- **Open with Prism.** Audio files opened from a file manager play in Prism.
+
+### Fixes
+
+- **No more static at the start of a song with Normalize volume on.** The next song's first half second played at the last song's level, so a loud song after a quiet one was pushed into the limiter. Each song now has its own level from its first sample.
+- **"Remove download" in a song's menu** (#471). The tile read "Downloaded", so nobody found that a tap removes it.
+- **More film songs play as songs under "Songs everywhere"** (#383): videos a little shorter than the song, names spelled a letter apart, and label-style titles now match.
+- **Your own songs beside YouTube's radio stay close to the seed** (#461).
+- **A playlist that failed to load part-way is read again** rather than kept short (#473).
+- **Shuffle keeps its order** when a song is swapped for its video or its other version.
+- **Reset this page** counts the lines it listed in its Undo bar.
+- **Switches are easier to see when off** on light glass.
+- **Settings → Player draws a still preview in Performance mode.**
+- **TalkBack says whether Shuffle is on.**
+- **Reduce motion and Performance mode hold every story slide still.**
+- **The Rewind notification** also comes when your year is all brought-in history, and never twice.
+- **Month names and letters in stories** follow your language.
+
 ## 1.8.4.1
 
 ### Fixes

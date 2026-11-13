@@ -88,6 +88,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -313,6 +314,21 @@ open class MainActivity : ComponentActivity() {
             container.looks.decode(lookCode)?.let { container.looks.pending.value = it }
                 ?: Toast.makeText(this, tr(R.string.that_look_code_couldn_t_be), Toast.LENGTH_SHORT).show()
             return Uri.parse("prism://looks")
+        }
+        // An audio file opened with Prism from a file manager (1.8.5): it plays on its own, from the file, and the
+        // player opens. The opener's read grant comes with the intent; nothing is copied. Prism's own files and providers
+        // are never opened this way (another app could name them).
+        intent?.data?.takeIf {
+            com.prism.music.data.local.OpenedAudio.accepts(intent.action, it, intent.type ?: runCatching { contentResolver.getType(it) }.getOrNull()) &&
+                !com.prism.music.data.local.OpenedAudio.prismsOwn(this, it)
+        }?.let { file ->
+            container.scope.launch(Dispatchers.IO) {
+                val song = com.prism.music.data.local.OpenedAudio.read(applicationContext, file)
+                withContext(Dispatchers.Main) {
+                    container.player.playQueue(listOf(song), 0, com.prism.music.playback.QueueSource(com.prism.music.playback.QueueKind.SINGLE, song.title))
+                }
+            }
+            return Uri.parse("prism://player")
         }
         lookFile(intent)?.let { file ->
             container.scope.launch(Dispatchers.Main) {
@@ -1034,7 +1050,7 @@ private fun NavRail(tabs: List<Tab>, route: String?, settings: AppSettings, onSe
     val scheme = MaterialTheme.colorScheme
     GlassSurface(modifier.width(RAIL_WIDTH), shape = RoundedCornerShape(RAIL_WIDTH / 2)) {
         Column(
-            Modifier.padding(vertical = 8.dp, horizontal = 6.dp).verticalScroll(rememberScrollState()),
+            Modifier.testTag(NAV_TABS_TAG).padding(vertical = 8.dp, horizontal = 6.dp).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -1066,6 +1082,9 @@ private fun isSelected(tab: Tab, route: String?): Boolean =
         // A page with optional arguments ("liked?genre={genre}") is its tab's own route.
         (route != null && '?' in route && route.substringBefore('?') == tab.route)
 
+/** The tabs' own row (bar or rail), for in-app tests: a page's chip can carry a tab's name too ("Replay", 1.8.5). */
+const val NAV_TABS_TAG = "nav:tabs"
+
 /** @param compact 0 = full bar, 1 = slim bar (while scrolling down). */
 @Composable
 private fun TabBar(
@@ -1081,7 +1100,7 @@ private fun TabBar(
             val full = barSize.floating.dp
             val height = lerp(full, full - 14.dp, compact)
             val tabsRow: @Composable () -> Unit = {
-                Row(Modifier.fillMaxWidth().height(height).padding(lerp(6.dp, 4.dp, compact)), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.testTag(NAV_TABS_TAG).fillMaxWidth().height(height).padding(lerp(6.dp, 4.dp, compact)), verticalAlignment = Alignment.CenterVertically) {
                     tabs.forEach { tab -> TabItem(tab, isSelected(tab, route), settings.navLabels, compact, Modifier.weight(1f).fillMaxHeight()) { onSelect(tab.route) } }
                 }
             }
@@ -1102,7 +1121,7 @@ private fun TabBar(
             val scheme = MaterialTheme.colorScheme
             val row: @Composable () -> Unit = {
                 Row(
-                    Modifier.fillMaxWidth().navigationBarsPadding().height(lerp(barSize.docked.dp, barSize.docked.dp - 12.dp, compact)).padding(horizontal = 8.dp),
+                    Modifier.testTag(NAV_TABS_TAG).fillMaxWidth().navigationBarsPadding().height(lerp(barSize.docked.dp, barSize.docked.dp - 12.dp, compact)).padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     tabs.forEach { tab -> TabItem(tab, isSelected(tab, route), settings.navLabels, compact, Modifier.weight(1f).fillMaxHeight(), line = true) { onSelect(tab.route) } }
@@ -1117,7 +1136,7 @@ private fun TabBar(
         NavBarStyle.MINIMAL -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 GlassSurface(Modifier.height(barSize.minimal.dp), shape = RoundedCornerShape((barSize.minimal / 2).dp), tint = tint) {
-                    Row(Modifier.fillMaxHeight().padding(5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(Modifier.testTag(NAV_TABS_TAG).fillMaxHeight().padding(5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         tabs.forEach { tab -> MinimalTab(tab, isSelected(tab, route), (barSize.minimal - 10).dp) { onSelect(tab.route) } }
                     }
                 }
@@ -1332,6 +1351,12 @@ private fun handleDeepLink(uri: Uri, nav: Navigator, c: AppContainer) {
             path.firstOrNull()?.toIntOrNull()?.let { c.rewindRequest.value = it }
             nav.go(Routes.REPLAY)
         }
+        // The monthly recap's notification and Home's card (1.8.5): that month's story; a milestone's notice: Replay.
+        uri.scheme == "prism" && uri.host == "recap" -> {
+            path.firstOrNull()?.let { runCatching { java.time.YearMonth.parse(it) }.getOrNull() }?.let { c.recapRequest.value = it }
+            nav.go(Routes.REPLAY)
+        }
+        uri.scheme == "prism" && uri.host == "replay" -> nav.go(Routes.REPLAY)
         // A handoff pairing code's notification: Prism Connect's settings, where the code shows.
         uri.scheme == "prism" && uri.host == "connect" -> nav.go(Routes.settings(com.prism.music.ui.screens.SettingsSection.CONNECT.key))
         uri.scheme == "prism" && uri.host == "mix" && path.isNotEmpty() -> nav.go(Routes.mix(path[0]))

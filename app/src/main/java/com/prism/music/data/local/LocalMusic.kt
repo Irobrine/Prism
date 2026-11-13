@@ -72,6 +72,8 @@ class LocalMusic(
 
     /** The file a local song plays from. */
     fun uriFor(id: String): Uri? = byId[id]?.uri
+        // A file opened with Prism (1.8.5): its address is in its id.
+        ?: OpenedAudio.uriOf(id)
         ?: id.removePrefix(Song.LOCAL_PREFIX).toLongOrNull()?.let { ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it) }
 
     fun track(id: String): Track? = byId[id]

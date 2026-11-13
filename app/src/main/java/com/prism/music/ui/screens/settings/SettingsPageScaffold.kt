@@ -380,7 +380,8 @@ fun ResetPageDialog(pageTitle: String, reset: PageReset, onDismiss: () -> Unit) 
             }
         },
         confirmButton = {
-            PrismTextButton(onClick = { onDismiss(); reset.onReset() }, Modifier.testTag(SettingsTags.RESET_CONFIRM)) { Text(tr(R.string.reset)) }
+            // Its Undo bar counts the lines listed here, not the stored values under them.
+            PrismTextButton(onClick = { onDismiss(); com.prism.music.data.looks.LookStore.pageReset(reset.changes.size); reset.onReset() }, Modifier.testTag(SettingsTags.RESET_CONFIRM)) { Text(tr(R.string.reset)) }
         },
         dismissButton = { PrismTextButton(onClick = onDismiss) { Text(tr(R.string.cancel)) } },
     )

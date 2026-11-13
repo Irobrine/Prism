@@ -105,9 +105,7 @@ class SpotifyConnectTest {
 
         // In Library with its mark; opened, its song is matched and listed.
         // The Library tab (its name may be hidden by the tab bar's label style; the tab still carries it).
-        val libraryTab = (hasText("Library") or androidx.compose.ui.test.hasContentDescription("Library")) and hasClickAction()
-        compose.waitUntil(15_000) { compose.onAllNodes(libraryTab).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(libraryTab).onFirst().performClick()
+        compose.tapTab("Library")
         // Library remembers its page: back to the first (Playlists).
         repeat(6) {
             if (compose.onAllNodes(hasText("Spotify ·", substring = true)).fetchSemanticsNodes().isNotEmpty()) return@repeat
@@ -180,7 +178,7 @@ class SpotifyConnectTest {
         compose.waitUntil(10_000) { compose.onAllNodes(spotifyRow and hasText("Not connected")).fetchSemanticsNodes().isNotEmpty() }
         // The followed one is gone too, from the data and from Library.
         compose.waitUntil(10_000) { c.spotify.followedShown.value.isEmpty() && c.spotify.playlists.followed.value.isEmpty() }
-        compose.onAllNodes(libraryTab).onFirst().performClick()
+        compose.tapTab("Library")
         compose.waitForIdle()
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Not shared by Spotify", substring = true)).fetchSemanticsNodes().isEmpty() }
     }

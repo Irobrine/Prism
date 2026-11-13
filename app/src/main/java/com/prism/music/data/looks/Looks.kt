@@ -516,11 +516,15 @@ object LookLabels {
         else -> tr(R.string.list_last, parts.dropLast(1).reduce { a, b -> tr(R.string.list_middle, a, b) }, parts.last())
     }
 
-    /** One change as it reads: "Corners → Sharp", or "Corners → Sharp and 2 more". */
-    fun change(before: Map<String, String>, after: Map<String, String>, order: List<String>): String? {
+    /**
+     * One change as it reads: "Corners → Sharp", or "Corners → Sharp and 2 more". [rows]: how many rows it changed, where
+     * that's known ("Reset this page" lists them; one row can hold several stored values), instead of the values.
+     */
+    fun change(before: Map<String, String>, after: Map<String, String>, order: List<String>, rows: Int? = null): String? {
         val changed = (before.keys + after.keys).filter { before[it] != after[it] }.sortedBy { order.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }
         val first = changed.firstOrNull() ?: return null
         val one = "${title(first)} → ${value(first, after[first])}"
-        return if (changed.size == 1) one else tr(R.string.and_more_4, one, changed.size - 1)
+        val count = rows?.coerceAtLeast(1) ?: changed.size
+        return if (count == 1) one else tr(R.string.and_more_4, one, count - 1)
     }
 }

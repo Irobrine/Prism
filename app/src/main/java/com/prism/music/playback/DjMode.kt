@@ -49,6 +49,13 @@ class DjMode {
         _rescan.update { it + 1 }
     }
 
+    /** Bumped when Shuffle is pressed with DJ mode on (#374): the playback service deals a new DJ set. */
+    private val _newSets = MutableStateFlow(0)
+    val newSets: StateFlow<Int> = _newSets
+
+    /** A new DJ set: another song next, the rest in the order that follows on from it. */
+    fun newSet() = _newSets.update { it + 1 }
+
     internal fun setProgress(p: DjProgress?) { _progress.value = p }
     internal fun bump() = _revision.update { it + 1 }
 }

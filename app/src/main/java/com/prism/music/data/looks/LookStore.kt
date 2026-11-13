@@ -459,6 +459,7 @@ class LookStore(private val app: Context, private val settings: SettingsReposito
     }
     @Volatile private var expect: Expect? = null
 
+
     private val _steps = MutableStateFlow(loadSteps())
     /** The last [MAX_STEPS] changes to the look, newest first. */
     val steps: StateFlow<List<LookStep>> = _steps.asStateFlow()
@@ -489,7 +490,9 @@ class LookStore(private val app: Context, private val settings: SettingsReposito
         if (e?.silent == true || e?.undo == true) return
         val keys = changedKeys(before, now)
         if (keys.isEmpty()) return
-        val label = e?.label ?: LookLabels.change(before, now, order) ?: return
+        val reset = resetRows?.takeIf { System.currentTimeMillis() < it.second }?.first
+        resetRows = null
+        val label = e?.label ?: LookLabels.change(before, now, order, rows = reset) ?: return
         val steps = _steps.value
         val top = steps.firstOrNull()
         val at = System.currentTimeMillis()
@@ -617,6 +620,15 @@ class LookStore(private val app: Context, private val settings: SettingsReposito
     }
 
     companion object {
+        /** Rows a "Reset this page" listed, until when: its Undo bar counts those, not the stored values under them (1.8.5). */
+        @Volatile private var resetRows: Pair<Int, Long>? = null
+
+        /**
+         * A settings page is about to reset the [rows] its confirm listed: the next change's Undo bar counts them. Not
+         * the store's own: the settings kit's dialog is drawn where there is no container at hand (its tests).
+         */
+        fun pageReset(rows: Int) { resetRows = rows to System.currentTimeMillis() + 5_000 }
+
         const val MAX_STEPS = 10
         /** The one "Before <Look>" kept by [apply]. */
         const val BEFORE_ID = "my-before"

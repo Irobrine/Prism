@@ -69,8 +69,7 @@ class IssueRound179Test {
         ui.grantRuntimePermission(Fixture.context.packageName, perm)
         tone = addTone("Prism search tone")
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         compose.clickWhenFound(hasText("Local files") and hasClickAction(), 15_000)
         compose.waitUntil(30_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasSetTextAction()).performTextInput("search tone")

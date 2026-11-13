@@ -39,8 +39,7 @@ class ExploreLiveInAppTest {
         assertTrue("no shelves on Explore", rest.isNotEmpty())
 
         Fixture.launch()
-        compose.waitUntil(20_000) { compose.onAllNodes(hasText("Search") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Search") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Search", 20_000)
         compose.waitUntil(20_000) {
             compose.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().indices.forEach { i ->
                 runCatching { compose.onAllNodes(hasScrollToNodeAction())[i].performScrollToNode(hasText("Explore")) }

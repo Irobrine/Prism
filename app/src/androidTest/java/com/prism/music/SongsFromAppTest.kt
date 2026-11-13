@@ -44,8 +44,7 @@ class SongsFromAppTest {
         val songs = Fixture.songs(3)
         val id = Fixture.prismPlaylist("Road trip", songs)
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         // The tab chips scroll: back to the start, where Songs is.
         for (i in 0 until 8) {
             if (compose.onAllNodes(hasText("Songs") and hasClickAction()).fetchSemanticsNodes().isNotEmpty()) break

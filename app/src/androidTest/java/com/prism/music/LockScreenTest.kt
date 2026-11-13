@@ -10,7 +10,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -41,6 +41,10 @@ import kotlin.math.abs
 /**
  * The lock screen player, driven with a real song playing (a generated tone, always muted). A test phone may have no lock,
  * so [LockScreenActivity.pretendLocked] stands in for the keyguard; showing over a real one is checked by hand.
+ *
+ * The v2 rule (1.8.5): the old one let a setting changed here (which reaches the page on DataStore's background thread)
+ * recompose the page on that thread while the main thread drew it, and now and then the page's nodes came out of step and
+ * closing it crashed ("Must run runDetachLifecycle() once after runAttachLifecycle()"). See ComposeTestThreadTest.
  */
 @RunWith(AndroidJUnit4::class)
 class LockScreenTest {

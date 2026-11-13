@@ -90,8 +90,7 @@ class AlbumBoxInPrismTest {
             "$body\n\nFrom Wikipedia (https://en.wikipedia.org/wiki/Imagined_(album)) under Creative Commons Attribution CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/legalcode)",
         )
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         repeat(8) {
             if (compose.onAllNodes(hasText("Test long player")).fetchSemanticsNodes().isNotEmpty()) return@repeat
             compose.onRoot().performTouchInput { swipeUp(startY = centerY + height * 0.2f, endY = centerY - height * 0.2f) }

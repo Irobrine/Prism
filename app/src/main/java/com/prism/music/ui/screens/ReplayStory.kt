@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -84,6 +85,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -166,6 +168,13 @@ internal class ReplayStory(
     val previousSongCount: Int? = null,
     /** "Includes Spotify" when an imported history is counted (1.8.1): every card says so. */
     val includes: String? = null,
+    // A year's 1.8.5 slides (see [com.prism.music.data.RewindSnapshot]); empty for other stories and older kept Rewinds.
+    val days: List<Long> = emptyList(),
+    val weekHours: List<Long> = emptyList(),
+    val hourSongs: List<SongPlays> = emptyList(),
+    val milestones: List<com.prism.music.data.RewindMilestone> = emptyList(),
+    val finds: List<SongPlays> = emptyList(),
+    val findCount: Int = finds.size,
 ) {
     /** "PRISM REWIND" for a year, "PRISM REPLAY" otherwise. */
     val brandName: String get() = if (rewind) tr(R.string.prism_rewind) else tr(R.string.prism_replay)
@@ -179,7 +188,13 @@ internal fun ReplayStory.facts() = com.prism.music.data.StoryFacts(
     genres = genres.size, seasonsWithGenre = seasons.count { it.genre != null }, album = topAlbum,
     monthsWithListening = months.count { it.ms > 0 }, firstSong = firstSong != null, newArtists = newArtists?.size ?: 0,
     prism = prism.any, previous = previousMs != null,
+    calendarDays = days.count { it > 0 }, clockHours = weekHours.count { it > 0 }, hourSong = hourSongs.isNotEmpty(),
+    milestones = shownMilestones().size, finds = if (finds.isEmpty()) 0 else maxOf(findCount, finds.size),
 )
+
+/** The year's milestones this version can put into words (a kind added later is left out). */
+internal fun ReplayStory.shownMilestones(): List<Pair<com.prism.music.data.RewindMilestone, com.prism.music.data.Milestone>> =
+    milestones.mapNotNull { r -> r.milestone()?.let { r to it } }
 
 /** A year's Rewind as its story: kept (or just worked out) by [com.prism.music.data.Rewinds], plus the top artist's type. */
 private suspend fun loadRewindStory(c: AppContainer, year: Int): ReplayStory = withContext(Dispatchers.IO) {
@@ -203,6 +218,7 @@ private suspend fun loadRewindStory(c: AppContainer, year: Int): ReplayStory = w
         rewind = true, months = s.months, topAlbum = s.topAlbum, firstSong = s.firstSong, seasons = s.seasons, prism = s.prism,
         topLyric = s.topLyric, previousTopArtist = s.previousTopArtist, previousSongCount = s.previousSongCount,
         includes = includesLine(c),
+        days = s.days, weekHours = s.weekHours, hourSongs = s.hourSongs, milestones = s.milestones, finds = s.finds, findCount = s.findCount,
     )
 }
 
@@ -271,8 +287,8 @@ private suspend fun loadPeriodStory(c: AppContainer, period: Period): ReplayStor
         period = period,
         title = when (period.kind) {
             Period.Kind.YEAR -> "${period.year}"
-            Period.Kind.MONTH -> Calendar.getInstance().getDisplayName(Calendar.MONTH, Calendar.LONG, java.util.Locale.getDefault()) ?: tr(R.string.this_month)
-            Period.Kind.MONTH_OF -> java.time.Month.of(period.month + 1).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+            Period.Kind.MONTH -> monthName(Calendar.getInstance().get(Calendar.MONTH) + 1)
+            Period.Kind.MONTH_OF -> monthName(period.month + 1)
             else -> period.label
         },
         totalMs = totalMs, previousMs = previousMs, previousLabel = prevLabel,
@@ -289,6 +305,27 @@ private suspend fun loadPeriodStory(c: AppContainer, period: Period): ReplayStor
         months = months,
         includes = includesLine(c),
     )
+}
+
+/**
+ * A month's name standing on its own, as a title ("Январь", not the "января" of "1 января" that the plain full name is in
+ * Russian, Polish, Ukrainian, Czech…).
+ */
+internal fun monthName(month: Int, locale: java.util.Locale = java.util.Locale.getDefault()): String =
+    java.time.Month.of(month).getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, locale)
+        // Some Java versions have no stand-alone names for a language and give the month's number instead.
+        .takeUnless { it == "$month" } ?: java.time.Month.of(month).getDisplayName(java.time.format.TextStyle.FULL, locale)
+
+/** January to December in one letter each, in the language shown ("J F M…" in English, "Я Ф М…" in Russian). */
+internal fun monthLetters(locale: java.util.Locale = java.util.Locale.getDefault()): List<String> = (1..12).map { m ->
+    java.time.Month.of(m).getDisplayName(java.time.format.TextStyle.NARROW_STANDALONE, locale).takeUnless { it == "$m" || it.isBlank() }
+        ?: monthName(m, locale).take(1).uppercase(locale)
+}
+
+/** Monday to Sunday in a letter or two each, in the language shown. */
+internal fun weekdayLetters(locale: java.util.Locale = java.util.Locale.getDefault()): List<String> = java.time.DayOfWeek.entries.map { d ->
+    d.getDisplayName(java.time.format.TextStyle.NARROW_STANDALONE, locale).takeUnless { it == "${d.value}" || it.isBlank() }
+        ?: d.getDisplayName(java.time.format.TextStyle.SHORT, locale)
 }
 
 // ---------------------------------------------------------------- Slides
@@ -316,6 +353,10 @@ private fun slidesFor(s: ReplayStory): List<Slide> {
             Kind.TOP_SONGS -> Slide(part, songs.first(), palette(0xFF3B0A0A, 0xFFFF3B30, 0xFFFF9500, 0xFFFFD60A))
             Kind.TOP_ALBUM -> Slide(part, songs.firstOrNull { it.albumTitle == s.topAlbum?.albumTitle } ?: songs.firstOrNull(), palette(0xFF0E1A12, 0xFF2EC27E, 0xFFFFD60A, 0xFF00B4D8))
             Kind.MONTHS -> Slide(part, songs.getOrNull(6) ?: songs.firstOrNull(), palette(0xFF0B1030, 0xFF3A86FF, 0xFFE056FD, 0xFF00E5FF))
+            Kind.CALENDAR -> Slide(part, songs.getOrNull(10) ?: songs.firstOrNull(), palette(0xFF061A14, 0xFF1ED38A, 0xFF00B8FF, 0xFFB8FF3B))
+            Kind.CLOCK -> Slide(part, s.hourSongs.firstOrNull() ?: songs.getOrNull(11) ?: songs.firstOrNull(), palette(0xFF0A0A26, 0xFF7C5CFF, 0xFFFF7A9C, 0xFF00C2FF))
+            Kind.FOUND -> Slide(part, s.finds.firstOrNull() ?: songs.firstOrNull(), palette(0xFF1A0E04, 0xFFFF9500, 0xFFFF3B5C, 0xFFFFD60A))
+            Kind.MILESTONES -> Slide(part, songs.getOrNull(12) ?: songs.firstOrNull(), palette(0xFF12081F, 0xFFFFD36B, 0xFFB18CFF, 0xFFFF7A9C))
             Kind.FIRST_SONG -> Slide(part, songs.firstOrNull { it.songId == s.firstSong?.songId } ?: songs.getOrNull(7) ?: songs.firstOrNull(), palette(0xFF201033, 0xFFB18CFF, 0xFFFF7A9C, 0xFFFFD36B))
             Kind.HABITS -> Slide(part, songs.getOrNull(4) ?: songs.firstOrNull(), palette(0xFF050E26, 0xFF5B6CFF, 0xFF00D1FF, 0xFFFFC857))
             Kind.DISCOVERY -> Slide(part, byArtist(s.newArtists!!.first().artistName), palette(0xFF04201F, 0xFF00E0B8, 0xFF9BFF5B, 0xFF00A3FF))
@@ -485,9 +526,13 @@ private fun StoryContent(story: ReplayStory, onDismiss: () -> Unit) {
                     ) { _, d -> drag = (drag + d).coerceAtLeast(0f) }
                 },
         ) {
+            val stillSlides = still()
             AnimatedContent(
                 targetState = index,
-                transitionSpec = { (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 1.06f)) togetherWith fadeOut(tween(250)) },
+                transitionSpec = {
+                    if (stillSlides) fadeIn(tween(250)) togetherWith fadeOut(tween(200))
+                    else (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 1.06f)) togetherWith fadeOut(tween(250))
+                },
                 label = "slide",
             ) { i ->
                 SlideView(slides[i], story, onReplay = { go(0) }, onPlayAll = {
@@ -497,6 +542,7 @@ private fun StoryContent(story: ReplayStory, onDismiss: () -> Unit) {
                 })
             }
         }
+        StoryBrand(story)
         }
 
         // Progress, title, mute and close.
@@ -510,10 +556,8 @@ private fun StoryContent(story: ReplayStory, onDismiss: () -> Unit) {
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${story.brand} · ${story.title.uppercase()}", Modifier.weight(1f).padding(start = 4.dp),
-                    style = kicker(12.sp), color = Color.White.copy(alpha = 0.85f), maxLines = 1,
-                )
+                // The story's name is drawn with the slide, beside these (so it's in a shared slide too).
+                Spacer(Modifier.weight(1f))
                 // Any slide as a picture (the summary has its own card too).
                 IconButton(onClick = {
                     paused = true
@@ -555,10 +599,10 @@ private fun StoryContent(story: ReplayStory, onDismiss: () -> Unit) {
     }
 }
 
-/** Slow-drifting color fields behind every slide. */
+/** Slow-drifting color fields behind every slide (held still with Reduce motion or Performance mode). */
 @Composable
 private fun Backdrop(base: Color, c1: Color, c2: Color, c3: Color) {
-    val t by rememberInfiniteTransition(label = "bg").animateFloat(0f, 1f, infiniteRepeatable(tween(18_000, easing = LinearEasing)), label = "t")
+    val t = drift(0f, 1f, 18_000, rest = 0f, reverse = false, linear = true)
     Canvas(Modifier.fillMaxSize()) {
         val a = t * 2 * PI.toFloat()
         val r = size.maxDimension * 0.62f
@@ -666,9 +710,41 @@ internal fun fittedSize(start: Float, room: Int, width: (Float) -> Int): Float {
 /** Below this, a title stops being one. */
 private const val FIT_MIN_SP = 12f
 
-/** Rises and fades in after [delayMs]. */
+/** Whether the story draws still: Reduce motion, or Performance mode (which turns it on, [AppSettings.effective]). */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+private fun still(): Boolean = com.prism.music.ui.theme.LocalUi.current.reduceMotion
+
+/**
+ * A slow back-and-forth (or, [reverse] false, round-and-round) between [from] and [to] for a slide's ornament; held at
+ * [rest] when the story draws still.
+ */
+@Composable
+private fun drift(from: Float, to: Float, ms: Int, rest: Float = from, reverse: Boolean = true, linear: Boolean = false): Float {
+    if (still()) return rest
+    val v by rememberInfiniteTransition(label = "drift").animateFloat(
+        from, to,
+        infiniteRepeatable(tween(ms, easing = if (linear) LinearEasing else androidx.compose.animation.core.FastOutSlowInEasing), if (reverse) RepeatMode.Reverse else RepeatMode.Restart),
+        label = "drift",
+    )
+    return v
+}
+
+/** A figure or bar growing to [target] after [delayMs]; there at once when the story draws still. */
+@Composable
+private fun grow(target: Float, delayMs: Long, ms: Int, easing: androidx.compose.animation.core.Easing = androidx.compose.animation.core.FastOutSlowInEasing): Float {
+    val still = still()
+    val a = remember { Animatable(if (still) target else 0f) }
+    LaunchedEffect(target, still) {
+        if (still) a.snapTo(target) else { delay(delayMs); a.animateTo(target, tween(ms, easing = easing)) }
+    }
+    return a.value
+}
+
+/** Rises and fades in after [delayMs] (at once, without moving, when the story draws still). */
 @Composable
 private fun Modifier.reveal(delayMs: Int): Modifier {
+    if (still()) return this
     val a = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay(delayMs.toLong())
@@ -695,9 +771,13 @@ private fun SlideView(slide: Slide, s: ReplayStory, onReplay: () -> Unit, onPlay
             Kind.TOP_SONGS -> TopSongs(s, pad)
             Kind.TOP_ALBUM -> TopAlbum(s, pad)
             Kind.MONTHS -> Months(s, pad)
+            Kind.CALENDAR -> YearCalendar(s, pad)
             Kind.FIRST_SONG -> FirstSong(s, pad)
             Kind.HABITS -> HabitsSlide(s.habits, pad)
+            Kind.CLOCK -> WeekClock(s, pad)
             Kind.DISCOVERY -> Discovery(s, pad)
+            Kind.FOUND -> Found(s, pad)
+            Kind.MILESTONES -> YearMilestones(s, pad)
             Kind.PRISM_YEAR -> PrismYearSlide(s, pad)
             Kind.YEAR_COMPARE -> YearCompare(s, pad)
             Kind.PERSONALITY -> PersonalitySlide(s.personality, pad)
@@ -706,9 +786,249 @@ private fun SlideView(slide: Slide, s: ReplayStory, onReplay: () -> Unit, onPlay
     }
 }
 
+/**
+ * The story's name over every slide, where the buttons' row has it on screen. Drawn with the slide, so a shared slide
+ * carries it too ("PRISM REWIND · INCLUDES SPOTIFY · 2026"), not only the intro and the summary card (1.8.5).
+ */
+@Composable
+private fun StoryBrand(story: ReplayStory) {
+    Box(
+        Modifier.statusBarsPadding().padding(start = 14.dp, end = BRAND_END, top = 15.dp).heightIn(min = 48.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        // The name and year first, what else is counted under it: a long "Includes …" can't push the year out of sight.
+        Column {
+            Text(
+                "${story.brandName} · ${story.title.uppercase()}", style = kicker(12.sp), color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            story.includes?.let {
+                Text(it.uppercase(), style = kicker(9.sp), color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** One slide on its own, as a shared slide's picture has it: backdrop, slide and the story's name (for render tests). */
+@Composable
+internal fun StorySlide(kind: com.prism.music.data.StoryPart, s: ReplayStory) {
+    val slide = slidesFor(s).firstOrNull { it.kind == kind } ?: Slide(kind, null, palette(0xFF0C0C14, 0xFF7C5CFF, 0xFFFF3B5C, 0xFF00C2FF))
+    Box(Modifier.fillMaxSize().background(slide.colors[0])) {
+        Backdrop(slide.colors[0], slide.colors[1], slide.colors[2], slide.colors[3])
+        SlideView(slide, s, onReplay = {}, onPlayAll = {})
+        StoryBrand(s)
+    }
+}
+
+/** Room for every row a slide has; at the largest text sizes (over 1.5×) the lists are cut short so nothing is cut off. */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+private fun roomy(): Boolean = androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.5f
+
+/** Where the buttons over the story start, from the end: the row's padding and its three buttons. */
+private val BRAND_END = 10.dp + 48.dp * 3
+
+/** An hour of the day as the phone writes it ("10 PM", "22 Uhr"…). */
+private fun hourText(hour: Int): String =
+    runCatching { java.time.LocalTime.of(hour, 0).format(com.prism.music.localDates("j")) }.getOrNull() ?: ReplayStats.hourLabel(hour)
+
+/** Five shades for the calendar: 0 for no music, then 1–4 by where the day stands among the year's days with music. */
+internal fun calendarShades(days: List<Long>): IntArray {
+    val lit = days.filter { it > 0 }.sorted()
+    if (lit.isEmpty()) return IntArray(days.size)
+    val cuts = listOf(0.25, 0.5, 0.75).map { lit[((lit.size - 1) * it).toInt()] }
+    return IntArray(days.size) { i ->
+        val ms = days[i]
+        when {
+            ms <= 0 -> 0
+            ms <= cuts[0] -> 1
+            ms <= cuts[1] -> 2
+            ms <= cuts[2] -> 3
+            else -> 4
+        }
+    }
+}
+
+private val shadeAlpha = floatArrayOf(0.10f, 0.32f, 0.52f, 0.76f, 1f)
+
+/** The year as a calendar: a row for each month, a square for each day, lighter where there was more music. */
+@Composable
+private fun YearCalendar(s: ReplayStory, modifier: Modifier) {
+    val year = s.period.year.takeIf { it > 0 } ?: s.title.toIntOrNull() ?: java.time.Year.now().value
+    val lit = s.days.count { it > 0 }
+    val shades = remember(s.days) { calendarShades(s.days) }
+    val letters = monthLetters()
+    val grown = grow(1f, 500, 1_200)
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    Column(modifier, verticalArrangement = Arrangement.Center) {
+        Text(tr(R.string.rw_calendar_title), style = kicker(), modifier = Modifier.reveal(100), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        FitText(fmt(lit.toLong()), display(110.sp), Modifier.reveal(250))
+        FitText(trp(R.plurals.rw_days_with_music, lit).uppercase(), display(36.sp, ArtistTypography.extended), Modifier.reveal(400), oneLine = false)
+        Spacer(Modifier.height(26.dp))
+        Canvas(Modifier.fillMaxWidth().aspectRatio(33f / 18f).reveal(500)) {
+            val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
+            val cw = size.width / 33f
+            val label = cw * 2
+            val ch = size.height / 12f
+            val gap = minOf(cw, ch) * 0.2f
+            // The month's letter is sized by its row, not the font size: it's part of the picture.
+            val letterStyle = TextStyle(fontSize = (ch * 0.62f).toSp(), fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.7f))
+            var i = 0
+            for (m in 1..12) {
+                val y = (m - 1) * ch
+                val t = measurer.measure(letters[m - 1], letterStyle, maxLines = 1)
+                val lx = (label - t.size.width) / 2
+                drawText(t, topLeft = Offset(if (rtl) size.width - lx - t.size.width else lx, y + (ch - t.size.height) / 2))
+                for (d in 0 until java.time.YearMonth.of(year, m).lengthOfMonth()) {
+                    val level = shades.getOrElse(i++) { 0 }
+                    val x = label + d * cw
+                    val a = shadeAlpha[0] + (shadeAlpha[level] - shadeAlpha[0]) * grown
+                    drawRoundRect(
+                        Color.White.copy(alpha = a),
+                        topLeft = Offset((if (rtl) size.width - x - cw else x) + gap / 2, y + gap / 2),
+                        size = androidx.compose.ui.geometry.Size(cw - gap, ch - gap),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(gap),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The week as a clock: a row for each weekday, a square for each hour; and the song of the busiest hour. */
+@Composable
+private fun WeekClock(s: ReplayStory, modifier: Modifier) {
+    val cells = s.weekHours
+    val peak = s.habits.peakHour
+    val days = weekdayLetters()
+    val grown = grow(1f, 400, 1_200)
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    Column(modifier, verticalArrangement = Arrangement.Center) {
+        Text(tr(R.string.rw_clock_title), style = kicker(), modifier = Modifier.reveal(100), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(22.dp))
+        Canvas(Modifier.fillMaxWidth().aspectRatio(26f / (8 * 1.15f)).reveal(250)) {
+            val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
+            val cw = size.width / 26f
+            val label = cw * 2
+            val ch = size.height / 8f
+            val gap = minOf(cw, ch) * 0.2f
+            val max = (cells.maxOrNull() ?: 0L).coerceAtLeast(1L).toFloat()
+            val labelStyle = TextStyle(fontSize = (ch * 0.55f).toSp(), fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.7f))
+            fun xOf(left: Float, w: Float) = if (rtl) size.width - left - w else left
+            for (wd in 0 until 7) {
+                val y = wd * ch
+                val t = measurer.measure(days[wd], labelStyle, maxLines = 1)
+                drawText(t, topLeft = Offset(xOf((label - t.size.width) / 2, t.size.width.toFloat()), y + (ch - t.size.height) / 2))
+                for (h in 0 until 24) {
+                    val v = cells.getOrElse(wd * 24 + h) { 0L }
+                    // Square root: the quiet hours still show against a few very busy ones.
+                    val share = kotlin.math.sqrt(v / max)
+                    val a = 0.08f + (if (v > 0) 0.14f + 0.78f * share else 0f) * grown
+                    drawRoundRect(
+                        if (h == peak && v > 0) Color.White.copy(alpha = maxOf(a, 0.5f * grown)) else Color.White.copy(alpha = a),
+                        topLeft = Offset(xOf(label + h * cw, cw) + gap / 2, y + gap / 2),
+                        size = androidx.compose.ui.geometry.Size(cw - gap, ch - gap),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(gap),
+                    )
+                }
+            }
+            // Hours along the bottom: midnight, 6, noon, 18.
+            for (h in listOf(0, 6, 12, 18)) {
+                val t = measurer.measure(hourText(h), labelStyle, maxLines = 1)
+                drawText(t, topLeft = Offset(xOf(label + h * cw, t.size.width.toFloat()), 7 * ch + (ch - t.size.height) / 2))
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(tr(R.string.prime_time), style = kicker(11.sp).copy(color = Color.White.copy(alpha = 0.75f)), modifier = Modifier.reveal(700))
+        FitText(hourText(peak).uppercase(), display(84.sp), Modifier.reveal(800))
+        s.hourSongs.firstOrNull()?.let { song ->
+            Row(
+                Modifier.fillMaxWidth().padding(top = 14.dp).reveal(1_200).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.12f)).padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AsyncImage(hiRes(song.thumbnail, 226), null, Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr(R.string.rw_clock_song, hourText(peak)).uppercase(), style = kicker(11.sp).copy(color = Color.White.copy(alpha = 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(song.title, style = body.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(song.artistName, style = body.copy(fontSize = 14.sp, lineHeight = 20.sp, color = Color.White.copy(alpha = 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+/** What Prism found for you: songs first heard on its radio, Smart Shuffle, DJ or a mix that you kept playing. */
+@Composable
+private fun Found(s: ReplayStory, modifier: Modifier) {
+    val n = maxOf(s.findCount, s.finds.size)
+    val roomy = roomy()
+    Column(modifier, verticalArrangement = Arrangement.Center) {
+        Text(tr(R.string.rw_found_title), style = kicker(), modifier = Modifier.reveal(100), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        FitText(fmt(n.toLong()), display(120.sp), Modifier.reveal(250))
+        FitText(trp(R.plurals.rw_found_songs, n).uppercase(), display(36.sp, ArtistTypography.extended), Modifier.reveal(400), oneLine = false)
+        Text(tr(R.string.rw_found_line), style = body.copy(fontSize = 16.sp, lineHeight = 22.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.reveal(600).padding(top = 8.dp))
+        Spacer(Modifier.height(18.dp))
+        s.finds.take(if (roomy) 3 else 2).forEachIndexed { i, song ->
+            Row(Modifier.padding(vertical = 6.dp).reveal(800 + i * 200), verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(hiRes(song.thumbnail, 226), null, Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(song.title, style = body.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${song.artistName} · ${trp(R.plurals.n_plays, song.plays, song.plays)}", style = body.copy(fontSize = 13.sp, lineHeight = 18.sp, color = Color.White.copy(alpha = 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        if (s.prism.radarFinds > 0 && roomy) {
+            Spacer(Modifier.height(10.dp))
+            Fact(tr(R.string.release_radar_finds), fmt(s.prism.radarFinds.toLong()), 1_500)
+        }
+    }
+}
+
+/** The year's milestones: the biggest of each kind and the two songs played the most times over. */
+@Composable
+private fun YearMilestones(s: ReplayStory, modifier: Modifier) {
+    val shown = s.shownMilestones().let { all -> if (roomy()) all else all.takeLast(3) }
+    val fmtDay = com.prism.music.localDates("MMMd")
+    val zone = java.time.ZoneId.systemDefault()
+    Column(modifier, verticalArrangement = Arrangement.Center) {
+        Text(tr(R.string.rw_milestones_title), style = kicker(), modifier = Modifier.reveal(100), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(20.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            shown.forEachIndexed { i, (r, m) ->
+                Row(
+                    Modifier.fillMaxWidth().reveal(300 + i * 220).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (r.thumbnail != null) {
+                        AsyncImage(hiRes(r.thumbnail, 226), null, Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
+                    } else {
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                            Icon(if (m.kind == com.prism.music.data.MilestoneKind.STREAK) PrismIcons.FlameFilled else PrismIcons.StarFilled, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            com.prism.music.data.MilestoneWatch.line(m, r.songTitle),
+                            style = body.copy(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            java.time.Instant.ofEpochMilli(r.at).atZone(zone).format(fmtDay),
+                            style = body.copy(fontSize = 13.sp, lineHeight = 18.sp, color = Color.White.copy(alpha = 0.7f)), maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun Intro(s: ReplayStory, modifier: Modifier) {
-    val spin by rememberInfiniteTransition(label = "fan").animateFloat(-4f, 4f, infiniteRepeatable(tween(3_000), RepeatMode.Reverse), label = "r")
+    val spin = drift(-4f, 4f, 3_000, rest = 0f)
     Column(modifier, verticalArrangement = Arrangement.Center) {
         // A fanned stack of your top three covers.
         Box(Modifier.fillMaxWidth().height(250.dp).reveal(100), contentAlignment = Alignment.Center) {
@@ -744,11 +1064,11 @@ private fun Intro(s: ReplayStory, modifier: Modifier) {
 @Composable
 private fun Minutes(s: ReplayStory, modifier: Modifier) {
     val total = listenTotal(s.totalMs)
-    val count = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { delay(400); count.animateTo(total.value.toFloat(), tween(2_200, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    val count = grow(total.value.toFloat(), 400, 2_200)
     Column(modifier, verticalArrangement = Arrangement.Center) {
         Text(tr(R.string.you_listened_for), style = kicker(), modifier = Modifier.reveal(100))
-        val text = total.text(count.value.toLong())
+        // Counting up ends on the exact figure (a float can't hold every minute count exactly).
+        val text = total.text(if (count >= total.value.toFloat()) total.value else count.toLong())
         val final = total.text(total.value)
         val longest = final.length
         FitText(text, display(if (longest > 8) 72.sp else if (longest > 6) 96.sp else 130.sp), Modifier.reveal(200), widest = final)
@@ -792,15 +1112,14 @@ private fun Genres(s: ReplayStory, modifier: Modifier) {
         Spacer(Modifier.height(30.dp))
         s.genres.forEachIndexed { i, (g, ms) ->
             val share = ms.toFloat() / total
-            val w = remember { Animatable(0f) }
-            LaunchedEffect(Unit) { delay(700L + i * 160); w.animateTo(share, tween(900)) }
+            val w = grow(share, 700L + i * 160, 900)
             Column(Modifier.padding(vertical = 6.dp).reveal(600 + i * 160)) {
                 Row(Modifier.fillMaxWidth()) {
                     Text(g, style = body.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold), modifier = Modifier.weight(1f))
                     Text("${(share * 100).toInt()}%", style = body.copy(fontSize = 17.sp))
                 }
                 Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(12.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f))) {
-                    Box(Modifier.fillMaxHeight().fillMaxWidth(w.value).clip(CircleShape).background(Color.White.copy(alpha = if (i == 0) 1f else 0.7f)))
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(w).clip(CircleShape).background(Color.White.copy(alpha = if (i == 0) 1f else 0.7f)))
                 }
             }
         }
@@ -813,7 +1132,7 @@ private fun TopArtist(s: ReplayStory, modifier: Modifier) {
     val thumbs by LocalContainer.current.library.artistThumbs.collectAsState()
     val c = LocalContainer.current
     val image = s.topArtistImage ?: c.library.artistPhoto(thumbs, a.artistId, a.artistName)
-    val zoom by rememberInfiniteTransition(label = "z").animateFloat(1.05f, 1.18f, infiniteRepeatable(tween(9_000), RepeatMode.Reverse), label = "z")
+    val zoom = drift(1.05f, 1.18f, 9_000)
     Box(Modifier.fillMaxSize()) {
         AsyncImage(hiRes(image, 2880), null, Modifier.fillMaxSize().graphicsLayer { scaleX = zoom; scaleY = zoom }, contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 0.35f to Color.Transparent, 0.6f to Color.Black.copy(alpha = 0.35f), 1f to Color.Black.copy(alpha = 0.9f))))
@@ -871,7 +1190,7 @@ private fun TopArtists(s: ReplayStory, modifier: Modifier) {
 @Composable
 private fun TopSong(s: ReplayStory, modifier: Modifier) {
     val song = s.songs.first()
-    val pulse by rememberInfiniteTransition(label = "p").animateFloat(1f, 1.035f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "p")
+    val pulse = drift(1f, 1.035f, 520)
     Box(Modifier.fillMaxSize()) {
         AsyncImage(hiRes(song.thumbnail, 300), null, Modifier.fillMaxSize().blur(60.dp).graphicsLayer { alpha = 0.55f }, contentScale = ContentScale.Crop)
         // Keeps white text readable over light covers.
@@ -924,8 +1243,7 @@ private fun TopSongs(s: ReplayStory, modifier: Modifier) {
 
 @Composable
 private fun HabitsSlide(h: Habits, modifier: Modifier) {
-    val grow = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { delay(300); grow.animateTo(1f, tween(1_400)) }
+    val grown = grow(1f, 300, 1_400)
     Column(modifier, verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(tr(R.string.when_you_listen), style = kicker(), modifier = Modifier.reveal(100).fillMaxWidth())
         Spacer(Modifier.height(18.dp))
@@ -937,7 +1255,7 @@ private fun HabitsSlide(h: Habits, modifier: Modifier) {
                 val outer = size.minDimension * 0.5f
                 for (hr in 0 until 24) {
                     val ang = (hr / 24f) * 2 * PI.toFloat() - PI.toFloat() / 2
-                    val len = (outer - inner) * (0.06f + 0.94f * h.byHour[hr] / max.toFloat()) * grow.value
+                    val len = (outer - inner) * (0.06f + 0.94f * h.byHour[hr] / max.toFloat()) * grown
                     val dir = Offset(cos(ang), sin(ang))
                     drawLine(
                         if (hr == h.peakHour) Color.White else Color.White.copy(alpha = 0.45f),
@@ -1002,7 +1320,7 @@ private fun Discovery(s: ReplayStory, modifier: Modifier) {
 
 @Composable
 private fun PersonalitySlide(p: Personality, modifier: Modifier) {
-    val turn by rememberInfiniteTransition(label = "prism").animateFloat(0f, 360f, infiniteRepeatable(tween(16_000, easing = LinearEasing)), label = "a")
+    val turn = drift(0f, 360f, 16_000, reverse = false, linear = true)
     Column(modifier, verticalArrangement = Arrangement.Center) {
         Text(tr(R.string.your_listening_personality), style = kicker(), modifier = Modifier.reveal(100))
         Spacer(Modifier.height(24.dp))
@@ -1043,7 +1361,7 @@ private fun Seasons(s: ReplayStory, modifier: Modifier) {
 @Composable
 private fun TopAlbum(s: ReplayStory, modifier: Modifier) {
     val a = s.topAlbum ?: return
-    val turn by rememberInfiniteTransition(label = "disc").animateFloat(0f, 360f, infiniteRepeatable(tween(12_000, easing = LinearEasing)), label = "d")
+    val turn = drift(0f, 360f, 12_000, reverse = false, linear = true)
     Column(modifier, verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(tr(R.string.your_top_album), style = kicker(), modifier = Modifier.reveal(100).fillMaxWidth())
         Spacer(Modifier.height(26.dp))
@@ -1071,33 +1389,35 @@ private fun TopAlbum(s: ReplayStory, modifier: Modifier) {
 /** Month by month, the busiest one picked out. */
 @Composable
 private fun Months(s: ReplayStory, modifier: Modifier) {
-    val grow = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { delay(300); grow.animateTo(1f, tween(1_400)) }
+    val grown = grow(1f, 300, 1_400)
     val byMonth = LongArray(12)
     s.months.forEach { m -> m.month.substringAfter('-').toIntOrNull()?.let { if (it in 1..12) byMonth[it - 1] += m.ms } }
     val peak = byMonth.indices.maxByOrNull { byMonth[it] } ?: 0
-    val names = java.text.DateFormatSymbols.getInstance().months
-    val letters = listOf("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D")
+    // In the language shown (the letters were English's "J F M…" in every language), the name as a title.
+    val letters = monthLetters()
     Column(modifier, verticalArrangement = Arrangement.Center) {
         Text(tr(R.string.your_biggest_month), style = kicker(), modifier = Modifier.reveal(100))
-        FitText(names.getOrElse(peak) { "" }.uppercase(), display(72.sp), Modifier.reveal(300))
+        FitText(monthName(peak + 1).uppercase(), display(72.sp), Modifier.reveal(300))
         Text(tr(R.string.that_month, listenTime(byMonth[peak])), style = body, modifier = Modifier.reveal(600).padding(top = 6.dp))
         Spacer(Modifier.height(30.dp))
         Canvas(Modifier.fillMaxWidth().height(200.dp).reveal(400)) {
             val max = byMonth.max().coerceAtLeast(1)
             val gap = 6.dp.toPx()
             val w = (size.width - gap * 11) / 12
+            // Right to left in Arabic, Hebrew…, as the letters under the bars are.
+            val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
             for (i in 0 until 12) {
-                val h = (size.height * byMonth[i] / max.toFloat() * grow.value).coerceAtLeast(3.dp.toPx())
+                val h = (size.height * byMonth[i] / max.toFloat() * grown).coerceAtLeast(3.dp.toPx())
+                val x = i * (w + gap)
                 drawRoundRect(
                     if (i == peak) Color.White else Color.White.copy(alpha = 0.38f),
-                    topLeft = Offset(i * (w + gap), size.height - h), size = androidx.compose.ui.geometry.Size(w, h),
+                    topLeft = Offset(if (rtl) size.width - x - w else x, size.height - h), size = androidx.compose.ui.geometry.Size(w, h),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()),
                 )
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            letters.forEach { Text(it, Modifier.weight(1f), style = body.copy(fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f)), textAlign = TextAlign.Center) }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            letters.forEach { Text(it, Modifier.weight(1f), style = body.copy(fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f)), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Clip) }
         }
     }
 }

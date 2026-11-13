@@ -76,8 +76,7 @@ class UploadsAppTest {
     }
 
     private fun openLibrary() {
-        compose.waitUntil(20_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library", 20_000)
         compose.waitForIdle()
     }
 

@@ -424,6 +424,16 @@ data class BehaviorPrefs(
     val downloadVideoOnStream: Boolean = false,
     /** Songs after the one playing to keep downloaded too: 0 (off) to 5. */
     val downloadQueueAhead: Int = 0,
+    /** 1.8.5: a notice on the 1st that last month's recap is ready (the Home card shows either way). */
+    val recapNotify: Boolean = false,
+    /** 1.8.5: a notice when a milestone is reached (the Milestones list shows them either way). */
+    val milestoneNotify: Boolean = false,
+    /** 1.8.5: "Finish the lyric", a small game from your top songs' saved lyrics, on Replay. */
+    val finishLyric: Boolean = false,
+    /** 1.8.5: laying the phone screen-down pauses; picking it up within a few minutes plays on. */
+    val faceDownPause: Boolean = false,
+    /** #464 (1.8.5): with the lyrics open, a tap on the small cover plays or pauses and a long press closes them; off, a tap closes them. */
+    val lyricsCoverPlays: Boolean = false,
 ) {
     companion object {
         /** #404: how far [lyricsOffsetMs] goes either way. */
@@ -2336,6 +2346,12 @@ class SettingsRepository(
         val shuffleButton = stringPreferencesKey("shuffle_button")
         val carLyricsLines = stringPreferencesKey("car_lyrics_lines")
         val locatePlaying = booleanPreferencesKey("locate_playing")
+        // 1.8.5 ([BehaviorPrefs.recapNotify] and on).
+        val recapNotify = booleanPreferencesKey("recap_notify")
+        val milestoneNotify = booleanPreferencesKey("milestone_notify")
+        val finishLyric = booleanPreferencesKey("finish_lyric")
+        val faceDownPause = booleanPreferencesKey("face_down_pause")
+        val lyricsCoverPlays = booleanPreferencesKey("lyrics_cover_plays")
         val lockScreenPlayerLook = booleanPreferencesKey("lock_screen_player_look")
         val albumHeroCover = booleanPreferencesKey("album_hero_cover")
         // 1.8.0 player editor ([PlayerParts]): the hidden parts are part of a Look, the menu's choices aren't.
@@ -2485,6 +2501,8 @@ class SettingsRepository(
                 "japanese_engine",
                 // 1.8.4 (#406, #404, #416, D57, PR #400, D54): how Prism behaves, not how it looks.
                 "row_swipes", "lyrics_offset_ms", "keep_shuffle", "shuffle_button", "car_lyrics_lines", "locate_playing",
+                // 1.8.5: Replay's notices and game, pausing face down, and the small cover's tap over the lyrics (#464).
+                "recap_notify", "milestone_notify", "finish_lyric", "face_down_pause", "lyrics_cover_plays",
             )
         }
     }
@@ -2831,6 +2849,11 @@ class SettingsRepository(
                 downloadOnStream = p[K.downloadOnStream] ?: d.behavior.downloadOnStream,
                 downloadVideoOnStream = p[K.downloadVideoOnStream] ?: d.behavior.downloadVideoOnStream,
                 downloadQueueAhead = (p[K.downloadQueueAhead] ?: d.behavior.downloadQueueAhead).coerceIn(0, 5),
+                recapNotify = p[K.recapNotify] ?: d.behavior.recapNotify,
+                milestoneNotify = p[K.milestoneNotify] ?: d.behavior.milestoneNotify,
+                finishLyric = p[K.finishLyric] ?: d.behavior.finishLyric,
+                faceDownPause = p[K.faceDownPause] ?: d.behavior.faceDownPause,
+                lyricsCoverPlays = p[K.lyricsCoverPlays] ?: d.behavior.lyricsCoverPlays,
             ),
             tv = TvPrefs(
                 ambientMinutes = (p[K.tvAmbientMinutes] ?: d.tv.ambientMinutes).coerceIn(0, 60),
@@ -3579,6 +3602,11 @@ class SettingsRepository(
     fun setRowSwipes(v: Boolean) = edit { it[K.rowSwipes] = v }
     fun setLyricsOffsetMs(v: Int) = edit { it[K.lyricsOffsetMs] = v.coerceIn(BehaviorPrefs.LYRICS_OFFSET_MS) }
     fun setKeepShuffle(v: Boolean) = edit { it[K.keepShuffle] = v }
+    fun setRecapNotify(v: Boolean) = edit { it[K.recapNotify] = v }
+    fun setMilestoneNotify(v: Boolean) = edit { it[K.milestoneNotify] = v }
+    fun setFinishLyric(v: Boolean) = edit { it[K.finishLyric] = v }
+    fun setFaceDownPause(v: Boolean) = edit { it[K.faceDownPause] = v }
+    fun setLyricsCoverPlays(v: Boolean) = edit { it[K.lyricsCoverPlays] = v }
     fun setShuffleButton(v: ShuffleButton) = edit { it[K.shuffleButton] = v.name }
     fun setCarLyricsLines(v: CarLyricsLines) = edit { it[K.carLyricsLines] = v.name }
     fun setLocatePlaying(v: Boolean) = edit { it[K.locatePlaying] = v }

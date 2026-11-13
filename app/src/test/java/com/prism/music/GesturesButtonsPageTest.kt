@@ -72,6 +72,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
     private val queueSwipe = t(R.string.swipe_up_for_the_queue)
     private val tabSwipe = t(R.string.swipe_between_tabs)
     private val rowSwipes = t(R.string.gb_row_swipes)
+    private val coverPlays = t(R.string.gb_lyrics_cover_plays)
     private val buttons = t(R.string.buttons)
     private val notificationLyrics = t(R.string.gb_lyrics_in_notification)
     private val portrait = t(R.string.lock_to_portrait)
@@ -144,9 +145,9 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
     @Test fun fiveGroupsWithinTheBudgets() {
         show()
         budgets("defaults")
-        // The ledger's layout with a fresh install's settings: 7 · 4 · 5 · 3 · 2 · 1 · 2.
+        // The ledger's layout with a fresh install's settings: 7 · 4 · 6 · 3 · 2 · 1 · 2 (#464's switch in Swipes and touch, 1.8.5).
         assertEquals(listOf(cover, mini, touch, songs, outside, persistent, screen), groupTitles())
-        assertEquals(listOf(7, 4, 5, 3, 2, 1, 2), sizes())
+        assertEquals(listOf(7, 4, 6, 3, 2, 1, 2), sizes())
         assertEquals("nothing differs from how Prism comes", 0, changedRows())
         assertFalse(listNode().config[SettingsRowChanged])
         assertTrue(groupTitles().none { it == SettingsPageId.GESTURES_BUTTONS.title })
@@ -175,7 +176,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         assertEquals(onCover, valueOf(work))
         assertEquals(SettingsTags.ROW_SLIDER, typeOf(holdSeek))
         assertEquals("10 s", valueOf(holdSeek))
-        for (title in listOf(haptics, queueSwipe, tabSwipe, rowSwipes, notificationLyrics, portrait)) assertEquals(title, SettingsTags.ROW_SWITCH, typeOf(title))
+        for (title in listOf(haptics, queueSwipe, tabSwipe, rowSwipes, coverPlays, notificationLyrics, portrait)) assertEquals(title, SettingsTags.ROW_SWITCH, typeOf(title))
         assertEquals(SettingsTags.ROW_CHOICE, typeOf(pip))
         assertEquals(PipMode.AUTO.label, valueOf(pip))
         // The buttons stay a list: Prism's own six, in order.
@@ -228,7 +229,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         pickIn(mini, pullDown, PlayerGesture.NONE.label)
         until("mini_swipe_down") { it.miniSwipeDown == PlayerGesture.NONE }
 
-        // hold_seek_seconds (Off at its start), haptics, panel_swipes, swipe_tabs, row_swipes
+        // hold_seek_seconds (Off at its start), haptics, panel_swipes, swipe_tabs, row_swipes, lyrics_cover_plays
         slide(holdSeek, 0f)
         until("hold_seek_seconds") { it.holdSeekSeconds == 0 }
         assertEquals(t(R.string.off), valueOf(holdSeek))
@@ -240,6 +241,8 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         until("swipe_tabs") { it.swipeTabs }
         tap(rowSwipes)
         until("row_swipes") { !it.behavior.rowSwipes }
+        tap(coverPlays)
+        until("lyrics_cover_plays") { it.behavior.lyricsCoverPlays }
 
         // session_buttons: untick one, tick another, move one.
         tick(SessionButton.LIKE)
@@ -263,15 +266,15 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
 
         // Every row now differs from how Prism comes, says so, and the page still fits.
         budgets("everything changed")
-        assertEquals(listOf(6, 4, 5, 3, 2, 1, 2), sizes())
-        assertEquals(18, changedRows())
+        assertEquals(listOf(6, 4, 6, 3, 2, 1, 2), sizes())
+        assertEquals(19, changedRows())
         // The root's line is live.
         val line = SettingsPageId.GESTURES_BUTTONS.value(stored)
         assertTrue(line, PlayerGesture.PLAY_PAUSE.label in line && haptics !in line)
 
         // Reset this page lists each of them (the hidden double-tap step too) and puts them all back.
         val lines = resetLines(confirm = true)
-        assertEquals(lines.joinToString("\n"), 20, lines.size)
+        assertEquals(lines.joinToString("\n"), 21, lines.size)
         assertTrue(lines.toString(), lines.any { it.startsWith("$mini · $swipeLeft: ${PlayerGesture.SLEEP.label} → ${d.miniSwipeLeft.label}") })
         assertTrue(lines.toString(), lines.any { it.startsWith("$work: $notLyrics → $onCover") })
         until("the reset") { it.behavior == d.behavior && it.sessionButtons == d.sessionButtons && it.haptics == d.haptics && it.swipeTabs == d.swipeTabs }
@@ -282,7 +285,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
                 it.carLyricsOnPhone == d.carLyricsOnPhone
         }
         assertEquals(0, changedRows())
-        assertEquals(listOf(7, 4, 5, 3, 2, 1, 2), sizes())
+        assertEquals(listOf(7, 4, 6, 3, 2, 1, 2), sizes())
     }
 
     /**
@@ -376,6 +379,29 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         assertTrue(SettingsIndex.entries.any { it.title == tabSwipe && it.page == SettingsPageId.GESTURES_BUTTONS && it.group == touch })
     }
 
+    /** #464 (1.8.5): "Tap the small cover to play or pause", a switch in Swipes and touch, off until switched on, its words behind the ⓘ. */
+    @Test fun smallCoverTapIsASwitchOffByDefault() {
+        show()
+        assertEquals(SettingsTags.ROW_SWITCH, typeOf(coverPlays))
+        assertFalse(stored.behavior.lyricsCoverPlays)
+        assertEquals("Tap the small cover to play or pause", coverPlays)
+        val e = SettingsIndex.entries.single { it.title == coverPlays }
+        assertEquals(SettingsPageId.GESTURES_BUTTONS, e.page)
+        assertEquals(touch, e.group)
+        assertEquals(null, e.needs)
+        assertTrue(SettingsIndex.search("small cover").any { it.title == coverPlays })
+        assertTrue(SettingsIndex.search("thumbnail").any { it.title == coverPlays })
+        val info = t(R.string.gb_lyrics_cover_plays_info)
+        assertEquals("With the lyrics open, a tap on the small cover plays or pauses and a long press closes the lyrics. Off: a tap closes the lyrics.", info)
+        // The explanation is behind the ⓘ only: never drawn on the page.
+        assertEquals(0, compose.onAllNodes(androidx.compose.ui.test.hasText(info)).fetchSemanticsNodes().size)
+        tap(coverPlays)
+        until("lyrics_cover_plays") { it.behavior.lyricsCoverPlays }
+        assertEquals(1, changedRows())
+        tap(coverPlays)
+        until("lyrics_cover_plays off") { !it.behavior.lyricsCoverPlays }
+    }
+
     /** Links written before the rework still land: the old page's groups by their old names. */
     @Test fun oldGroupNamesOpenTheGroupThatHoldsThemNow() {
         val old = SettingsPageId.GESTURES_BUTTONS.oldGroups
@@ -392,7 +418,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         val mine = SettingsIndex.entries.filter { it.page == SettingsPageId.GESTURES_BUTTONS && !it.isPage }
         val lost = mine.filter { it.group !in drawn }
         assertTrue("search lines in groups the page doesn't have: ${lost.map { it.group + " › " + it.title }}", lost.isEmpty())
-        assertEquals("a line a row", 34, mine.size)
+        assertEquals("a line a row (7 + 4 + 6 + 3 + 2 + 1 + 2)", 35, mine.size)
     }
 
     @Test fun atLargeTextNothingIsCutOff() {

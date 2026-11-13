@@ -71,7 +71,7 @@ class HistoryReplayTest {
         compose.waitUntil(5_000) { c.settings.current.behavior.playCountSeconds == 10 }
 
         // Replay says history is paused, and turns it back on.
-        compose.clickWhenFound((hasText("Replay") or hasContentDescription("Replay")) and hasClickAction())
+        compose.tapTab("Replay")
         seeText("History is paused")
         compose.clickWhenFound(hasText("Turn back on") and hasClickAction())
         compose.waitUntil(5_000) { !HistoryPause.paused(c.settings.current.behavior) }
@@ -86,14 +86,14 @@ class HistoryReplayTest {
         com.prism.music.ui.screens.SearchMemory.remember(Fixture.context, com.prism.music.data.model.SongItem(Fixture.songs(1, "Private")[0]))
         assertEquals(before, com.prism.music.ui.screens.SearchMemory.opened(Fixture.context))
         Fixture.launch()
-        compose.clickWhenFound((hasText("Replay") or hasContentDescription("Replay")) and hasClickAction())
+        compose.tapTab("Replay")
         seeText("until you turn it back on")
     }
 
     @Test fun replayDrawsAWeekByDayAndADayByHour() {
         listened()
         Fixture.launch()
-        compose.clickWhenFound((hasText("Replay") or hasContentDescription("Replay")) and hasClickAction())
+        compose.tapTab("Replay")
         compose.clickWhenFound(hasText("This week") and hasClickAction())
         seeText("Listening by day")
         seeText("Busiest day")

@@ -110,6 +110,10 @@ fun RecommendationsHistoryPage(bottomPadding: Dp, find: String? = null, showBack
     val themeColorsChanged = reset.add(tr(R.string.use_theme_colors), s.replayThemeColors, d.replayThemeColors, onOff) { prefs.setReplayThemeColors(it) }
     val storyTypeChanged = reset.add(tr(R.string.replay_story_font), s.view.replayStoryFont, d.view.replayStoryFont, storyType) { prefs.setReplayStoryFont(it) }
     val rewindChanged = reset.add(tr(R.string.rewind_notification), s.rewindNotification, d.rewindNotification, onOff) { prefs.setRewindNotification(it) }
+    // 1.8.5: the monthly recap's notice, the milestone notice and "Finish the lyric", all off as Prism comes.
+    val recapChanged = reset.add(tr(R.string.recap_notification), b.recapNotify, d.behavior.recapNotify, onOff) { prefs.setRecapNotify(it) }
+    val milestoneChanged = reset.add(tr(R.string.milestone_notification), b.milestoneNotify, d.behavior.milestoneNotify, onOff) { prefs.setMilestoneNotify(it) }
+    val finishLyricChanged = reset.add(tr(R.string.finish_lyric_title), b.finishLyric, d.behavior.finishLyric, onOff) { prefs.setFinishLyric(it) }
     // Replay as it comes counts Prism's own plays only.
     val countedChanged = reset.add(tr(R.string.imp_count_history_from), countedNow, emptySet(), ::countedText) { countedNow.forEach { source -> c.imports.setCounted(source, false) } }
 
@@ -183,7 +187,9 @@ fun RecommendationsHistoryPage(bottomPadding: Dp, find: String? = null, showBack
                 tr(R.string.replay_story_font), listOf(false, true), s.view.replayStoryFont, storyType,
                 info = tr(R.string.replay_story_font_info), changed = storyTypeChanged, onPick = { prefs.setReplayStoryFont(it) },
             ) { StoryTypeSample(it) }
-            SwitchRow(tr(R.string.rewind_notification), s.rewindNotification, info = tr(R.string.on_december_1_when_your_year), changed = rewindChanged) { prefs.setRewindNotification(it) }
+            // 1.8.5: Replay's three notices are one row (the group stays within its seven); each has its switch in the sheet.
+            RhReplayNotices(rewindChanged, recapChanged, milestoneChanged)
+            SwitchRow(tr(R.string.finish_lyric_title), b.finishLyric, info = tr(R.string.finish_lyric_info), changed = finishLyricChanged) { prefs.setFinishLyric(it) }
             RhCountHistoryFrom(sources, countedText(countedNow), countedChanged)
         }
     }
@@ -216,6 +222,29 @@ private fun RhCountHistoryFrom(sources: List<CountSources.Row>, value: String, c
                 if (source == ImportSource.SPOTIFY_LIVE) nav.go(Routes.settings(SettingsSection.SPOTIFY.key)) else nav.go(Routes.BRING_HISTORY)
             }
         }
+    }
+}
+
+/**
+ * "Notifications" (1.8.5) as one row: Rewind's (1 December), the monthly recap's and the milestones', each a switch in
+ * the row's sheet. The row says how many of the three are on.
+ */
+@Composable
+private fun RhReplayNotices(rewindChanged: Boolean, recapChanged: Boolean, milestoneChanged: Boolean) {
+    val c = LocalContainer.current
+    val prefs = c.settings
+    val s = LocalAppSettings.current
+    val b = s.behavior
+    val title = tr(R.string.replay_notices)
+    val on = listOf(s.rewindNotification, b.recapNotify, b.milestoneNotify).count { it }
+    var open by rememberSaveable(title, "replay-notices") { mutableStateOf(false) }
+    // A notice turned on asks for notifications (Android 13+) if Prism may not post them yet: else nothing would come.
+    fun asked(turnedOn: Boolean) { if (turnedOn) c.askNotifications() }
+    PickRow(title, if (on == 0) tr(R.string.off) else "$on / 3", changed = rewindChanged || recapChanged || milestoneChanged) { open = true }
+    if (open) RowsSheet(title, { open = false }) {
+        SwitchRow(tr(R.string.rewind_notification), s.rewindNotification, info = tr(R.string.on_december_1_when_your_year), changed = rewindChanged) { prefs.setRewindNotification(it); asked(it) }
+        SwitchRow(tr(R.string.recap_notification), b.recapNotify, info = tr(R.string.recap_notification_info), changed = recapChanged) { prefs.setRecapNotify(it); asked(it) }
+        SwitchRow(tr(R.string.milestone_notification), b.milestoneNotify, info = tr(R.string.milestone_notification_info), changed = milestoneChanged) { prefs.setMilestoneNotify(it); asked(it) }
     }
 }
 
@@ -265,7 +294,16 @@ val recommendationsHistoryIndex: List<SettingEntry> by lazy {
         SettingEntry(page, replay, tr(R.string.show_time_in_hours), tr(R.string.stats_minutes)),
         SettingEntry(page, replay, tr(R.string.use_theme_colors), tr(R.string.colors_stats)),
         SettingEntry(page, replay, tr(R.string.replay_story_font), tr(R.string.replay_story_font_keywords)),
+        // One row, three notices in its sheet: each name finds it.
+        SettingEntry(
+            page, replay, tr(R.string.replay_notices),
+            listOf(R.string.rewind_notification, R.string.rewind_wrapped_year_in_review_december, R.string.recap_notification, R.string.milestone_notification, R.string.milestones).joinToString(" ") { tr(it) },
+        ),
+        // Each of the three, by its own name (drawn in that row's sheet).
         SettingEntry(page, replay, tr(R.string.rewind_notification), tr(R.string.rewind_wrapped_year_in_review_december)),
+        SettingEntry(page, replay, tr(R.string.recap_notification), tr(R.string.recap_ready_text)),
+        SettingEntry(page, replay, tr(R.string.milestone_notification), tr(R.string.milestones)),
+        SettingEntry(page, replay, tr(R.string.finish_lyric_title), tr(R.string.finish_lyric_info)),
         SettingEntry(page, replay, tr(R.string.imp_count_history_from), tr(R.string.imp_count_keywords) + " " + tr(R.string.imp_prism_plays)),
     )
 }

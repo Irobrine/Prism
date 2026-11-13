@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -79,21 +80,24 @@ import com.prism.music.ui.theme.LocalAppSettings
 import com.prism.music.ui.theme.LocalContainer
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 
 // The phone's own music files have their own page (Local files, from Playlists), with Songs, Artists and Albums.
 // Tags (1.8.3) last, and only once there's a tag: the other tabs keep their places.
 private enum class LibTab(val label: String) { PLAYLISTS(tr(R.string.playlists)), SONGS(tr(R.string.songs)), ALBUMS(tr(R.string.albums)), ARTISTS(tr(R.string.artists)), HISTORY(tr(R.string.history)), DOWNLOADS(tr(R.string.downloads)), TAGS(tr(R.string.tags)) }
 
 /** One row of History (#118): a play, or a run of plays of the same song one after another. */
-private data class HistoryEntry(val song: com.prism.music.data.model.Song, val at: Long, val times: Int)
+private data class HistoryEntry(val song: com.prism.music.data.model.Song, val at: Long, val times: Int, val ids: List<Long> = emptyList())
 
 /** Plays on this phone under day headings (Today, Yesterday, the weekday, then the date), repeats in a row folded into one. */
 private fun historyByDay(rows: List<com.prism.music.data.db.HistoryRow>, now: Long = System.currentTimeMillis()): List<Pair<String, List<HistoryEntry>>> {
     val entries = mutableListOf<HistoryEntry>()
     for (r in rows) {
         val last = entries.lastOrNull()
-        if (last != null && last.song.id == r.song.id && dayStart(last.at) == dayStart(r.playedAt)) entries[entries.lastIndex] = last.copy(times = last.times + 1)
-        else entries += HistoryEntry(r.song.toSong(), r.playedAt, 1)
+        if (last != null && last.song.id == r.song.id && dayStart(last.at) == dayStart(r.playedAt)) entries[entries.lastIndex] = last.copy(times = last.times + 1, ids = last.ids + r.eventId)
+        else entries += HistoryEntry(r.song.toSong(), r.playedAt, 1, listOf(r.eventId))
     }
     val today = dayStart(now)
     val dayMs = 86_400_000L
@@ -114,6 +118,47 @@ private fun dayStart(at: Long): Long = java.util.Calendar.getInstance().apply {
     timeInMillis = at
     set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
 }.timeInMillis
+
+/**
+ * "Removed from history" with Undo (#469), as the look's Undo bar shows it (the same bar, glass or plain), for five
+ * seconds (or the longer time to act the listener set in Android's accessibility settings): Undo puts the same plays
+ * back. TalkBack reads it out when it comes.
+ */
+@Composable
+internal fun HistoryUndoBar(
+    removed: com.prism.music.data.HistoryRemoval.Removed?, modifier: Modifier, onGone: () -> Unit,
+    onUndo: (com.prism.music.data.HistoryRemoval.Removed) -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var shown by remember { mutableStateOf(removed) }
+    if (removed != null) shown = removed
+    LaunchedEffect(removed) { if (removed != null) { kotlinx.coroutines.delay(com.prism.music.ui.components.undoBarMillis(context)); onGone() } }
+    androidx.compose.animation.AnimatedVisibility(
+        removed != null, modifier,
+        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it / 2 }, exit = androidx.compose.animation.fadeOut(),
+    ) {
+        val r = shown ?: return@AnimatedVisibility
+        val glass = LocalAppSettings.current.glassEverywhere
+        val (ink, action) = com.prism.music.ui.components.barInk(glass)
+        com.prism.music.ui.components.BarSurface(glass, androidx.compose.foundation.shape.RoundedCornerShape(50), Modifier.widthIn(max = 520.dp)) {
+            Row(
+                Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag(HISTORY_UNDO_TAG)
+                    .padding(start = 18.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(tr(R.string.removed_from_history), Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodyMedium, color = ink, maxLines = 1)
+                Spacer(Modifier.width(8.dp))
+                PrismTextButton({ onUndo(r) }) {
+                    androidx.compose.material3.Icon(PrismIcons.Undo, null, Modifier.size(16.dp), tint = action)
+                    Spacer(Modifier.width(6.dp))
+                    Text(tr(R.string.undo), color = action)
+                }
+            }
+        }
+    }
+}
+
+internal const val HISTORY_UNDO_TAG = "library.history.undo"
 
 @Composable
 private fun HistoryHeading(title: String) {
@@ -216,6 +261,17 @@ fun LibraryScreen(bottomPadding: Dp) {
     val menu = com.prism.music.ui.components.rememberPlayMenu()
     var editingTiles by remember { mutableStateOf(false) }
     if (editingTiles) LibraryTilesSheet { editingTiles = false }
+    // History's "Remove from history" (#469): the plays taken out, until Undo or the bar goes.
+    var historyUndo by remember { mutableStateOf<com.prism.music.data.HistoryRemoval.Removed?>(null) }
+    fun removePlays(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        scope.launch {
+            val removed = runCatching { com.prism.music.data.HistoryRemoval.remove(c.db, ids) }.getOrNull() ?: return@launch
+            // Home's Replay card keeps its year a few minutes: read again. (A finished year's kept Rewind stays as it was.)
+            forgetYearSoFar()
+            historyUndo = removed
+        }
+    }
 
     // The account's saved albums / artists first, then the ones your liked and downloaded songs come from.
     val mine = remember(liked, dls) {
@@ -423,9 +479,19 @@ fun LibraryScreen(bottomPadding: Dp) {
             // History (#118): this phone's plays, or the account's (YouTube Music's own history: the app and the web too).
             var fromAccount by rememberSaveable { mutableStateOf(false) }
             var historyLimit by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(300) }
+            // #469: a search through the whole of it (not only the plays shown so far), a moment after the typing pauses.
+            var historyQuery by rememberSaveable { mutableStateOf("") }
             val phoneHistory = if (tab == LibTab.HISTORY) {
                 val rows by remember(historyLimit) { c.db.plays().historyFlow(historyLimit, 0) /* #263: every kept play (how long one takes is the listener's pick) */ }.collectAsState(null)
-                remember(rows) { rows?.let { it.size to historyByDay(it) } }
+                val searcher = remember { com.prism.music.data.HistorySearch.Searcher(c.db.plays()) }
+                // Read again as the history changes (the list above emits for a new play or a removal), so a search stays true.
+                val found by androidx.compose.runtime.produceState<List<com.prism.music.data.db.HistoryRow>?>(null, historyQuery, historyLimit, rows) {
+                    if (historyQuery.isBlank()) { value = null; return@produceState }
+                    kotlinx.coroutines.delay(200)
+                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { searcher.find(historyQuery, historyLimit, rows) }.getOrNull() }
+                }
+                val shownRows = if (historyQuery.isBlank()) rows else found ?: rows
+                remember(shownRows) { shownRows?.let { it.size to historyByDay(it) } }
             } else null
             var accountReload by remember { androidx.compose.runtime.mutableIntStateOf(0) }
             val accountHistory = if (tab == LibTab.HISTORY) {
@@ -481,7 +547,14 @@ fun LibraryScreen(bottomPadding: Dp) {
                 }
             }
             // The page showing, not this page's own tab (fixed for it, and the next page stays composed beside it).
-            com.prism.music.ui.components.SelectableSongs(pickList, resetKey = pager.settledPage to fromAccountShown) {
+            // On this phone's History, picked songs' plays shown (the search's, when searching) come out together (#469).
+            val historyRemover = if (tab == LibTab.HISTORY && !fromAccountShown) com.prism.music.ui.components.SelectionRemover(
+                tr(R.string.history), asks = false, label = tr(R.string.remove_from_history),
+            ) { picked ->
+                val ids = picked.map { it.id }.toSet()
+                removePlays(phoneHistory?.second.orEmpty().flatMap { day -> day.second.filter { it.song.id in ids }.flatMap { it.ids } })
+            } else null
+            com.prism.music.ui.components.SelectableSongs(pickList, remover = historyRemover, resetKey = pager.settledPage to fromAccountShown) {
             LazyVerticalGrid(
                 when {
                     asList -> GridCells.Fixed(1)
@@ -694,10 +767,17 @@ fun LibraryScreen(bottomPadding: Dp) {
                                 com.prism.music.ui.components.PrismChip(fromAccount, { fromAccount = true }, tr(R.string.your_account), icon = PrismIcons.Person)
                             }
                         }
+                        // #469: the same search for both; the account's is only what's been read of it (no more requests).
+                        val historyCount = if (fromAccountShown) accountHistory?.getOrNull().orEmpty().sumOf { it.second.size } else phoneHistory?.first ?: 0
+                        findField(historyQuery, tr(R.string.search_history), historyCount) { historyQuery = it }
                         if (fromAccountShown) {
                             val result = accountHistory
-                            val sections = result?.getOrNull()
+                            val sections = result?.getOrNull()?.let { all ->
+                                if (historyQuery.isBlank()) all
+                                else all.map { (t, songs) -> t to songs.filter { s -> libraryMatches(historyQuery, s.title, s.artistText, s.album?.title.orEmpty()) } }.filter { it.second.isNotEmpty() }
+                            }
                             when {
+                                sections != null && sections.isEmpty() && historyQuery.isNotBlank() -> nothingFound(tr(R.string.history), historyQuery)
                                 result == null -> item(span = { GridItemSpan(maxLineSpan) }) {
                                     Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { com.prism.music.ui.components.PrismSpinner(Modifier.size(28.dp)) }
                                 }
@@ -719,7 +799,8 @@ fun LibraryScreen(bottomPadding: Dp) {
                             }
                         } else {
                             val (count, days) = phoneHistory ?: (0 to emptyList())
-                            if (phoneHistory != null && days.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                            if (phoneHistory != null && days.isEmpty() && historyQuery.isNotBlank()) nothingFound(tr(R.string.history), historyQuery)
+                            else if (phoneHistory != null && days.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                                 EmptyState(PrismIcons.History, tr(R.string.nothing_played_yet), tr(R.string.songs_you_play_in_prism_show))
                             }
                             val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
@@ -728,8 +809,10 @@ fun LibraryScreen(bottomPadding: Dp) {
                                 items(entries.size, key = { "p$di-${entries[it].at}" }, span = { GridItemSpan(maxLineSpan) }) { i ->
                                     val e = entries[i]
                                     val at = time.format(java.util.Date(e.at))
+                                    // #469: the row's own plays out (a run of the same song is one row), not the song's others.
                                     SongRow(
                                         e.song, trailingInfo = if (e.times > 1) "$at · ${e.times}×" else at,
+                                        extraActions = listOf(com.prism.music.ui.components.SheetItem(PrismIcons.Delete, tr(R.string.remove_from_history)) { removePlays(e.ids) }),
                                         swipe = settings.behavior.songSwipeLibrary,
                                     ) { c.player.playSingle(e.song) }
                                 }
@@ -768,6 +851,13 @@ fun LibraryScreen(bottomPadding: Dp) {
             // D54. Above the songs: where they're from, then (with any songs) the search and the sort.
             if (tab == LibTab.SONGS) LocatePlayingRow(locate, gridState, inList = playingAt >= 0, songId = playingRowId, bottomPadding = bottomPadding) {
                 playingAt + 1 + (if (songsBase.isNotEmpty()) 2 else 0)
+            }
+            if (tab == LibTab.HISTORY) HistoryUndoBar(
+                historyUndo, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp).padding(bottom = bottomPadding + 8.dp),
+                onGone = { historyUndo = null },
+            ) { removed ->
+                historyUndo = null
+                scope.launch { runCatching { com.prism.music.data.HistoryRemoval.restore(c.db, removed) }; forgetYearSoFar() }
             }
             }
         }

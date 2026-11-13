@@ -487,7 +487,9 @@ internal fun PlayerPagePreview(strip: Boolean) {
         Modifier.fillMaxSize().padding(horizontal = if (strip) 14.dp else 18.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (strip) 12.dp else 18.dp, Alignment.CenterHorizontally),
     ) {
-        PreviewPhone(if (strip) 28.dp else 86.dp) { LookTheme(s, true) { colors -> MiniPlayerScreen(colors, song) } }
+        // Performance mode (1.8.5): a still phone, cheap to open (no live player, blur or motion); the same words beside it.
+        if (s.performanceMode) PlainPlayerPhone(if (strip) 28.dp else 86.dp)
+        else PreviewPhone(if (strip) 28.dp else 86.dp, Modifier.testTag(PlayerPreviewTags.LIVE)) { LookTheme(s, true) { colors -> MiniPlayerScreen(colors, song) } }
         Column(Modifier.weight(1f, fill = false)) {
             Text(song?.title ?: tr(R.string.northern_lights), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -495,6 +497,45 @@ internal fun PlayerPagePreview(strip: Boolean) {
                 maxLines = if (strip) 1 else 3, overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+/** Which phone [PlayerPagePreview] drew, for tests. */
+internal object PlayerPreviewTags {
+    const val LIVE = "settings:player:preview:live"
+    const val PLAIN = "settings:player:preview:plain"
+}
+
+/**
+ * The player drawn plainly, [width] wide (as [PreviewPhone]): a cover, the title's lines, a progress bar and the
+ * controls in one still drawing, without the player's background, artwork, fonts or an offscreen layer.
+ */
+@Composable
+private fun PlainPlayerPhone(width: androidx.compose.ui.unit.Dp) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(width * 0.12f)
+    val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
+    val hues = com.prism.music.ui.screens.standIns[0]
+    androidx.compose.foundation.Canvas(
+        Modifier.size(width, width * 2.05f).testTag(PlayerPreviewTags.PLAIN).clip(shape).background(Color(0xFF121212)).border(1.dp, edge, shape),
+    ) {
+        val w = size.width
+        val h = size.height
+        val side = w * 0.12f
+        val cover = w - side * 2
+        val r = androidx.compose.ui.geometry.CornerRadius(w * 0.05f)
+        drawRoundRect(Brush.linearGradient(hues, androidx.compose.ui.geometry.Offset(side, h * 0.14f), androidx.compose.ui.geometry.Offset(side + cover, h * 0.14f + cover)),
+            androidx.compose.ui.geometry.Offset(side, h * 0.14f), androidx.compose.ui.geometry.Size(cover, cover), r)
+        val line = h * 0.022f
+        val lr = androidx.compose.ui.geometry.CornerRadius(line / 2)
+        var y = h * 0.14f + cover + h * 0.05f
+        drawRoundRect(Color.White.copy(alpha = 0.9f), androidx.compose.ui.geometry.Offset(side, y), androidx.compose.ui.geometry.Size(cover * 0.7f, line), lr)
+        y += line * 2
+        drawRoundRect(Color.White.copy(alpha = 0.5f), androidx.compose.ui.geometry.Offset(side, y), androidx.compose.ui.geometry.Size(cover * 0.45f, line * 0.8f), lr)
+        y += line * 3
+        drawRoundRect(Color.White.copy(alpha = 0.25f), androidx.compose.ui.geometry.Offset(side, y), androidx.compose.ui.geometry.Size(cover, line * 0.4f), lr)
+        drawRoundRect(Color.White.copy(alpha = 0.85f), androidx.compose.ui.geometry.Offset(side, y), androidx.compose.ui.geometry.Size(cover * 0.35f, line * 0.4f), lr)
+        y += line * 4
+        for (i in -1..1) drawCircle(Color.White.copy(alpha = if (i == 0) 0.95f else 0.6f), if (i == 0) w * 0.08f else w * 0.045f, androidx.compose.ui.geometry.Offset(w / 2 + i * w * 0.25f, y))
     }
 }
 

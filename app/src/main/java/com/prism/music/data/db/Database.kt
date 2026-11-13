@@ -247,6 +247,10 @@ fun List<SongPlays>.mergeUploads(): List<SongPlays> {
 data class ArtistPlays(val artistName: String, val plays: Int, val ms: Long, val thumbnail: String?, val artistId: String?)
 @kotlinx.serialization.Serializable
 data class MonthTotal(val month: String, val ms: Long)
+/** Listening in one hour of one weekday (the listening clock, 1.8.5): [weekday] 0 = Monday … 6 = Sunday, [hour] 0..23, local. */
+data class HourTotal(val weekday: Int, val hour: Int, val ms: Long, val plays: Int)
+/** Listening on one day (the listening calendar, 1.8.5): [day] is the local date, "yyyy-MM-dd". */
+data class DayTotal(val day: String, val ms: Long, val plays: Int)
 /** An album's listening (by its title and the songs' main artist); [songs] is how many of its songs were played. */
 @kotlinx.serialization.Serializable
 data class AlbumPlays(val albumTitle: String, val artistName: String, val plays: Int, val ms: Long, val songs: Int, val thumbnail: String?)
@@ -318,12 +322,16 @@ interface SongDao {
     suspend fun mineOnAlbum(id: String): List<SongEntity>
 }
 
-/** One play in Library → History (#118): when, for how long, and the song. */
+/** One play in Library → History (#118): when, for how long, and the song; [eventId] is the play's own row (#469: removing it). */
 data class HistoryRow(
     val playedAt: Long,
     val playedFor: Long,
     @androidx.room.Embedded val song: SongEntity,
+    val eventId: Long,
 )
+
+/** A played song's names, all History's search (#469) reads of it. */
+data class PlayedSongNames(val id: String, val title: String, val artistName: String, val albumTitle: String?)
 
 @Dao
 interface PlayEventDao {
@@ -332,10 +340,40 @@ interface PlayEventDao {
 
     /** The latest [limit] plays on this phone of at least [minMs], newest first, each with its song (Library → History, #118). */
     @Query(
-        """SELECT e.timestamp AS playedAt, e.playedMs AS playedFor, s.* FROM play_events e JOIN songs s ON s.id = e.songId
+        """SELECT e.id AS eventId, e.timestamp AS playedAt, e.playedMs AS playedFor, s.* FROM play_events e JOIN songs s ON s.id = e.songId
            WHERE e.playedMs >= :minMs ORDER BY e.timestamp DESC LIMIT :limit"""
     )
     fun historyFlow(limit: Int, minMs: Long): Flow<List<HistoryRow>>
+
+    /** Every song played on this phone once, by its names (History's search, #469): matched in Kotlin, without accents. */
+    @Query("SELECT id, title, artistName, albumTitle FROM songs WHERE id IN (SELECT DISTINCT songId FROM play_events WHERE playedMs >= :minMs)")
+    suspend fun playedSongNames(minMs: Long): List<PlayedSongNames>
+
+    /** The latest [limit] plays of [songIds], newest first (History's search, #469; at most 500 ids a call). */
+    @Query(
+        """SELECT e.id AS eventId, e.timestamp AS playedAt, e.playedMs AS playedFor, s.* FROM play_events e JOIN songs s ON s.id = e.songId
+           WHERE e.playedMs >= :minMs AND e.songId IN (:songIds) ORDER BY e.timestamp DESC LIMIT :limit"""
+    )
+    suspend fun historyOf(songIds: List<String>, limit: Int, minMs: Long): List<HistoryRow>
+
+    /** Plays by their own ids, as stored (History's "Remove from history" keeps them for Undo, #469). */
+    @Query("SELECT * FROM play_events WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<Long>): List<PlayEventEntity>
+
+    /** Takes one play out of the history (not the song's other plays). */
+    @Query("DELETE FROM play_events WHERE id = :id")
+    suspend fun deleteById(id: Long): Int
+
+    @Query("DELETE FROM play_events WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>): Int
+
+    /** Puts removed plays back exactly as they were (same id, time, length, source, excluded): History's Undo. */
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun reinsert(events: List<PlayEventEntity>)
+
+    /** The song's latest play left, if any. */
+    @Query("SELECT MAX(timestamp) FROM play_events WHERE songId = :songId")
+    suspend fun lastPlayOf(songId: String): Long?
 
     @Query("SELECT * FROM play_events WHERE timestamp > :since")
     suspend fun eventsSince(since: Long): List<PlayEventEntity>
@@ -375,6 +413,18 @@ interface PlayEventDao {
     )
     suspend fun monthly(from: Long, to: Long): List<MonthTotal>
 
+    /** The listening clock (1.8.5): SQL from [com.prism.music.data.imports.LocalClock.hours], which says why it's built there. */
+    @androidx.room.RawQuery
+    suspend fun clockHours(q: androidx.sqlite.db.SupportSQLiteQuery): List<HourTotal>
+
+    /** The listening calendar (1.8.5): SQL from [com.prism.music.data.imports.LocalClock.days]. */
+    @androidx.room.RawQuery
+    suspend fun clockDays(q: androidx.sqlite.db.SupportSQLiteQuery): List<DayTotal>
+
+    /** One hour's top songs (1.8.5): SQL from [com.prism.music.data.imports.LocalClock.songs]. */
+    @androidx.room.RawQuery
+    suspend fun clockSongs(q: androidx.sqlite.db.SupportSQLiteQuery): List<SongPlays>
+
     @Query("SELECT COUNT(DISTINCT strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch', 'localtime')) FROM play_events WHERE timestamp BETWEEN :from AND :to")
     suspend fun activeDays(from: Long, to: Long): Int
 
@@ -386,6 +436,10 @@ interface PlayEventDao {
 
     @Query("SELECT COUNT(DISTINCT songId) FROM play_events WHERE timestamp BETWEEN :from AND :to")
     suspend fun songCount(from: Long, to: Long): Int
+
+    /** How many times [songId] was played up to [to] (the milestones' cheap check after a play). */
+    @Query("SELECT COUNT(*) FROM play_events WHERE songId = :songId AND timestamp <= :to")
+    suspend fun playsOf(songId: String, to: Long): Int
 
     @Query("SELECT COUNT(DISTINCT s.primaryArtist) FROM play_events e JOIN songs s ON s.id = e.songId WHERE e.timestamp BETWEEN :from AND :to AND s.primaryArtist != ''")
     suspend fun artistCount(from: Long, to: Long): Int

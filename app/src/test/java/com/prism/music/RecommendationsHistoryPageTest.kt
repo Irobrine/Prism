@@ -68,6 +68,10 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
     private val themeColors = t(R.string.use_theme_colors)
     private val storyType = t(R.string.replay_story_font)
     private val rewind = t(R.string.rewind_notification)
+    private val notices = t(R.string.replay_notices)
+    private val recap = t(R.string.recap_notification)
+    private val milestone = t(R.string.milestone_notification)
+    private val finishLyric = t(R.string.finish_lyric_title)
     private val countFrom = t(R.string.imp_count_history_from)
 
     private val gMade = t(R.string.made_for_you)
@@ -106,7 +110,7 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
         assertBudgets("defaults")
         // The ledger's layout with a fresh install's settings ("Bring your history" is a row of History: its group was named as its row).
         assertEquals(listOf(gMade, gRadios, gHistory, gReplay), groupTitles())
-        assertEquals(listOf(5, 3, 3, 5), groupSizes())
+        assertEquals(listOf(5, 3, 3, 6), groupSizes())
         assertEquals("nothing differs from how Prism comes", 0, changedRows())
         assertTrue(groupTitles().none { it == SettingsPageId.RECOMMENDATIONS_HISTORY.title })
         for (g in groupTitles()) assertFalse("a group and a row are both \"$g\"", hasRow(g))
@@ -129,7 +133,11 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
         assertEquals(SettingsTags.ROW_SWITCH, typeOf(themeColors))
         assertEquals(SettingsTags.ROW_PICK, typeOf(storyType))
         assertEquals(t(R.string.replay_story_font_poster), valueOf(storyType))
-        assertEquals(SettingsTags.ROW_SWITCH, typeOf(rewind))
+        // 1.8.5: Replay's three notices are one row; Rewind's is on as Prism comes, the two new ones off.
+        assertEquals(SettingsTags.ROW_PICK, typeOf(notices))
+        assertEquals("1 / 3", valueOf(notices))
+        assertFalse(hasRow(rewind))
+        assertEquals(SettingsTags.ROW_SWITCH, typeOf(finishLyric))
         assertEquals(SettingsTags.ROW_PICK, typeOf(countFrom))
         assertEquals(t(R.string.imp_prism_plays), valueOf(countFrom))
         // "A song and its video as one" is Home & Library's; "Plays in Prism · Always counted" only explained (§2.7).
@@ -142,7 +150,7 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
     @Test fun everyStoredSettingHasItsControl() {
         show(over = signedIn)
         val d = AppSettings()
-        assertEquals("signed in, History has its third setting", listOf(5, 3, 4, 5), groupSizes())
+        assertEquals("signed in, History has its third setting", listOf(5, 3, 4, 6), groupSizes())
 
         // release_notifications
         tap(releases)
@@ -176,8 +184,21 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
         assertEquals(t(R.string.like_1_204_min), valueOf(hours))
         tap(themeColors)
         until("replay_theme_colors") { it.replayThemeColors }
-        tap(rewind)
+        tap(notices)
+        assertEquals(1, sheets())
+        inSheet(rewind).performSemanticsAction(SemanticsActions.OnClick)
         until("rewind_notification") { !it.rewindNotification }
+        assertEquals(t(R.string.off), valueOf(notices))
+        // recap_notify, milestone_notify (1.8.5, off as Prism comes), in the same sheet.
+        inSheet(recap).performSemanticsAction(SemanticsActions.OnClick)
+        until("recap_notify") { it.behavior.recapNotify }
+        inSheet(milestone).performSemanticsAction(SemanticsActions.OnClick)
+        until("milestone_notify") { it.behavior.milestoneNotify }
+        swipeSheetAway()
+        assertEquals("2 / 3", valueOf(notices))
+        // finish_lyric
+        tap(finishLyric)
+        until("finish_lyric") { it.behavior.finishLyric }
         // replay_story_font: in its pick sheet, one card a type.
         tap(storyType)
         assertEquals(2, compose.onAllNodes(hasTestTag(SettingsTags.SHEET_OPTION)).fetchSemanticsNodes().size)
@@ -189,20 +210,39 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
 
         // Every row with a setting now differs from how Prism comes, says so, and the page still fits.
         assertBudgets("everything changed")
-        assertEquals(listOf(5, 3, 4, 5), groupSizes())
-        assertEquals(11, changedRows())
+        assertEquals(listOf(5, 3, 4, 6), groupSizes())
+        assertEquals(12, changedRows())
 
         // Reset this page lists each of them and puts them all back (history is recorded again).
         val lines = resetLines(confirm = true)
-        assertEquals(lines.joinToString("\n"), 11, lines.size)
+        assertEquals(lines.joinToString("\n"), 14, lines.size)
         assertTrue(lines.toString(), lines.any { it.startsWith("$pause: ") && it.endsWith("→ " + t(R.string.off)) })
         assertTrue(lines.toString(), lines.any { it == "$countAfter: ${PlayCount.label(30)} → ${PlayCount.label(10)}" })
         until("the reset") {
             it.behavior.radioTune == d.behavior.radioTune && it.behavior.historyPausedUntil == 0L && it.behavior.playCountSeconds == d.behavior.playCountSeconds &&
                 it.behavior.playCountOnAccount == d.behavior.playCountOnAccount && it.releaseNotifications == d.releaseNotifications && it.replayHours == d.replayHours &&
-                it.replayThemeColors == d.replayThemeColors && it.rewindNotification == d.rewindNotification && it.view.replayStoryFont == d.view.replayStoryFont
+                it.replayThemeColors == d.replayThemeColors && it.rewindNotification == d.rewindNotification && it.view.replayStoryFont == d.view.replayStoryFont &&
+                !it.behavior.recapNotify && !it.behavior.milestoneNotify && !it.behavior.finishLyric
         }
         assertEquals(0, changedRows())
+    }
+
+    /**
+     * A Replay notice turned on asks for notifications when Prism may not post them (Android 13+ without the permission):
+     * before, the switch showed on and nothing ever came. Turning one off doesn't ask.
+     */
+    @Test fun turningOnAReplayNoticeAsksForNotifications() {
+        var asked = 0
+        container.notificationPrompt = { asked++ }
+        show()
+        tap(notices)
+        inSheet(rewind).performSemanticsAction(SemanticsActions.OnClick)
+        until("rewind_notification off") { !it.rewindNotification }
+        assertEquals("turning one off doesn't ask", 0, asked)
+        inSheet(recap).performSemanticsAction(SemanticsActions.OnClick)
+        until("recap_notify") { it.behavior.recapNotify }
+        compose.waitForIdle()
+        assertEquals("turning one on asks", 1, asked)
     }
 
     /** Your artists, Exclusions and Bring your history stay their own screens, behind Link rows. */
@@ -228,7 +268,7 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
         show()
         addRoutes(Routes.BRING_HISTORY)
         compose.waitUntil(5_000) { hasRow(shapeMixes) }
-        assertEquals("with a history brought in, its switch shows", listOf(5, 3, 4, 5), groupSizes())
+        assertEquals("with a history brought in, its switch shows", listOf(5, 3, 4, 6), groupSizes())
         assertEquals(SettingsTags.ROW_SWITCH, typeOf(shapeMixes))
         assertEquals(t(R.string.imp_prism_plays), valueOf(countFrom))
 
@@ -278,9 +318,11 @@ class RecommendationsHistoryPageTest : ListeningPageHarness(SettingsPageId.RECOM
         val mine = SettingsIndex.entries.filter { it.page == SettingsPageId.RECOMMENDATIONS_HISTORY && it.group.isNotBlank() }
         val lost = mine.filter { it.group !in drawn }
         assertTrue("search lines in groups the page doesn't have: ${lost.map { it.group + " › " + it.title }}", lost.isEmpty())
-        for (title in listOf(artists, releases, mixesAgain, exclusions, forget, newness, depth, energy, pause, countAfter, account, bring, shapeMixes, hours, themeColors, storyType, rewind, countFrom)) {
+        for (title in listOf(artists, releases, mixesAgain, exclusions, forget, newness, depth, energy, pause, countAfter, account, bring, shapeMixes, hours, themeColors, storyType, notices, finishLyric, countFrom)) {
             assertEquals(title, 1, mine.count { it.title == title })
         }
+        // The three notices are in one row's sheet: each one's name finds that row.
+        for (word in listOf(rewind, recap, milestone)) assertTrue(word, SettingsIndex.search(word).any { it.title == notices })
         // Every row drawn is one of them.
         for (r in rows()) {
             val title = r.config.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text ?: continue

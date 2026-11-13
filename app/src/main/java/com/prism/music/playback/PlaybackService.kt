@@ -116,6 +116,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private val spatial = SpatialAudioProcessor()
     /** "Pause when muted" (#157). */
     private val muteWatch by lazy { MuteWatch(this, player) { c.settings.current.behavior.pauseOnMute } }
+    /** "Pause when face down" (1.8.5): made only while the setting is on ([faceDownSetting]); null otherwise. */
+    private var faceDown: FaceDown? = null
     private val normalizer = NormalizerProcessor()
     private var songLoudness: Float? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -178,6 +180,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             }
         })
         effects = AudioEffects(this)
+        // D62: each song's gain from its very first sample, not the last song's until the main thread catches up.
+        normalizer.songGainDb = ::startingGain
         // Lossless mode keeps hi-res files (24-bit FLAC) at full resolution instead of rounding to 16-bit.
         val renderers = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
@@ -311,6 +315,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         scope.launch { c.settings.flow.map { it.sound.normalizeTarget to it.sound.normalizeAlbums }.distinctUntilChanged().drop(1).collect { applyNormalization() } }
         sessionPlayer.gentle = ::gentle
         scope.launch { c.settings.flow.map { it.behavior.pauseOnMute }.distinctUntilChanged().collect { muteWatch.update() } }
+        scope.launch { c.settings.flow.map { it.behavior.faceDownPause }.distinctUntilChanged().collect { faceDownSetting(it) } }
         scope.launch { c.settings.flow.map { it.audioDiagnostics }.distinctUntilChanged().collect { on -> AudioDiagnostics.setEnabled(on) { AudioDiagnostics.about(c) } } }
         // The buttons beside play follow Settings → Player → Buttons as soon as they're changed.
         scope.launch { c.settings.flow.map { it.sessionButtons }.distinctUntilChanged().drop(1).collect { updateButtons() } }
@@ -372,6 +377,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         // DJ mode: the set is worked out when it's turned on, and again when its energy curve changes.
         scope.launch { c.dj.on.collect { on -> if (on) djAhead() else { djJob?.cancel(); djSoon?.cancel() } } }
         scope.launch { c.dj.rescan.drop(1).collect { if (c.dj.onNow) djAhead() } }
+        scope.launch { c.dj.newSets.drop(1).collect { djNewSet() } }
         scope.launch { c.settings.flow.map { it.djFlow }.distinctUntilChanged().drop(1).collect { resequence() } }
         scope.launch {
             c.settings.flow.map { listOf(it.carLyrics, it.carLyricsStyle, it.carLyricsOnPhone, it.behavior.carLyricsLines) }.distinctUntilChanged().collect {
@@ -654,6 +660,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         }
         mix.release()
         muteWatch.release()
+        faceDown?.release()
         c.cast.detach(player)
         c.player.detach()
         carLyrics.stop()
@@ -1104,10 +1111,15 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+        // #374: Shuffle in DJ mode (from the notification, the car, anywhere) deals a new DJ set; DJ mode stays on and
+        // its order stays the order, so Media3's shuffle goes back off (the player's button never turns it on).
+        if (shuffleModeEnabled && c.dj.onNow) {
+            player.shuffleModeEnabled = false
+            c.dj.newSet()
+            return
+        }
         vocals.shuffle = shuffleModeEnabled
         edges.shuffle = shuffleModeEnabled
-        // Shuffle and DJ mode both decide the order: the listener's shuffle wins.
-        if (shuffleModeEnabled && c.dj.onNow) c.dj.setOn(false)
         // Shuffle off (from anywhere: the notification, the car) is Smart Shuffle off too.
         if (!shuffleModeEnabled && c.queue.smartShuffle.value) c.queue.smartShuffle.value = false
         updateButtons()
@@ -1405,10 +1417,14 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      * "Albums as they are" (A2): while an album plays through, every song gets the same gain, set by the loudest of its
      * songs measured so far, so a quiet interlude stays quiet next to the single. Null otherwise.
      */
-    private fun albumLoudness(): Pair<Float, Float?>? {
+    private fun albumLoudness(): Pair<Float, Float?>? =
+        albumLoudness(trackedSong, (0 until player.mediaItemCount).map { player.getMediaItemAt(it) })
+
+    /** [albumLoudness] for [song] among [queue] (the player's items, or its timeline's on the audio thread). Any thread. */
+    private fun albumLoudness(song: Song?, queue: List<MediaItem>): Pair<Float, Float?>? {
         if (!c.settings.current.sound.normalizeAlbums || c.queue.source.value.kind != QueueKind.ALBUM) return null
-        val album = trackedSong?.album?.id ?: return null
-        val songs = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }.filter { it.toSong()?.album?.id == album }
+        val album = song?.album?.id ?: return null
+        val songs = queue.filter { it.toSong()?.album?.id == album }
             .filter { c.mixTempo.loudness(it.mediaId) != null }
         val loudest = songs.maxOfOrNull { c.mixTempo.loudness(it.mediaId)!! } ?: return null
         // The album's highest peak bounds how far all of it can be lifted (unknown while any song's is).
@@ -1416,27 +1432,45 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         return loudest to (if (null in peaks) null else peaks.maxOf { it!! })
     }
 
-    private fun applyNormalization() {
+    /**
+     * The gain (dB) for the song [id], from its measured loudness, else YouTube's figure [yt], with "Albums as they are"
+     * the [album]'s. Reads only settings and stored figures, so the audio thread can ask it too (D62,
+     * [NormalizerProcessor.songGainDb]) and gets what [applyNormalization] sets a moment later.
+     */
+    private fun normalizationGain(id: String?, yt: Float?, album: Pair<Float, Float?>?): Float {
         // The song's own measured loudness (integrated LUFS, from [MixTempo]'s scan) is the real figure. YouTube's
         // loudnessDb hardly differs between a loud master and a quiet one, so it only stands in until the song is
         // measured.
-        val measured = trackedSong?.id?.let { c.mixTempo.loudness(it) }
-        val yt = songLoudness
+        val measured = id?.let { c.mixTempo.loudness(it) }
         // The level picked (A2; -14 LUFS unless changed), and with "Albums as they are" one level for a whole album.
         val target = c.settings.current.sound.normalizeTarget.toFloat()
-        val album = albumLoudness()
-        val gain = when {
+        return when {
             !c.settings.current.normalize -> 0f
             album != null -> NormalizerProcessor.gainFor(target, album.first, album.second)
-            measured != null -> NormalizerProcessor.gainFor(target, measured, trackedSong?.id?.let { c.mixTempo.peak(it) })
+            measured != null -> NormalizerProcessor.gainFor(target, measured, id.let { c.mixTempo.peak(it) })
             yt != null -> NormalizerProcessor.gainFor(target, TARGET_LUFS + yt)
             else -> 0f
         }
+    }
+
+    /** [normalizationGain] for a song about to start, on the audio thread: its remembered YouTube figure, as [loadExtras] reads it. */
+    private fun startingGain(item: MediaItem, timeline: androidx.media3.common.Timeline): Float? {
+        val song = item.toSong() ?: return null
+        val queue = if (!c.settings.current.sound.normalizeAlbums) emptyList()
+            else (0 until timeline.windowCount).map { timeline.getWindow(it, androidx.media3.common.Timeline.Window()).mediaItem }
+        return normalizationGain(song.id, c.loudness.getFloat(song.id, Float.NaN).takeIf { !it.isNaN() }, albumLoudness(song, queue))
+    }
+
+    private fun applyNormalization() {
+        val measured = trackedSong?.id?.let { c.mixTempo.loudness(it) }
+        val yt = songLoudness
+        val gain = normalizationGain(trackedSong?.id, yt, albumLoudness())
         // Once the song is under way, a better figure eases in over two seconds, and a small one isn't worth a change
         // heard mid-song; before its sound starts, the right level is set at once.
         val underWay = player.isPlaying && player.currentPosition > 400
         if (underWay && kotlin.math.abs(gain - normalizeGainDb) < MIN_MIDSONG_CHANGE_DB) return
-        normalizer.setGainDb(gain, if (underWay) 2f else 0.1f)
+        // For this song only: a figure landing as it ended, after the audio moved on to the next, isn't put on that one.
+        normalizer.setGainDb(gain, if (underWay) 2f else 0.1f, trackedSong?.id)
         if (gain != normalizeGainDb) AudioDiagnostics.log("normalize", "gain %.1f dB (%s) at %d s".format(gain, if (measured != null) "measured" else if (yt != null) "YouTube's figure" else "none", player.currentPosition / 1000))
         normalizeGainDb = gain
         c.nerdStats.value = c.nerdStats.value.copy(
@@ -1574,15 +1608,17 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 withContext(Dispatchers.IO) { c.yourMusic.radio(seeds, existing, if (noRepeats) 60 else 15, offlineOnly = offline) }
             }.onFailure { android.util.Log.w("PrismRadio", "Prism radio failed", it) }.getOrNull().orEmpty()
                 .let { picks -> if (noRepeats) picks.filter { !session.has(it.song) }.take(15) else picks }
-            val mine = (if (!useYours) emptyList() else ownRadio())
-                .let { com.prism.music.data.foryou.LocalRadio.besideYouTube(it, onlyYours = !useYouTube || mode == com.prism.music.data.prefs.AutoplaySource.YOURS) }
-                .map { it.song }
+            val ownPicks = if (!useYours) emptyList() else ownRadio()
             // "Your music": YouTube only fills in when your own music has too little to follow with.
-            val wantYouTube = useYouTube && (radio || mode != com.prism.music.data.prefs.AutoplaySource.YOURS || mine.size < 5)
+            val wantYouTube = useYouTube && (radio || mode != com.prism.music.data.prefs.AutoplaySource.YOURS || ownPicks.size < 5)
             suspend fun askRadio(from: String, token: String?) = runCatching {
                 withContext(Dispatchers.IO) { c.radio(from, "RDAMVM$from", continuation = token) }
             }.getOrNull()
             val r = if (!wantYouTube) null else askRadio(seed, c.queue.autoplayContinuation)
+            // #461: beside YouTube's radio, only your songs close to the seed (or by artists on that radio).
+            val mine = com.prism.music.data.foryou.LocalRadio.besideYouTube(
+                ownPicks, onlyYours = !useYouTube || mode == com.prism.music.data.prefs.AutoplaySource.YOURS, radio = r?.songs.orEmpty(),
+            ).map { it.song }
             // Dropped if the queue was replaced, or Autoplay was switched off, while loading. (With no repeats on, having
             // nothing from either isn't the end yet: [RadioTopUp.next] looks further.)
             if ((!noRepeats && r == null && mine.isEmpty()) || c.queue.source.value !== src || (!c.settings.current.autoplay && !radio)) return@launch
@@ -1788,7 +1824,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 val at = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == next && it != player.currentMediaItemIndex }
                 val song = at?.let { player.getMediaItemAt(it).toSong() }
                 if (at != null && song != null && !song.isLive) {
-                    player.replaceMediaItem(at, song.copy(isLive = true).toMediaItem(player.getMediaItemAt(at).videoModeId?.let { song.id }))
+                    player.replaceKeepingOrder(at, song.copy(isLive = true).toMediaItem(player.getMediaItemAt(at).videoModeId?.let { song.id }))
                 }
             }
         }
@@ -1856,12 +1892,12 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                     val cover = found.thumbnail?.takeIf { it != video.thumbnail } ?: return@launch
                     val at = queued() ?: return@launch
                     val now = player.getMediaItemAt(at).toSong() ?: return@launch
-                    player.replaceMediaItem(at, VideoCover.withSong(now, found, cover).toMediaItem())
+                    player.replaceKeepingOrder(at, VideoCover.withSong(now, found, cover).toMediaItem())
                     return@launch
                 }
                 if (!c.network.online.value && !c.availableOffline(song.id)) return@launch
                 val at = queued() ?: return@launch
-                player.replaceMediaItem(at, song.toMediaItem())
+                player.replaceKeepingOrder(at, song.toMediaItem())
             } finally {
                 findingSongs.remove(video.id)
             }
@@ -2176,6 +2212,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         if (song != null && com.prism.music.data.HistoryPause.keepsPlay(c.settings.current.behavior, ms, song.isEpisode)) {
             scope.launch(Dispatchers.IO) {
                 c.db.plays().insert(PlayEventEntity(songId = song.id, timestamp = System.currentTimeMillis(), playedMs = ms, source = source, excluded = excluded))
+                c.milestones.afterPlay()
             }
         }
     }
@@ -2355,12 +2392,16 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         val queued = c.queue.userQueued.value
         var base = cur + 2
         while (base < player.mediaItemCount && player.getMediaItemAt(base).mediaId in queued) base++
+        // A new set's first song (#374) stays first after the listener's queued songs.
+        if (base < player.mediaItemCount && player.getMediaItemAt(base).mediaId == djLead) base++
         // Within the queue's own songs, or within autoplay's, so neither list in the queue gets the other's songs.
         val autoplay = c.queue.autoplayStart.value.takeIf { it > 0 } ?: Int.MAX_VALUE
         val limit = if (base < autoplay) minOf(autoplay, player.mediaItemCount) else player.mediaItemCount
         val end = minOf(limit, base + DJ_WINDOW)
         if (end - base < 2) return
-        val anchor = djTrack(player.getMediaItemAt(cur + 1)) ?: return
+        // The set follows on from the song just before it: the next one, or the last song the listener queued (#374:
+        // so a new set dealt after those isn't put back in the old order).
+        val anchor = djTrack(player.getMediaItemAt(base - 1)) ?: return
         val items = (base until end).map { player.getMediaItemAt(it) }
         val tracks = items.mapIndexed { i, item -> if (c.mixTempo.keyed(item.mediaId)) djTrack(item, id = i.toString()) else null }
         val known = tracks.filterNotNull()
@@ -2380,6 +2421,72 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         } finally {
             djMoving = false
         }
+    }
+
+    /**
+     * #374: Shuffle with DJ mode on. The songs after the playing one (after those the listener queued with "Play next",
+     * which keep their place) are dealt as a new DJ set: another song next, picked at random among those that blend
+     * well, and the rest in the order that follows on from it ([DjSequencer.newSet]). The same window [resequence]
+     * orders, so its next pass keeps the new set. Only moves songs.
+     */
+    /** The song a new set put first ([djNewSet]); [resequence] leaves it there. */
+    private var djLead: String? = null
+
+    private fun djNewSet() {
+        if (!c.dj.onNow || player.shuffleModeEnabled) return
+        val cur = player.currentMediaItemIndex
+        if (cur == C.INDEX_UNSET) return
+        val queued = c.queue.userQueued.value
+        var base = cur + 1
+        while (base < player.mediaItemCount && player.getMediaItemAt(base).mediaId in queued) base++
+        val autoplay = c.queue.autoplayStart.value.takeIf { it > 0 } ?: Int.MAX_VALUE
+        val limit = if (base < autoplay) minOf(autoplay, player.mediaItemCount) else player.mediaItemCount
+        val end = minOf(limit, base + 1 + DJ_WINDOW)
+        if (end - base < 2) return
+        val items = (base until end).map { player.getMediaItemAt(it) }
+        val window = items.mapIndexed { i, item -> if (c.mixTempo.keyed(item.mediaId)) djTrack(item, id = i.toString()) else null }
+        val start = djTrack(player.getMediaItemAt(base - 1))
+        val desired = DjSequencer.newSet(start, window, c.settings.current.djFlow, java.util.Random()) ?: return
+        if (desired == items.indices.toList()) return
+        android.util.Log.d("PrismDj", "new set: ${items[desired.first()].mediaId} next (was ${items.first().mediaId})")
+        djLead = items[desired.first()].mediaId
+        djMoving = true
+        try {
+            player.replaceMediaItems(base, end, desired.map { items[it] })
+        } finally {
+            djMoving = false
+        }
+        // Shuffling picks a different next song.
+        prefetchNext()
+        scheduleSave()
+    }
+
+    /**
+     * "Pause when face down" switched on or off (and at start): on, a [FaceDown] listens to the player and takes the
+     * accelerometer while music plays; off, it's let go and nothing of it is left (no listener, no sensor).
+     */
+    private fun faceDownSetting(on: Boolean) {
+        if (!on) {
+            faceDown?.let { player.removeListener(it); it.release() }
+            faceDown = null
+            return
+        }
+        val f = faceDown ?: FaceDown(FaceDown.Accelerometer(this), { c.settings.current.behavior.faceDownPause }, object : FaceDown.Controls {
+            override val playing get() = player.playWhenReady && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+            // Not while the music goes to another device (Cast, Prism Connect), the car (Android Auto), or in a call.
+            override val blocked get() = c.cast.casting || carControllers.isNotEmpty() || inCall()
+            override fun pause() = player.pause()
+            override fun play() = player.play()
+        }).also { faceDown = it; player.addListener(it) }
+        f.update()
+    }
+
+    private val audioManager by lazy { getSystemService(android.media.AudioManager::class.java) }
+
+    /** A phone or voice call (ringing, or on one). */
+    private fun inCall(): Boolean = when (runCatching { audioManager?.mode }.getOrNull()) {
+        android.media.AudioManager.MODE_IN_CALL, android.media.AudioManager.MODE_IN_COMMUNICATION, android.media.AudioManager.MODE_RINGTONE -> true
+        else -> false
     }
 
     private var resequenceJob: kotlinx.coroutines.Job? = null
@@ -3087,6 +3194,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 tree.shuffleSongs(single.mediaId)?.takeIf { it.second.isNotEmpty() }?.let { (title, list) ->
                     c.queue.source.value = QueueSource(QueueKind.PLAYLIST, title)
                     c.queue.autoplayStart.value = -1
+                    // A new queue, shuffled: DJ mode ends with the old one (Shuffle in DJ mode would deal a DJ set, #374).
+                    c.dj.setOn(false)
                     player.shuffleModeEnabled = true
                     // Shuffled here too, so each "Shuffle play" is a new order rather than the player's last one.
                     return@future MediaSession.MediaItemsWithStartPosition(list.shuffled().map { it.toMediaItem() }, 0, C.TIME_UNSET)
@@ -3171,6 +3280,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             c.queue.source.value = QueueSource(QueueKind.PLAYLIST, pick.title)
             // Asked to shuffle: shuffled here too, so it's a new order each time (as the car's "Shuffle play" is);
             // otherwise in order, whatever shuffle was left on.
+            // A new queue asked shuffled: DJ mode ends with the old one (Shuffle in DJ mode would deal a DJ set, #374).
+            if (request.shuffle && pick.songs.size > 1) c.dj.setOn(false)
             player.shuffleModeEnabled = request.shuffle && pick.songs.size > 1
             val list = if (player.shuffleModeEnabled) pick.songs.shuffled() else pick.songs
             return MediaSession.MediaItemsWithStartPosition(list.map { it.toMediaItem() }, pick.start.coerceIn(0, list.lastIndex), C.TIME_UNSET)

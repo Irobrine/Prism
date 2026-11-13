@@ -52,6 +52,31 @@ class SongsEverywhereLiveTest {
         org.junit.Assert.assertTrue("missed: ${missed.map { it.title }}", missed.isEmpty())
     }
 
+    /**
+     * #383 (1.8.5): the two playlists named after 1.8.4.1. Every video row, what's searched for it, what the search gives
+     * and which song is picked: the misses show which rule turned the song down.
+     */
+    @Test fun playlistsNamedAfter1841() = runBlocking {
+        var videosSeen = 0
+        var missed = 0
+        for (id in listOf("PLEV4Wjn7aSFHRm-VkBxh2TJKwNyfUGqsO", "PLV8MOG0oNwgPXs35owR0R1BbHwTFGRMYP")) {
+            val songs = ytm.playlistAll(id, 120).songs
+            val videos = songs.filter { it.isVideo }
+            log("$id: ${songs.size} rows, ${videos.size} videos, ${songs.count { it.isEpisode }} episodes")
+            for (v in videos) {
+                videosSeen++
+                val picked = runCatching { ytm.songForVideo(v) }.getOrNull()
+                if (picked != null) continue
+                missed++
+                val query = YouTubeMusic.songForVideoQuery(v)
+                log("MISS ${v.id} \"${v.title}\" / ${v.artistText} (${v.durationSec}s) query=\"$query\"")
+                val results = query?.let { q -> runCatching { ytm.search(q, com.prism.music.data.innertube.SearchFilter.SONGS).items.filterIsInstance<com.prism.music.data.model.SongItem>().map { it.song } }.getOrNull() }.orEmpty()
+                results.take(8).forEach { s -> log("     ${s.id} \"${s.title}\" / ${s.artistText} (${s.durationSec}s) album=${s.album} video=${s.isVideo}") }
+            }
+        }
+        log("missed $missed of $videosSeen videos")
+    }
+
     @Test fun reportersPlaylists() = runBlocking {
         for (id in listOf("PLEwlFF5xcXHzubwrqTqBzexAGjhl_1LoA", "PLtLEpc9CWsdfxbsiuKYw02kpbCF1mnNcS")) {
             val songs = ytm.playlistAll(id, 60).songs

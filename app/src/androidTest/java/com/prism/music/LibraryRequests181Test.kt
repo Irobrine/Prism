@@ -61,8 +61,7 @@ class LibraryRequests181Test {
     }
 
     private fun openLibraryPlaylist(title: String, first: String) {
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         // Library keeps the page it was on (an earlier test leaves it on Downloads or History): its own "Library" page,
         // the topmost "Library" that can be tapped (the tab bar's is at the bottom), holds the playlists.
         // Library keeps the page it was on (an earlier test leaves it on Downloads): its first page, left of Songs, holds

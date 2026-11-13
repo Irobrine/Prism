@@ -105,6 +105,14 @@ import kotlinx.coroutines.launch
 
 private fun history(context: Context) = context.getSharedPreferences("search", Context.MODE_PRIVATE)
 
+/** Recent searches (#477): the last [KEEP] kept, newest first and each once; [SHOWN] of them before "Show all". */
+internal object RecentSearches {
+    const val KEEP = 30
+    const val SHOWN = 12
+
+    fun add(list: List<String>, query: String): List<String> = (listOf(query) + list.filter { it != query }).take(KEEP)
+}
+
 @Composable
 fun SearchScreen(bottomPadding: Dp) {
     val c = LocalContainer.current
@@ -148,8 +156,8 @@ fun SearchScreen(bottomPadding: Dp) {
         val v = q.trim()
         // #296: nothing searched is kept while history is paused.
         if (v.isBlank() || com.prism.music.data.HistoryPause.paused(c.settings.current.behavior)) return
-        recents.remove(v); recents.add(0, v)
-        while (recents.size > 12) recents.removeAt(recents.lastIndex)
+        val kept = RecentSearches.add(recents, v)
+        recents.clear(); recents.addAll(kept)
         history(context).edit().putString("q", recents.joinToString("\n")).apply()
     }
 
@@ -315,6 +323,7 @@ fun SearchScreen(bottomPadding: Dp) {
                 recents, moods, bottomPadding, opened,
                 onPick = { submit(it) },
                 onRemove = { r -> recents.remove(r); history(context).edit().putString("q", recents.joinToString("\n")).apply() },
+                onClearAll = { recents.clear(); history(context).edit().remove("q").apply() },
                 onForget = { o -> SearchMemory.forget(context, o); opened = SearchMemory.opened(context) },
                 onOpen = { item -> SearchMemory.remember(context, item); opened = SearchMemory.opened(context); nav.open(item, onSong) },
                 onMood = { nav.open(it, onSong) },

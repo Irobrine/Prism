@@ -846,6 +846,8 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
 
     fun next() = withPlayer { it.seekToNext() }
     fun previous() = withPlayer { it.seekToPrevious() }
+    /** The song before, wherever this one is (#481: Previous held): the player's own previous item, so shuffle's order. */
+    fun previousSong() = withPlayer { it.seekToPreviousMediaItem() }
 
     /** Calls [done] once the player is reached (after commands asked for before it, such as a widget's), at once if it is. */
     fun afterPending(done: () -> Unit) = withPlayer { done() }
@@ -1007,7 +1009,13 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
      * (where the queue allows it) → off, or off → on → off with "Shuffle only" (D57): [nextShuffle].
      */
     fun toggleShuffle() = withPlayer {
-        val now = when { !it.shuffleModeEnabled -> ShuffleMode.OFF; c.queue.smartShuffle.value -> ShuffleMode.SMART; else -> ShuffleMode.SHUFFLE }
+        // #374: in DJ mode Shuffle deals a new DJ set; DJ mode stays on and its order stays the order (no Media3 shuffle).
+        if (c.dj.onNow) {
+            if (it.shuffleModeEnabled) it.shuffleModeEnabled = false
+            c.dj.newSet()
+            return@withPlayer
+        }
+        val now =when { !it.shuffleModeEnabled -> ShuffleMode.OFF; c.queue.smartShuffle.value -> ShuffleMode.SMART; else -> ShuffleMode.SHUFFLE }
         when (nextShuffle(now, c.settings.current.behavior.shuffleButton, c.queue.smartAllowed())) {
             ShuffleMode.SHUFFLE -> { reshuffle(it); it.shuffleModeEnabled = true }
             ShuffleMode.SMART -> c.queue.smartShuffle.value = true

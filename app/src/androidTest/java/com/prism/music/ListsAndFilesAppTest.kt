@@ -153,8 +153,7 @@ class ListsAndFilesAppTest {
     // ------------------------------------------------------------ #221
 
     private fun openPlaylist(title: String, firstSong: String) {
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         compose.clickWhenFound(hasText(title) and hasClickAction(), 15_000)
         compose.waitForText(firstSong)
     }

@@ -183,7 +183,8 @@ fun QuickActions(items: List<ActionItem>, onPick: (ActionItem) -> Unit) {
                 Spacer(Modifier.height(7.dp))
                 Text(
                     a.value ?: a.label, style = MaterialTheme.typography.labelMedium, color = if (a.active) scheme.onSurface else scheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    // Two lines: "Remove download" (#471) and longer words in other languages weren't cut short.
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                 )
             }
         }

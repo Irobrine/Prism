@@ -48,8 +48,7 @@ class SmartPlaylistAppTest {
         val songs = Fixture.songs(3)
         runBlocking { c.tags.add("Gym", songs.take(2)) }
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         compose.waitUntil(10_000) { hasTag("libraryPager") || has("Library") }
         // The chip sits with the playlists' chips, on the Playlists tab (the first; Library reopens on the last one used).
         for (i in 0 until 8) {

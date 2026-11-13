@@ -95,7 +95,7 @@ class TourTest {
      */
     @Test
     fun anUpdateFrom1831ShowsThe184Pages() {
-        val pages = Tour.stepsAfter(60)
+        val pages = Tour.stepsAfter(60).filter { it.since <= 61 }
         assertTrue(pages.all { it.since == 61 && it.kind == TourStep.Kind.PLAIN })
         assertEquals(
             listOf(R.string.tour_184_settings_title, R.string.tour_184_lyrics_title, R.string.tour_184_lock_title, R.string.tour_184_lists_title, R.string.also_new)
@@ -120,7 +120,7 @@ class TourTest {
      */
     @Test
     fun the184StepsOpenThePlaceTheyDescribe() {
-        val pages = Tour.stepsAfter(60)
+        val pages = Tour.stepsAfter(60).filter { it.since <= 61 }
         // Step title → (page, group, a row the step talks of that is drawn in that group).
         val places = mapOf(
             tr(R.string.tour_184_lyrics_title) to Triple(SettingsPageId.LYRICS_SING, tr(R.string.ls_sources_and_timing), tr(R.string.ls_offset)),
@@ -141,6 +141,34 @@ class TourTest {
         }
     }
 
+    /**
+     * 1.8.5 (build 63): an update from 1.8.4.1 (62) shows Replay's new sections, Rewind 2026, the widgets and notices,
+     * and the rest, in that order, and nothing older.
+     */
+    @Test
+    fun anUpdateFrom1841ShowsThe185Pages() {
+        val pages = Tour.stepsAfter(62)
+        assertTrue(pages.all { it.since == 63 && it.kind == TourStep.Kind.PLAIN })
+        assertEquals(
+            listOf(R.string.tour_185_replay_title, R.string.tour_185_rewind_title, R.string.tour_185_more_title, R.string.also_new).map { tr(it) },
+            pages.map { it.title },
+        )
+        assertTrue(pages.all { it.points.size in 3..5 && it.points.all { p -> p.isNotBlank() } })
+        assertTrue(pages.flatMap { it.points }.none { "%" in it })
+        assertEquals(com.prism.music.ui.Routes.REPLAY, pages.first().showMe)
+        assertNull(pages.last().showMe)
+        // The notices and Finish the lyric are named as their rows are, and the step opens the group that draws them.
+        val more = pages[2]
+        assertTrue(more.points[1].contains(tr(R.string.replay_notices)))
+        assertTrue(more.points[2].contains(tr(R.string.finish_lyric_title)))
+        val (key, find) = parse(more.showMe!!)
+        val page = SettingsPageId.RECOMMENDATIONS_HISTORY
+        assertEquals(SettingsTarget(page, tr(R.string.replay_2)), SettingsMap.resolve(key, find))
+        for (row in listOf(R.string.replay_notices, R.string.finish_lyric_title)) {
+            assertTrue(page.index.any { it.group == tr(R.string.replay_2) && it.title == tr(row) })
+        }
+        assertTrue(pages[3].points[2].contains(tr(R.string.playback_face_down_pause)))
+    }
     /** `settings/<key>?find=<group>` → its key and group, as the app's route reads it. */
     private fun parse(route: String): Pair<String, String?> {
         val key = route.removePrefix("settings/").substringBefore('?')
@@ -157,6 +185,7 @@ class TourTest {
         val routes = setOf(
             com.prism.music.ui.Routes.SETTINGS, com.prism.music.ui.Routes.SEARCH, com.prism.music.ui.Routes.CATALOGUE,
             com.prism.music.ui.Routes.BRING_HISTORY, com.prism.music.ui.Routes.LIBRARY, com.prism.music.ui.Routes.librarySearch(),
+            com.prism.music.ui.Routes.REPLAY,
         )
         for (route in Tour.steps.mapNotNull { it.showMe }) {
             if (route.startsWith("settings/")) {

@@ -46,8 +46,7 @@ class LibrarySearchAppTest {
         val songs = Fixture.songs(3) + Song("libsearch-kana", "とりのうた", listOf(ArtistRef("Lia")), durationSec = 240)
         Fixture.prismPlaylist("Morning drive", songs)
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         compose.clickWhenFound(hasTestTag("librarySearch"), 10_000)
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("libraryResults")).fetchSemanticsNodes().isNotEmpty() }
 

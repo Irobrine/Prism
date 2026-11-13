@@ -55,8 +55,7 @@ class TagsAppTest {
         val songs = Fixture.songs(3)
         Fixture.prismPlaylist("Three to tag", songs)
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         compose.waitUntil(10_000) { has("Songs") }
         swipeLibrary(toTheRight = true) { has("Three to tag") }
         compose.clickWhenFound(hasText("Three to tag") and hasClickAction(), 15_000)

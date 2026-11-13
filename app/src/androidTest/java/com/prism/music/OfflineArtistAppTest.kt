@@ -79,7 +79,7 @@ class OfflineArtistAppTest {
         airplane(false)
     }
 
-    private fun waitForApp() = compose.waitUntil(20_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitForApp() = compose.waitForTab("Library")
 
     /** As a shared link to the artist opens: straight to their page. */
     private fun openArtist(id: String) {

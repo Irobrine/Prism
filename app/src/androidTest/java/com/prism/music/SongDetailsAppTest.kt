@@ -51,8 +51,7 @@ class SongDetailsAppTest {
 
     private fun openDetails() {
         Fixture.launch()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         compose.clickWhenFound(hasText("Everything") and hasClickAction(), 15_000)
         compose.clickWhenFound(hasContentDescription("More") and hasClickAction() and hasParent(hasText(song.title)), 15_000)
         val row = hasText("Song details") and hasClickAction()

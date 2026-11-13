@@ -91,6 +91,28 @@ class VideoPreviousTest {
         videoNextPrevious()
     }
 
+    /**
+     * 1.8.5: every in-place swap the playback service makes keeps the play order: a live stream lined up as one, a
+     * video's cover from its song, and "Songs, not videos" swapping a coming video for its song used Media3's own
+     * replaceMediaItem, which sends the item to the end of a shuffled order.
+     */
+    @Test fun thePlaybackServiceSwapsOnlyWithReplaceKeepingOrder() {
+        val source = java.io.File("src/main/java/com/prism/music/playback/PlaybackService.kt").readText()
+        val bare = Regex("""\.replaceMediaItem\(""").findAll(source).map { source.substring(0, it.range.first).count { c -> c == '\n' } + 1 }.toList()
+        assertEquals("PlaybackService swaps an item in place with Media3's replaceMediaItem at line(s) $bare", emptyList<Int>(), bare)
+    }
+
+    /** The swap keeps the order when the item swapped is one coming up later in a shuffled queue (not the playing one). */
+    @Test fun shuffledSwappingALaterSongKeepsItsPlace() {
+        player.shuffleModeEnabled = true
+        player.setShuffleOrder(HistoryShuffleOrder(intArrayOf(0, 3, 1, 4, 2)) { player.currentMediaItemIndex })
+        swap(1, Song("s1song", "Song 1 (the song)").toMediaItem())
+        assertEquals(listOf(0, 3, 1, 4, 2), order())
+        player.seekToNext(); player.seekToNext()
+        assertEquals("s1song", player.currentMediaItem?.mediaId)
+        assertEquals(3, player.previousMediaItemIndex)
+    }
+
     private fun order(): List<Int> {
         val t = player.currentTimeline
         return generateSequence(t.getFirstWindowIndex(true).takeIf { it >= 0 }) { i ->

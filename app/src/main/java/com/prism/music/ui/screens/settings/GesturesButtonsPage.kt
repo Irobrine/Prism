@@ -217,6 +217,7 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     val songLeftChanged = reset.add(tr(R.string.songs) + " · " + tr(R.string.swipe_left), s.behavior.songSwipeLeft, d.behavior.songSwipeLeft, { it.label }) { prefs.setSongSwipeLeft(it) }
     val songRightChanged = reset.add(tr(R.string.songs) + " · " + tr(R.string.swipe_right), s.behavior.songSwipeRight, d.behavior.songSwipeRight, { it.label }) { prefs.setSongSwipeRight(it) }
     val songLibraryChanged = reset.add(tr(R.string.library) + " · " + tr(R.string.swipe_left) + " / " + tr(R.string.swipe_right), s.behavior.songSwipeLibrary, d.behavior.songSwipeLibrary, onOff) { prefs.setSongSwipeLibrary(it) }
+    val coverPlaysChanged = reset.add(tr(R.string.gb_lyrics_cover_plays), s.behavior.lyricsCoverPlays, d.behavior.lyricsCoverPlays, onOff) { prefs.setLyricsCoverPlays(it) }
     val buttonsChanged = reset.add(tr(R.string.buttons), s.sessionButtons, d.sessionButtons, ::buttonsText) { prefs.setSessionButtons(it) }
     val persistentChanged = reset.add(tr(R.string.persistent_controls), s.persistent.controls, d.persistent.controls, onOff) { prefs.setPersistentControls(it) }
     val compatibilityChanged = reset.add(tr(R.string.persistent_compatibility), s.persistent.compatibility, d.persistent.compatibility, onOff) { prefs.setPersistentCompatibility(it) }
@@ -265,6 +266,8 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
             SwitchRow(tr(R.string.swipe_between_tabs), s.swipeTabs, info = tr(R.string.a_sideways_swipe_on_a_tab), changed = tabsChanged) { prefs.setSwipeTabs(it) }
             // #406 (1.8.4): on is how Prism was.
             SwitchRow(tr(R.string.gb_row_swipes), s.behavior.rowSwipes, info = tr(R.string.gb_row_swipes_info), changed = rowsChanged) { prefs.setRowSwipes(it) }
+            // #464 (1.8.5): off is how Prism was (a tap closes the lyrics).
+            SwitchRow(tr(R.string.gb_lyrics_cover_plays), s.behavior.lyricsCoverPlays, info = tr(R.string.gb_lyrics_cover_plays_info), changed = coverPlaysChanged) { prefs.setLyricsCoverPlays(it) }
         }
         // 1.8.3.2: the songs in every list: their two swipes, and Library's own switch for them.
         group(tr(R.string.songs)) {
@@ -506,6 +509,7 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
         SettingEntry(page, tr(R.string.songs), tr(R.string.swipe_left), tr(R.string.gb_row_swipes_keywords) + " " + SongSwipeAction.entries.joinToString(" ") { it.label }),
         SettingEntry(page, tr(R.string.songs), tr(R.string.swipe_right), tr(R.string.gb_row_swipes_keywords) + " " + SongSwipeAction.entries.joinToString(" ") { it.label }),
         SettingEntry(page, tr(R.string.songs), tr(R.string.library), tr(R.string.gb_row_swipes_keywords) + " " + tr(R.string.library)),
+        SettingEntry(page, touch, tr(R.string.gb_lyrics_cover_plays), tr(R.string.gb_lyrics_cover_plays_keywords)),
         SettingEntry(page, outside, tr(R.string.buttons), tr(R.string.notification_lock_screen_android_auto_car)),
         SettingEntry(page, outside, tr(R.string.gb_lyrics_in_notification), tr(R.string.gb_lyrics_in_notification_keywords)),
         SettingEntry(page, persistent, tr(R.string.persistent_controls), tr(R.string.persistent_controls_info)),

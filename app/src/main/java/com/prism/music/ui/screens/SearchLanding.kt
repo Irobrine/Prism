@@ -136,6 +136,28 @@ object SearchMemory {
  * and your searches, your artists, and the moods and genres as Prism-drawn tiles. The sections can be shown, hidden and
  * put in order (Arrange).
  */
+/**
+ * Recent searches as chips (#477): the newest [RecentSearches.SHOWN] first, the rest of the kept ones behind "Show all";
+ * a long press takes one away, "Clear all" every one.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun RecentSearchChips(recents: List<String>, onPick: (String) -> Unit, onRemove: (String) -> Unit, onClearAll: () -> Unit) {
+    var all by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Column {
+    FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        (if (all) recents else recents.take(RecentSearches.SHOWN)).forEach { r ->
+            // The chip takes the long press itself: wrapped in another clickable, its own click ate it.
+            PrismChip(false, { onPick(r) }, r, icon = PrismIcons.History, onLongClick = { onRemove(r) }, onLongClickLabel = tr(R.string.remove))
+        }
+    }
+    androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 8.dp)) {
+        if (!all && recents.size > RecentSearches.SHOWN) com.prism.music.ui.components.PrismTextButton({ all = true }) { Text(tr(R.string.show_all)) }
+        com.prism.music.ui.components.PrismTextButton(onClearAll) { Text(tr(R.string.clear_all)) }
+    }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun SearchLanding(
@@ -145,6 +167,7 @@ internal fun SearchLanding(
     opened: List<OpenedItem>,
     onPick: (String) -> Unit,
     onRemove: (String) -> Unit,
+    onClearAll: () -> Unit,
     onForget: (OpenedItem) -> Unit,
     onOpen: (BrowseItem) -> Unit,
     onMood: (MoodItem) -> Unit,
@@ -177,14 +200,7 @@ internal fun SearchLanding(
                     }
                     if (recents.isNotEmpty()) {
                         item(key = "recents-h") { SectionHeader(tr(R.string.recent_searches)) }
-                        item(key = "recents") {
-                            FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                recents.take(10).forEach { r ->
-                                    // The chip takes the long press itself: wrapped in another clickable, its own click ate it.
-                                    PrismChip(false, { onPick(r) }, r, icon = PrismIcons.History, onLongClick = { onRemove(r) }, onLongClickLabel = tr(R.string.remove))
-                                }
-                            }
-                        }
+                        item(key = "recents") { RecentSearchChips(recents, onPick, onRemove, onClearAll) }
                     }
                 }
                 SearchSection.ARTISTS -> if (artists.isNotEmpty()) {

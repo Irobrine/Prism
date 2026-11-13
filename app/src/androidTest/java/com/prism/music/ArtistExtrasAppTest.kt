@@ -129,7 +129,7 @@ class ArtistExtrasAppTest {
         compose.waitUntil(5_000) { c.settings.current.behavior.let { it.artistBio == bio && it.artistYou == you && it.artistEssentials == essentials } }
     }
 
-    private fun waitForApp() = compose.waitUntil(20_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitForApp() = compose.waitForTab("Library")
 
     private fun openArtist() {
         Fixture.context.startActivity(

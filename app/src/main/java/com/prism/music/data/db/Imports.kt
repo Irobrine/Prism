@@ -254,6 +254,18 @@ interface CountedPlayDao {
     )
     suspend fun monthly(o: List<String>, from: Long, to: Long): List<MonthTotal>
 
+    /** The listening clock (1.8.5) over `counted_plays`: SQL from [com.prism.music.data.imports.LocalClock.hours]. */
+    @androidx.room.RawQuery
+    suspend fun clockHours(q: androidx.sqlite.db.SupportSQLiteQuery): List<HourTotal>
+
+    /** The listening calendar (1.8.5): SQL from [com.prism.music.data.imports.LocalClock.days]. */
+    @androidx.room.RawQuery
+    suspend fun clockDays(q: androidx.sqlite.db.SupportSQLiteQuery): List<DayTotal>
+
+    /** One hour's top songs (1.8.5): SQL from [com.prism.music.data.imports.LocalClock.songs]. */
+    @androidx.room.RawQuery
+    suspend fun clockSongs(q: androidx.sqlite.db.SupportSQLiteQuery): List<SongPlays>
+
     @Query("SELECT COUNT(DISTINCT strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch', 'localtime')) FROM counted_plays WHERE origin IN (:o) AND timestamp BETWEEN :from AND :to")
     suspend fun activeDays(o: List<String>, from: Long, to: Long): Int
 
@@ -268,6 +280,9 @@ interface CountedPlayDao {
 
     @Query("SELECT COUNT(DISTINCT songId) FROM counted_plays WHERE origin IN (:o) AND timestamp BETWEEN :from AND :to")
     suspend fun songCount(o: List<String>, from: Long, to: Long): Int
+
+    @Query("SELECT COUNT(*) FROM counted_plays WHERE origin IN (:o) AND songId = :songId AND timestamp <= :to")
+    suspend fun playsOf(o: List<String>, songId: String, to: Long): Int
 
     @Query("SELECT COUNT(DISTINCT s.primaryArtist) FROM counted_plays e JOIN songs s ON s.id = e.songId WHERE e.origin IN (:o) AND e.timestamp BETWEEN :from AND :to AND s.primaryArtist != ''")
     suspend fun artistCount(o: List<String>, from: Long, to: Long): Int

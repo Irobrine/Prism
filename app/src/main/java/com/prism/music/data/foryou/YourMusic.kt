@@ -82,13 +82,18 @@ class YourMusic(private val c: AppContainer) {
         if (seeds.isEmpty()) return emptyList()
         val now = System.currentTimeMillis()
         val recent = s.events.filter { now - it.timestamp < 2 * HOUR }.map { it.songId }.toSet()
+        // A seed new to the phone's music (just picked from search) can still have its genre saved: how close your songs
+        // are to it goes by that (#461).
+        val seedGenres = seeds.filter { it.id !in s.genres }.takeIf { it.isNotEmpty() }
+            ?.let { runCatching { c.meta.cachedGenres(it) }.getOrNull() }.orEmpty()
         val pool = LocalRadio.Pool(
             // Not clips under a minute (an album's intro, a skit, a sound file on the phone): they'd break the run of songs.
             songs = s.songs.values.filter { ok(it) && !it.isVideo && (it.durationSec == 0 || it.durationSec >= 60) && (!offlineOnly || c.availableOffline(it.id)) },
             coListen = s.coListen,
             affinity = { s.model.score(it) * rest(s, it.id) },
-            genreOf = { s.genres[it] },
+            genreOf = { s.genres[it] ?: seedGenres[it] },
             keyFit = { a, b -> keyFit(a, b) },
+            bpmOf = { c.mixTempo.djBpm(it) },
         )
         val day = LocalDate.now().toString()
         return LocalRadio.pick(seeds, pool, inQueue + recent, count) { id -> 0.9 + 0.2 * (((id + day + seedIds.last()).hashCode().toLong() and 0xffff) / 65535.0) }

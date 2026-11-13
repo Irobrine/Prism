@@ -60,6 +60,7 @@ class PlaybackPageTest : ListeningPageHarness(SettingsPageId.PLAYBACK) {
     private val pauseFade = t(R.string.fade_on_pause_and_play)
     private val stopOnSwipe = t(R.string.stop_when_swiped_away)
     private val pauseOnMute = t(R.string.pause_when_muted)
+    private val faceDown = t(R.string.playback_face_down_pause)
 
     private fun groupTitles() = compose.onAllNodes(hasTestTag(SettingsTags.GROUP)).fetchSemanticsNodes()
         .map { g -> g.children.first().config[SemanticsProperties.Text].first().text }
@@ -72,7 +73,7 @@ class PlaybackPageTest : ListeningPageHarness(SettingsPageId.PLAYBACK) {
             listOf(t(R.string.what_plays_next), t(R.string.shuffle), t(R.string.playback_song_to_song), t(R.string.playback_speed_and_pitch), t(R.string.stopping_and_pausing)),
             groupTitles(),
         )
-        assertEquals(listOf(6, 2, 2, 2, 4), groupSizes())
+        assertEquals(listOf(6, 2, 2, 2, 5), groupSizes())
         assertEquals("nothing differs from how Prism comes", 0, changedRows())
         // No group is named as the page, and none as one of its own rows (§2.7: "Crossfade" was both).
         assertTrue(groupTitles().none { it == SettingsPageId.PLAYBACK.title })
@@ -99,7 +100,7 @@ class PlaybackPageTest : ListeningPageHarness(SettingsPageId.PLAYBACK) {
         until("crossfade on") { it.mix && !it.mixAuto }
         show()
         assertBudgets("crossfade on, fixed length")
-        assertEquals(listOf(6, 2, 5, 2, 4), groupSizes())
+        assertEquals(listOf(6, 2, 5, 2, 5), groupSizes())
         assertEquals("6 s", valueOf(length))
     }
 
@@ -179,18 +180,21 @@ class PlaybackPageTest : ListeningPageHarness(SettingsPageId.PLAYBACK) {
         until("stop_on_swipe_away") { it.stopOnSwipeAway }
         tap(pauseOnMute)
         until("pause_on_mute") { it.behavior.pauseOnMute }
+        // face_down_pause (new in 1.8.5)
+        tap(faceDown)
+        until("face_down_pause") { it.behavior.faceDownPause }
 
         // Every row now differs from how Prism comes, says so, and the page still fits.
         assertBudgets("everything changed")
-        assertEquals(listOf(6, 2, 5, 2, 4), groupSizes())
-        assertEquals(19, changedRows())
+        assertEquals(listOf(6, 2, 5, 2, 5), groupSizes())
+        assertEquals(20, changedRows())
         // The root's line is live.
         val line = SettingsPageId.PLAYBACK.value(stored)
         assertTrue(line, tr(R.string.root_crossfade_seconds, 9) in line && noRepeats in line)
 
         // Reset this page lists each of them and puts them all back.
         val lines = resetLines(confirm = true)
-        assertEquals(lines.joinToString("\n"), 19, lines.size)
+        assertEquals(lines.joinToString("\n"), 20, lines.size)
         assertTrue(lines.toString(), lines.any { it.startsWith("$shuffleButton: ${ShuffleButton.SHUFFLE_ONLY.label} → ${ShuffleButton.SHUFFLE_AND_SMART.label}") })
         until("the reset") { it.behavior == d.behavior && it.sound == d.sound }
         until("the reset") {
@@ -199,7 +203,7 @@ class PlaybackPageTest : ListeningPageHarness(SettingsPageId.PLAYBACK) {
                 it.mixBeatMatch == d.mixBeatMatch && it.mixKeepAlbums == d.mixKeepAlbums && it.stopOnSwipeAway == d.stopOnSwipeAway
         }
         assertEquals(0, changedRows())
-        assertEquals(listOf(6, 2, 2, 2, 4), groupSizes())
+        assertEquals(listOf(6, 2, 2, 2, 5), groupSizes())
     }
 
     /** D57 and #416: the two new rows, off (as Prism was) until picked. */
@@ -222,6 +226,30 @@ class PlaybackPageTest : ListeningPageHarness(SettingsPageId.PLAYBACK) {
             "When the last queue was shuffled, a song you tap in a list plays first and the rest of that list is shuffled. Radios, single songs and videos are left alone.",
             t(R.string.playback_keep_shuffle_info),
         )
+    }
+
+    /** 1.8.5: "Pause when face down", a switch in Stopping and pausing, off until switched on, its words behind the ⓘ. */
+    @Test fun pauseWhenFaceDownIsASwitchOffByDefault() {
+        show()
+        assertEquals(SettingsTags.ROW_SWITCH, typeOf(faceDown))
+        assertFalse(stored.behavior.faceDownPause)
+        val e = SettingsIndex.entries.single { it.title == faceDown }
+        assertEquals(SettingsPageId.PLAYBACK, e.page)
+        assertEquals(t(R.string.stopping_and_pausing), e.group)
+        assertTrue(SettingsIndex.search("face down").any { it.title == faceDown })
+        assertTrue(SettingsIndex.search("flip").any { it.title == faceDown })
+        assertEquals(
+            "Lay your phone screen-down to pause. Pick it up within five minutes and the music plays on.",
+            t(R.string.playback_face_down_pause_info),
+        )
+        // The explanation is behind the ⓘ only: never drawn on the page.
+        assertFalse(hasRow(t(R.string.playback_face_down_pause_info)))
+        assertEquals(0, compose.onAllNodes(androidx.compose.ui.test.hasText(t(R.string.playback_face_down_pause_info))).fetchSemanticsNodes().size)
+        tap(faceDown)
+        until("face_down_pause") { it.behavior.faceDownPause }
+        assertEquals(1, changedRows())
+        tap(faceDown)
+        until("face_down_pause off") { !it.behavior.faceDownPause }
     }
 
     /** Links written before the rework still land: the old page's groups by their old names. */

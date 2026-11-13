@@ -66,8 +66,7 @@ class SearchTypedMenuAppTest {
         RecordedNetwork.answering = { url, _ -> if ("get_search_suggestions" in url) suggestions else null }
         val scenario = Fixture.launch()
 
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Search") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Search") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Search")
         compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasSetTextAction()).performClick()
         compose.onNode(hasSetTextAction()).performTextInput("beat")

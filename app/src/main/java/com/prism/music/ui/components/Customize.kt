@@ -163,6 +163,17 @@ internal fun BarSurface(glass: Boolean, shape: RoundedCornerShape, modifier: Mod
     else Box(modifier.clip(shape).background(MaterialTheme.colorScheme.inverseSurface)) { content() }
 }
 
+/**
+ * How long an Undo bar stays: [base], or longer when the listener asked Android for more time to act (Accessibility →
+ * Time to take action, Android 10+), as for a bar with text and a button.
+ */
+internal fun undoBarMillis(context: android.content.Context, base: Long = 5_000): Long {
+    if (android.os.Build.VERSION.SDK_INT < 29) return base
+    val am = context.getSystemService(android.view.accessibility.AccessibilityManager::class.java) ?: return base
+    val flags = android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT
+    return am.getRecommendedTimeoutMillis(base.toInt(), flags).toLong().coerceAtLeast(base)
+}
+
 /** What's written on a [BarSurface]: its text, and its buttons. */
 @Composable
 internal fun barInk(glass: Boolean): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {

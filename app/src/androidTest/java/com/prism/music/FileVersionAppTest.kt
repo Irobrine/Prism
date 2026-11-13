@@ -65,8 +65,7 @@ class FileVersionAppTest {
         compose.waitUntil(30_000) { c.localMusic.tracks.value.any { it.song.title == song.title } }
         val file = c.localMusic.tracks.value.first { it.song.title == song.title }.song
 
-        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Library") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodes(hasText("Library") and hasClickAction()).onFirst().performClick()
+        compose.tapTab("Library")
         for (i in 0 until 8) {
             if (compose.onAllNodes(hasText("Playlists") and hasClickAction()).fetchSemanticsNodes().isNotEmpty()) break
             compose.onRoot().performTouchInput { swipeRight(startX = width * 0.15f, endX = width * 0.95f) }

@@ -219,6 +219,7 @@ fun PrismSwitch(
     )
     val x by animateDpAsState(if (checked) 19.dp else 3.dp, tween(PrismTokens.Motion.STANDARD), label = "x")
     val off = glassFill(2.2f)
+    val offInk = switchOffInk(LocalIsDark.current, LocalFrosted.current, s.onSurface)
     Box(
         modifier.then(
             if (onCheckedChange != null) Modifier.minimumInteractiveComponentSize()
@@ -230,7 +231,9 @@ fun PrismSwitch(
         Box(
             Modifier.size(width = 44.dp, height = 26.dp)
                 .background(off, CircleShape)
+                .then(if (offInk != null) Modifier.background(offInk.first, CircleShape) else Modifier)
                 .then(if (white) Modifier.background(track.copy(alpha = lit * dim), CircleShape) else Modifier.background(PrismTokens.spectrum, CircleShape, alpha = lit * dim))
+                .then(if (offInk != null) Modifier.border(1.dp, offInk.second.copy(alpha = offInk.second.alpha * (1f - lit) * dim), CircleShape) else Modifier)
                 .border(1.dp, glassEdge(), CircleShape),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -238,6 +241,14 @@ fun PrismSwitch(
         }
     }
 }
+
+/**
+ * The off track's ink on light glass (1.8.5): there the glass track is white on a near-white frosted card, so it gets a
+ * faint ink tint and an ink hairline (fading as it lights up), as (tint, outline). Null, dark or off the glass: the
+ * switch draws exactly as before.
+ */
+internal fun switchOffInk(dark: Boolean, frosted: Boolean, ink: Color): Pair<Color, Color>? =
+    if (dark || !frosted) null else ink.copy(alpha = 0.10f) to ink.copy(alpha = 0.40f)
 
 /** A slider: a soft 4 dp track lit with the split light up to a white knob; steps show as dots. */
 @OptIn(ExperimentalMaterial3Api::class)

@@ -106,8 +106,9 @@ class BringHistoryTest {
         seeText("Plays in Prism · Spotify")
 
         // Replay says what it counts.
-        // The Replay tab (its name may be hidden by the tab bar's label style; the tab still carries it).
-        compose.clickWhenFound((hasText("Replay") or hasContentDescription("Replay")) and hasClickAction())
+        // The Replay tab (its name may be hidden by the tab bar's label style; the tab still carries it), in the tab bar:
+        // this page's "Replay" jump chip has the same name.
+        compose.tapTab("Replay")
         seeText("Includes Spotify")
 
         // Removed from its page. Replay is a tab: Back from it goes Home, and the Settings tab then reopens where it was

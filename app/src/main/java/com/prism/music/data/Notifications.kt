@@ -26,6 +26,8 @@ object Notifications {
     const val CONNECT = "connect"
     /** "Time for a fresh Spotify download?" every few months (1.8.1), quiet: no sound, no pop-up. */
     const val IMPORT_REMINDERS = "import_reminders"
+    /** The monthly recap and milestones (1.8.5), each off unless its switch is turned on. */
+    const val REPLAY_NEWS = "replay_news"
 
     fun createChannels(context: Context) {
         val nm = NotificationManagerCompat.from(context)
@@ -42,6 +44,7 @@ object Notifications {
             Triple(NEW_RELEASES, tr(R.string.new_releases), tr(R.string.new_music_from_artists_you_follow)),
             Triple(REWIND, tr(R.string.rewind_3), tr(R.string.when_your_year_in_music_is)),
             Triple(RECOGNITION, tr(R.string.song_recognition), tr(R.string.songs_recognized_after_you_were_offline)),
+            Triple(REPLAY_NEWS, tr(R.string.replay_news_channel), tr(R.string.replay_news_channel_desc)),
         ).forEach { (id, name, description) ->
             nm.createNotificationChannel(
                 NotificationChannelCompat.Builder(id, NotificationManagerCompat.IMPORTANCE_DEFAULT)

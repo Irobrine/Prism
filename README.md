@@ -51,23 +51,23 @@ The optional lock screen player needs a permission called "Display over other ap
 
 Prism walks you through this on the setting's page. It uses the permission only to bring its player up on your lock screen, and never draws over other apps.
 
-## New in 1.8.4
+## New in 1.8.5
 
-Settings, made simple.
+Replay & Rewind 2026.
 
-- **A new Settings:** search, your account and Performance mode at the top, then 17 pages in five groups. Each one says how it's set.
-- **Choices with examples:** choices open in a sheet with an example of each. Nothing you've set changes, and every setting is still there.
-- **Reset this page** puts one page back the way it came.
-- **Also new:** lyrics earlier or later for every song, lyrics in the notification without a car, the lock screen in the player's look, Go to the playing song, Replay for yesterday, last week and last month, and a solid color as a background.
-- **Fixes** for crossfades lost after a seek, text showing through Liquid Glass, and more.
+- **Listening clock and calendar:** your week hour by hour and every day with music, both shareable as a picture.
+- **Milestones and a monthly recap:** your 25th, 100th or 1,000th play of a song, hours of music, days in a row, and last month at a glance on Home.
+- **Rewind 2026** opens on December 1 with four new slides.
+- **Replay widgets** for your home screen, and **Finish the lyric**, a game from your most played songs.
+- **Also new:** search your history and remove a play, 30 recent searches, hold Previous for the song before, Pause when face down, and a tap on the small cover to play or pause.
+- **Fixes** for static at the start of a song with Normalize volume on, and more.
 
-See every change in the [changelog](CHANGELOG.md).
+Everything is worked out on your phone. See every change in the [changelog](CHANGELOG.md).
 
 <p align="center">
-<img src="docs/screenshots/settings-root.jpg" width="24%" alt="The new Settings: search, your account and Performance mode at the top, then the pages in groups, each with a line that says how it's set">
-<img src="docs/screenshots/settings-pick-sheet.jpg" width="24%" alt="The player's Background choice opened in a sheet, with an example of each option under the player's live preview">
-<img src="docs/screenshots/lyrics-timing.jpg" width="24%" alt="Lyrics & Sing, Sources and timing: the lyrics sources in order and Lyrics earlier / later">
-<img src="docs/screenshots/locate-playing.jpg" width="24%" alt="A long mix with the playing song's row lit up after Go to the playing song">
+<img src="docs/screenshots/replay-clock.jpg" width="32%" alt="Replay's listening clock: the week hour by hour, with the busiest hour and day named">
+<img src="docs/screenshots/replay-calendar.jpg" width="32%" alt="Replay's listening calendar: every day with music, shaded by how much was played">
+<img src="docs/screenshots/replay-milestones.jpg" width="32%" alt="Replay's milestones: a song's 50th play, with the date it was reached">
 </p>
 
 ## What Prism does

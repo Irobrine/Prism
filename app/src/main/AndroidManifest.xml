@@ -110,6 +110,16 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/zip" />
             </intent-filter>
+            <!-- An audio file opened from a file manager ("Open with Prism", 1.8.5): it plays from the file (OpenedAudio). -->
+            <intent-filter android:label="@string/open_in_prism">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-flac" />
+            </intent-filter>
             <!-- Last.fm's sign-in page sends the browser back here with a token (1.7.8). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -494,6 +504,21 @@
             android:label="@string/widget_recognize_name">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_recognize_info" />
+        </receiver>
+        <!-- Replay (1.8.5): this week's top song (2×2), and the top song and artist (4×2). Home screen only. -->
+        <receiver
+            android:name=".widget.ReplayWidget"
+            android:exported="false"
+            android:label="@string/widget_replay_song_name">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_replay_small_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.ReplayWideWidget"
+            android:exported="false"
+            android:label="@string/widget_replay_name">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_replay_info" />
         </receiver>
         <!-- The Recognize widget and Quick Settings tile's listening card, over whatever is on screen. -->
         <activity
