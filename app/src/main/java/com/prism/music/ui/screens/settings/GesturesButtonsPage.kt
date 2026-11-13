@@ -208,6 +208,7 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     val rowsChanged = reset.add(tr(R.string.gb_row_swipes), s.behavior.rowSwipes, d.behavior.rowSwipes, onOff) { prefs.setRowSwipes(it) }
     val buttonsChanged = reset.add(tr(R.string.buttons), s.sessionButtons, d.sessionButtons, ::buttonsText) { prefs.setSessionButtons(it) }
     val persistentChanged = reset.add(tr(R.string.persistent_controls), s.persistent.controls, d.persistent.controls, onOff) { prefs.setPersistentControls(it) }
+    val compatibilityChanged = reset.add(tr(R.string.persistent_compatibility), s.persistent.compatibility, d.persistent.compatibility, onOff) { prefs.setPersistentCompatibility(it) }
     val persistentButtonChanged = (0 until PersistentAction.SLOTS).map { i ->
         reset.add(tr(PERSISTENT_BUTTON_TITLES[i]), nowButtons[i], defaultButtons[i], { it.label }) { picked ->
             prefs.setPersistentButtons(prefs.current.persistent.buttons.toMutableList().also { it[i] = picked })
@@ -291,6 +292,10 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
                     value = if (overlayAllowed) tr(R.string.persistent_overlay_allowed) else tr(R.string.persistent_overlay_ask),
                     info = tr(R.string.persistent_overlay_info), external = true,
                 ) { openOverlay() }
+                SwitchRow(
+                    tr(R.string.persistent_compatibility), s.persistent.compatibility,
+                    info = tr(R.string.persistent_compatibility_info), changed = compatibilityChanged,
+                ) { prefs.setPersistentCompatibility(it) }
                 for (i in 0 until PersistentAction.SLOTS) {
                     val here = nowButtons[i]
                     PickListRow(
@@ -465,6 +470,7 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
         SettingEntry(page, persistent, tr(R.string.persistent_battery), tr(R.string.persistent_battery_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_notifications), tr(R.string.persistent_notifications_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_overlay), tr(R.string.persistent_overlay_info)),
+        SettingEntry(page, persistent, tr(R.string.persistent_compatibility), tr(R.string.persistent_compatibility_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[0]), tr(R.string.persistent_buttons_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[1]), tr(R.string.persistent_buttons_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[2]), tr(R.string.persistent_buttons_info)),

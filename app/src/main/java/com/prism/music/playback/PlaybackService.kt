@@ -241,11 +241,9 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         lockScreen = com.prism.music.ui.lockscreen.LockScreenGate(this, c.settings.flow, player, scope).also { it.start() }
 
         sessionPlayer = LyricsOverlayPlayer(player)
-        // OriginOS/Funtouch hide a paused media session's card (lockscreen included): there the placeholder reports
-        // playing instead, and its first button becomes Library songs.
-        sessionPlayer.setPlaceholderAsPlaying(
-            listOf(Build.MANUFACTURER, Build.BRAND).any { it.equals("vivo", true) || it.equals("iqoo", true) }
-        )
+        // Compatibility mode (on by default for vivo/iQOO): report the placeholder as playing, since OriginOS hides a
+        // paused media session's card on the lock screen and in the shade.
+        sessionPlayer.setPlaceholderAsPlaying(c.settings.current.persistent.compatibility)
         // The persistent card's own item: no URI, only the title, subtitle and the app's icon. (Android needs a window
         // in the session's timeline to show controls at all.)
         sessionPlayer.setPlaceholderItem(placeholderItem())
@@ -307,9 +305,9 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         scope.launch { c.settings.flow.map { it.audioDiagnostics }.distinctUntilChanged().collect { on -> AudioDiagnostics.setEnabled(on) { AudioDiagnostics.about(c) } } }
         // The buttons beside play follow Settings → Player → Buttons as soon as they're changed.
         scope.launch { c.settings.flow.map { it.sessionButtons }.distinctUntilChanged().drop(1).collect { updateButtons() } }
-        // Persistent controls: the master switch and its four buttons, live.
+        // Persistent controls: the master switch, compatibility mode and its four buttons, live.
         scope.launch {
-            c.settings.flow.map { it.persistent.controls to it.persistent.buttons }.distinctUntilChanged().collect {
+            c.settings.flow.map { it.persistent }.distinctUntilChanged().collect {
                 syncPlaceholder()
                 updateButtons()
             }
@@ -2356,8 +2354,11 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     /** The placeholder item: no URI (nothing to play), just the title, subtitle and Prism's own icon. */
     private fun placeholderItem(): MediaItem {
         val artwork = Uri.parse("android.resource://$packageName/${AppIcons.current(this).foreground}")
+        val silence = Uri.parse("android.resource://$packageName/${R.raw.persistent_silence}")
         return MediaItem.Builder()
             .setMediaId("prism:persistent-placeholder")
+            // A real (silent) resource: some phones only show a media card for a session whose item can be played.
+            .setUri(silence)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(tr(R.string.app_name))
@@ -2378,6 +2379,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     private fun syncPlaceholder() {
         if (!::sessionPlayer.isInitialized || !::player.isInitialized) return
+        sessionPlayer.setPlaceholderAsPlaying(c.settings.current.persistent.compatibility)
         val on = placeholderWanted()
         if (sessionPlayer.placeholder == on) return
         sessionPlayer.setPlaceholder(on)

@@ -283,6 +283,13 @@ enum class TabTint(val label: String) { INK(tr(R.string.ink)), ACCENT(tr(R.strin
 data class PersistentPrefs(
     val controls: Boolean = false,
     val buttons: List<PersistentAction> = PersistentAction.DEFAULT,
+    /**
+     * Compatibility mode: report the placeholder as playing (no play/pause button), for phones that hide a paused
+     * media session's card. On by default on vivo/iQOO, where OriginOS does that; the settings' switch can turn it off.
+     */
+    val compatibility: Boolean = listOf(android.os.Build.MANUFACTURER, android.os.Build.BRAND).any {
+        it.equals("vivo", ignoreCase = true) || it.equals("iqoo", ignoreCase = true)
+    },
 )
 
 data class BehaviorPrefs(
@@ -2082,6 +2089,7 @@ class SettingsRepository(
         val sessionButtons = stringPreferencesKey("session_buttons")
         val persistentControls = booleanPreferencesKey("persistent_controls")
         val persistentButtons = stringPreferencesKey("persistent_buttons")
+        val persistentCompatibility = booleanPreferencesKey("persistent_compatibility")
         val scrubberColor = stringPreferencesKey("scrubber_color")
         val playerTitleAlign = stringPreferencesKey("player_title_align")
         val playerTitleSize = stringPreferencesKey("player_title_size")
@@ -2374,7 +2382,7 @@ class SettingsRepository(
                 // 1.7.4: what buttons and gestures do is how you use Prism, not how it looks.
                 "session_buttons", "cover_swipe_left", "cover_swipe_right", "cover_swipe_up", "cover_double_tap", "cover_long_press",
                 // 1.8.5: the persistent media controls and their buttons.
-                "persistent_controls", "persistent_buttons",
+                "persistent_controls", "persistent_buttons", "persistent_compatibility",
                 "mini_swipe_left", "mini_swipe_right", "mini_swipe_down", "mini_swipe_up",
                 // 1.7.8 ([BehaviorPrefs]).
                 "lock_screen_player", "lock_screen_layout", "lock_screen_volume", "lock_screen_like", "lock_screen_output", "lock_screen_paused", "lock_screen_hide_song",
@@ -2790,6 +2798,7 @@ class SettingsRepository(
             persistent = PersistentPrefs(
                 controls = p[K.persistentControls] ?: d.persistent.controls,
                 buttons = persistentButtonsOf(p.enumList(K.persistentButtons, d.persistent.buttons)),
+                compatibility = p[K.persistentCompatibility] ?: d.persistent.compatibility,
             ),
             scrubberColor = p.enum(K.scrubberColor, d.scrubberColor),
             playerTitleAlign = p.enum(K.playerTitleAlign, d.playerTitleAlign),
@@ -3335,6 +3344,7 @@ class SettingsRepository(
     fun setPlayerButtons(v: List<PlayerButton>) = edit { it[K.playerButtons] = v.joinToString(",") { b -> b.name } }
     fun setSessionButtons(v: List<SessionButton>) = edit { it[K.sessionButtons] = v.joinToString(",") { b -> b.name } }
     fun setPersistentControls(v: Boolean) = edit { it[K.persistentControls] = v }
+    fun setPersistentCompatibility(v: Boolean) = edit { it[K.persistentCompatibility] = v }
     fun setPersistentButtons(v: List<PersistentAction>) = edit { it[K.persistentButtons] = persistentButtonsOf(v).joinToString(",") { a -> a.name } }
     fun setScrubberColor(v: ScrubberColor) = edit { it[K.scrubberColor] = v.name }
     fun setPlayerTitleAlign(v: PlayerTitleAlign) = edit { it[K.playerTitleAlign] = v.name }
