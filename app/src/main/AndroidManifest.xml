@@ -244,6 +244,20 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- Persistent media controls (1.8.5): keeps Prism's process (and so the playback service) alive after the app
+             is swiped away, the way Tasker keeps its work alive. It reads nothing on screen and performs no gestures. -->
+        <service
+            android:name=".playback.PersistentKeepAliveService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/persistent_accessibility" />
+        </service>
         <service
             android:name=".playback.PlaybackServiceSpectrum"
             android:enabled="false"

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Persistent media controls: Prism reads nothing and performs no gestures; the service only keeps the process (and
+     the playback service with it) alive after the app is swiped away. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/persistent_keep_alive_info"
+    android:notificationTimeout="100" />
