@@ -5331,4 +5331,6 @@
     <string name="persistent_making_mix">Making Daily Mix %1$d…</string>
     <string name="persistent_getting_quick_picks">Getting Quick picks…</string>
     <string name="persistent_getting_library_songs">Getting Library songs…</string>
+    <string name="persistent_notifications">Notifications</string>
+    <string name="persistent_notifications_info">The persistent controls need Prism\'s notifications allowed. Turn them on here if they are off or the permission was denied.</string>
 </resources>
