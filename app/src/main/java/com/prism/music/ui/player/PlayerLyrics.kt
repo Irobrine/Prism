@@ -329,6 +329,15 @@ class LyricsState(
         }
     }
 
+    /**
+     * A version was picked for the song (or the song's own again): the lyrics are looked up under the version's title
+     * and artist, as they play in its place, and a page on screen asks again straight away.
+     */
+    fun searchAsPicked(version: Song?) {
+        if (version == null) searchAgainAs("", "", emptyList())
+        else searchAgainAs(version.title, version.artistText, emptyList())
+    }
+
     /** Checks every source in the background to show which ones have lyrics. */
     fun probeAll(sources: List<LyricsSource>) {
         sources.forEach { src ->
@@ -368,6 +377,16 @@ fun rememberLyricsState(song: Song, opened: Boolean = true): LyricsState {
     val hold = metered && !LocalAppSettings.current.lyricsOnMobileData
     LaunchedEffect(song.id, opened, hold) {
         if (!state.settled || state.waiting && (opened || !hold)) state.loadAuto(savedOnly = hold && !opened)
+    }
+    // A version picked while the lyrics are open (or since they were last seen) asks under its own title and artist.
+    val picked by c.versions.picks.collectAsState()
+    val version = picked[song.id]?.song
+    val shownVersion = remember(song.id) { mutableStateOf(version?.id) }
+    LaunchedEffect(version?.id) {
+        if (version?.id != shownVersion.value) {
+            shownVersion.value = version?.id
+            state.searchAsPicked(version)
+        }
     }
     return state
 }
