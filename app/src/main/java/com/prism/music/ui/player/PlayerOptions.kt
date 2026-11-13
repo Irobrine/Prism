@@ -109,6 +109,9 @@ fun PlayerOptionsSheet(
     if (credits) { com.prism.music.ui.components.SongCreditsSheet(song) { credits = false; onDismiss() }; return }
     var details by remember { mutableStateOf(false) }
     if (details) { com.prism.music.ui.components.SongDetailsSheet(song) { details = false; onDismiss() }; return }
+    // 1.8.3: the listener's own title, artist, album and genre, kept on this phone (for YouTube songs too).
+    var editingMetadata by remember { mutableStateOf(false) }
+    if (editingMetadata) { com.prism.music.ui.components.MetadataEditorSheet(listOf(song)) { editingMetadata = false; onDismiss() }; return }
     var versions by remember { mutableStateOf(false) }
     val picks by c.versions.picks.collectAsState()
     if (versions) { com.prism.music.ui.components.SongVersionsSheet(song) { versions = false; onDismiss() }; return }
@@ -193,6 +196,8 @@ fun PlayerOptionsSheet(
     // This song
     put(MenuAction.ADD_TO_PLAYLIST, ActionItem(PrismIcons.PlaylistAdd, tr(R.string.add_to_playlist), keepOpen = true) { pickPlaylist = true })
     put(MenuAction.TAGS, ActionItem(PrismIcons.Tag, tr(R.string.add_a_tag), value = com.prism.music.ui.components.tagsValue(songTags), active = songTags.isNotEmpty(), keepOpen = true) { tagging = true })
+    // A YouTube song shows its edits on this phone just as a file does (the file and YouTube Music stay as they are).
+    put(MenuAction.EDIT_METADATA, ActionItem(PrismIcons.Edit, tr(R.string.edit_metadata), active = c.metadata.of(song.id) != null, keepOpen = true) { editingMetadata = true })
     if (!local) put(MenuAction.RADIO, ActionItem(PrismIcons.Radio, tr(R.string.start_radio)) { c.player.playRadio(song) })
     if (!local) put(MenuAction.DOWNLOAD, downloadItem)
     put(MenuAction.ALBUM, song.shown.album?.id?.let { id -> ActionItem(PrismIcons.Album, tr(R.string.go_to_album)) { onCollapse(); nav.go(Routes.album(id)) } })
@@ -330,6 +335,7 @@ private fun ActionItem.tile(a: MenuAction): ActionItem {
 internal fun menuIcon(a: MenuAction): ImageVector = when (a) {
     MenuAction.ADD_TO_PLAYLIST -> PrismIcons.PlaylistAdd
     MenuAction.TAGS -> PrismIcons.Tag
+    MenuAction.EDIT_METADATA -> PrismIcons.Edit
     MenuAction.RADIO -> PrismIcons.Radio
     MenuAction.DOWNLOAD -> PrismIcons.Download
     MenuAction.ALBUM -> PrismIcons.Album
@@ -369,6 +375,7 @@ internal fun menuIcon(a: MenuAction): ImageVector = when (a) {
 internal fun menuLabel(a: MenuAction): String = when (a) {
     MenuAction.ADD_TO_PLAYLIST -> tr(R.string.add_to_playlist)
     MenuAction.TAGS -> tr(R.string.add_a_tag)
+    MenuAction.EDIT_METADATA -> tr(R.string.edit_metadata)
     MenuAction.RADIO -> tr(R.string.start_radio)
     MenuAction.DOWNLOAD -> tr(R.string.download)
     MenuAction.ALBUM -> tr(R.string.go_to_album)

@@ -10,6 +10,7 @@ import com.prism.music.data.model.Song
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -111,6 +112,31 @@ class SongMetadataTest {
         assertEquals("My Night Drive", shown.title)
         assertEquals(listOf(ArtistRef("My Band", "UCband")), shown.artists)
         assertEquals(AlbumRef("My Roads", "MPREb_roads"), shown.album)
+    }
+
+    /**
+     * A YouTube song (not a file on the phone) takes the same edits, kept on this phone by its id: lists, the player and
+     * the notification show them, while its id (playlists, downloads, history) and YouTube Music stay as they were.
+     */
+    @Test fun aYouTubeSongsEditIsSavedLocallyLikeALocalFiles() {
+        val youtube = Song(
+            "yt123", "Night Drive (Official Video)", listOf(ArtistRef("TheBandVEVO")), AlbumRef("Roads"),
+            250, "https://i.ytimg.com/vi/yt123/hqdefault.jpg", isVideo = true,
+        )
+        val store = SongMetadata(context)
+        store.set(listOf(youtube.id), title = "Night Drive", artist = "The Band", album = "Roads (2026)", genre = "Rock")
+        // Read again at the next start, as a file's tags would be.
+        val again = SongMetadata(context)
+        val shown = SongVersions.shownOf(youtube)
+        assertEquals("yt123", shown.id)
+        assertTrue(shown.isVideo)
+        assertEquals("Night Drive", shown.title)
+        assertEquals("The Band", shown.artistText)
+        assertEquals("Roads (2026)", shown.album?.title)
+        assertEquals("Rock", again.genreOf(youtube.id))
+        // The file and YouTube Music aren't touched: only what Prism shows on this phone.
+        assertEquals("Night Drive (Official Video)", youtube.title)
+        assertEquals("TheBandVEVO", youtube.artistText)
     }
 
     @Test fun namesAreTidiedAndLimited() {
