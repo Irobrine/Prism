@@ -5416,6 +5416,11 @@
     <string name="persistent_overlay_allowed">Allowed</string>
     <string name="persistent_overlay_ask">Allow</string>
     <string name="persistent_overlay_info">Android needs this to open a tab or the listening card from the controls while Prism is in the background.</string>
+    <string name="persistent_keep_alive">Stay alive after closing</string>
+    <string name="persistent_keep_alive_info">Phones such as vivo\'s stop an app when it is swiped away, which takes the controls with it. Like Tasker, Prism can keep a small accessibility service on: Android then keeps it running and starts it again. Prism reads nothing on screen.</string>
+    <string name="persistent_keep_alive_allowed">On</string>
+    <string name="persistent_keep_alive_ask">Allow</string>
+    <string name="persistent_keep_alive_settings">Accessibility settings</string>
     <string name="persistent_setup_title">Keep Prism\'s controls</string>
     <string name="persistent_setup_text">To keep the controls after Prism is closed, let Prism use the battery without restrictions. Opening a tab or recognizing a song from the controls also needs Display over other apps.</string>
     <string name="persistent_setup_battery">Battery settings</string>

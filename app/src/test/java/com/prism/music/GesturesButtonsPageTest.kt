@@ -392,7 +392,7 @@ class GesturesButtonsPageTest : ListeningPageHarness(SettingsPageId.GESTURES_BUT
         val mine = SettingsIndex.entries.filter { it.page == SettingsPageId.GESTURES_BUTTONS && !it.isPage }
         val lost = mine.filter { it.group !in drawn }
         assertTrue("search lines in groups the page doesn't have: ${lost.map { it.group + " › " + it.title }}", lost.isEmpty())
-        assertEquals("a line a row", 33, mine.size)
+        assertEquals("a line a row", 34, mine.size)
     }
 
     @Test fun atLargeTextNothingIsCutOff() {

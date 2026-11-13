@@ -52,6 +52,7 @@ import com.prism.music.data.prefs.PlayerGesture
 import com.prism.music.data.prefs.SessionButton
 import com.prism.music.data.prefs.SongSwipeAction
 import com.prism.music.data.prefs.persistentButtonsOf
+import com.prism.music.playback.PersistentKeepAliveService
 import com.prism.music.tr
 import com.prism.music.ui.components.ReorderList
 import com.prism.music.ui.screens.InfoMark
@@ -142,10 +143,12 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     var batteryFree by remember { mutableStateOf(ignoringBattery(context)) }
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var notificationsOn by remember { mutableStateOf(notificationsAllowed(context)) }
+    var keepAliveOn by remember { mutableStateOf(PersistentKeepAliveService.enabled(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         batteryFree = ignoringBattery(context)
         overlayAllowed = Settings.canDrawOverlays(context)
         notificationsOn = notificationsAllowed(context)
+        keepAliveOn = PersistentKeepAliveService.enabled(context)
     }
     // Where "battery" lives on phones whose maker has its own permission page (vivo's Autostart, background pop-ups).
     val maker = remember { com.prism.music.ui.lockscreen.LockScreenMaker.of() }
@@ -164,6 +167,9 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     val openNotifications: () -> Unit = {
         val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         runCatching { context.startActivity(intent) }
+    }
+    val openKeepAlive: () -> Unit = {
+        runCatching { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
     }
     // The four persistent buttons as they are and as Prism comes (each is a row of this page's reset).
     val nowButtons = remember(s.persistent.buttons) { persistentButtonsOf(s.persistent.buttons) }
@@ -313,6 +319,11 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
                     value = if (overlayAllowed) tr(R.string.persistent_overlay_allowed) else tr(R.string.persistent_overlay_ask),
                     info = tr(R.string.persistent_overlay_info), external = true,
                 ) { openOverlay() }
+                LinkRow(
+                    tr(R.string.persistent_keep_alive),
+                    value = if (keepAliveOn) tr(R.string.persistent_keep_alive_allowed) else tr(R.string.persistent_keep_alive_ask),
+                    info = tr(R.string.persistent_keep_alive_info), external = true,
+                ) { openKeepAlive() }
                 SwitchRow(
                     tr(R.string.persistent_compatibility), s.persistent.compatibility,
                     info = tr(R.string.persistent_compatibility_info), changed = compatibilityChanged,
@@ -338,7 +349,7 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
             ) { prefs.setPipMode(it) }
         }
     }
-    // Two steps, one after the other: background first, then display over other apps.
+    // Three steps, one after the other: background first, then display over other apps, then staying alive after closing.
     when (persistentSetup) {
         1 -> AlertDialog(
             onDismissRequest = { persistentSetup = 2 },
@@ -348,10 +359,17 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
             dismissButton = { TextButton(onClick = { persistentSetup = 2 }) { Text(tr(R.string.persistent_setup_later)) } },
         )
         2 -> AlertDialog(
-            onDismissRequest = { persistentSetup = 0 },
+            onDismissRequest = { persistentSetup = 3 },
             title = { Text(tr(R.string.persistent_overlay)) },
             text = { Text(tr(R.string.persistent_overlay_info)) },
-            confirmButton = { TextButton(onClick = { persistentSetup = 0; openOverlay() }) { Text(tr(R.string.persistent_setup_overlay)) } },
+            confirmButton = { TextButton(onClick = { persistentSetup = 3; openOverlay() }) { Text(tr(R.string.persistent_setup_overlay)) } },
+            dismissButton = { TextButton(onClick = { persistentSetup = 3 }) { Text(tr(R.string.persistent_setup_later)) } },
+        )
+        3 -> AlertDialog(
+            onDismissRequest = { persistentSetup = 0 },
+            title = { Text(tr(R.string.persistent_keep_alive)) },
+            text = { Text(tr(R.string.persistent_keep_alive_info)) },
+            confirmButton = { TextButton(onClick = { persistentSetup = 0; openKeepAlive() }) { Text(tr(R.string.persistent_keep_alive_settings)) } },
             dismissButton = { TextButton(onClick = { persistentSetup = 0 }) { Text(tr(R.string.persistent_setup_later)) } },
         )
     }
@@ -494,6 +512,7 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
         SettingEntry(page, persistent, tr(R.string.persistent_battery), tr(R.string.persistent_battery_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_notifications), tr(R.string.persistent_notifications_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_overlay), tr(R.string.persistent_overlay_info)),
+        SettingEntry(page, persistent, tr(R.string.persistent_keep_alive), tr(R.string.persistent_keep_alive_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_compatibility), tr(R.string.persistent_compatibility_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[0]), tr(R.string.persistent_buttons_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[1]), tr(R.string.persistent_buttons_info)),

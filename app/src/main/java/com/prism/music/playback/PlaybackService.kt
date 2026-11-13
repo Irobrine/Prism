@@ -152,6 +152,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     private lateinit var lockScreen: com.prism.music.ui.lockscreen.LockScreenGate
     private val silentKeepAlive by lazy { SilentKeepAlive(this) }
+    /** A real song that isn't playing: the persistent card takes its place while Prism is out of sight. */
+    private var pausedForControls = false
 
     override fun onCreate() {
         super.onCreate()
@@ -384,19 +386,14 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 if (++tick % 5 == 0 && player.isPlaying) saveEpisodePosition()
                 // The persistent card's notification was swiped away: put it back (the listener asked for it always).
                 if (tick % 30 == 0 && ::sessionPlayer.isInitialized && sessionPlayer.placeholder) triggerNotificationUpdate()
-                // A song's card swiped away: Android/OriginOS often just pauses it and leaves no notification. Switch to
-                // the persistent controls instead (the notification is the app's own, so its absence is visible here).
-                if (tick % 2 == 0 && ::sessionPlayer.isInitialized && !sessionPlayer.placeholder && player.mediaItemCount > 0) {
-                    val nm = getSystemService(android.app.NotificationManager::class.java)
-                    val active = nm?.activeNotifications?.any {
-                        it.id == DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID
-                    } == true
-                    if (active) notificationMissingTicks = 0
-                    else if (++notificationMissingTicks >= 2) {
-                        notificationMissingTicks = 0
-                        stopForPersistentControls()
-                    }
-                } else notificationMissingTicks = 0
+                // A paused song has no card on phones that hide a paused session (OriginOS). Once Prism is out of sight
+                // (the card swiped away, the app closed, the screen locked), the persistent controls take its place.
+                if (::sessionPlayer.isInitialized && !sessionPlayer.placeholder &&
+                    c.settings.current.persistent.controls && player.mediaItemCount > 0 &&
+                    player.playbackState == Player.STATE_READY && !player.playWhenReady && !uiInFront()
+                ) {
+                    if (++pausedAwayTicks >= 2) { pausedAwayTicks = 0; showPersistentControls() }
+                } else pausedAwayTicks = 0
                 // Widgets' progress bars move on every 15 s (more often would cost battery for little); with the screen
                 // off nobody sees them, so they catch up the moment it's back on instead.
                 if (tick % 15 == 0 && player.isPlaying) pushWidgets(progressOnly = true)
@@ -606,7 +603,9 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 player.stop()
             }
             setNotificationClosed(false)
-            syncPlaceholder()
+            // Closing Prism while a song is paused leaves the persistent controls (a paused card is hidden on some
+            // phones); a playing song keeps its own card.
+            if (!player.isPlaying) showPersistentControls() else syncPlaceholder()
             triggerNotificationUpdate()
             // vivo can kill even a foreground service when its task is dismissed: let WorkManager bring it back.
             runCatching {
@@ -937,8 +936,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     /** The song that just came up and when, until it's heard: how long starting a song takes (logcat tag PrismStream). */
     private var startedLoading: Pair<String, Long>? = null
-    /** Consecutive ticks in which a song's media notification was missing (swiped away). */
-    private var notificationMissingTicks = 0
+    /** Consecutive ticks in which a paused song has been out of Prism's sight (see the service's tick). */
+    private var pausedAwayTicks = 0
 
     /** Whether the listener swiped the notification away and nothing has played since. */
     private fun notificationClosed() = getSharedPreferences("playback_service", MODE_PRIVATE).getBoolean("notification_closed", false)
@@ -959,9 +958,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      */
     private fun closedFromNotification() {
         if (c.settings.current.persistent.controls) {
-            // Dismissing a song's card ends it and leaves the persistent controls (rather than keeping the paused song).
-            android.util.Log.i("PrismControl", "the card was dismissed: stopping the song and showing the persistent controls")
-            stopForPersistentControls()
+            // Dismissing a song's card leaves the persistent controls (rather than keeping the paused song).
+            android.util.Log.i("PrismControl", "the card was dismissed: showing the persistent controls")
+            player.pause()
+            showPersistentControls()
             return
         }
         if (player.isPlaying) return
@@ -974,17 +974,26 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         pauseAllPlayersAndStopSelf()
     }
 
-    /** Ends the song (paused or not) and puts the persistent controls up; the queue is saved to resume later. */
-    private fun stopForPersistentControls() {
+    /**
+     * Puts the persistent controls up in place of a song that isn't playing (a paused song's own card is hidden on
+     * phones such as OriginOS's, and swiping its card away only pauses it). The queue and its place are kept, and the
+     * card's Play picks the song up exactly where it stopped.
+     */
+    private fun showPersistentControls() {
+        if (!c.settings.current.persistent.controls) return
+        if (pausedForControls) return
+        if (player.isPlaying) return
+        pausedForControls = true
         flushPlayTime()
         saveEpisodePosition()
         saveQueue(now = true)
-        player.pause()
-        player.stop()
         setNotificationClosed(false)
         syncPlaceholder()
         triggerNotificationUpdate()
     }
+
+    /** Whether one of Prism's own screens is showing (a foreground service alone doesn't count). */
+    private fun uiInFront(): Boolean = c.visible.value
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (isPlaying) setNotificationClosed(false)
@@ -1008,6 +1017,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        // Something started (the listener pressed Play, a call ended, the card's Play): the song's own controls are back.
+        if (playWhenReady) pausedForControls = false
         syncPlaceholder()
         // #216: the explicit song left current when none that may play came after it stays paused, whatever presses Play.
         if (!playWhenReady || c.queue.followingHost) return
@@ -2476,12 +2487,13 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     /**
-     * Whether the persistent card shows: switched on, and nothing is playing. A paused song is ready and keeps its own
-     * controls; stopped, ended, or an empty queue gives the card. Closing Prism stops the player (see [onTaskRemoved]),
-     * so the card is what is left.
+     * Whether the persistent card shows: switched on, and nothing playing. A paused song is ready and keeps its own
+     * controls while Prism is in front; out of sight it gives them to the persistent card ([pausedForControls]),
+     * since some phones hide a paused session's card.
      */
     private fun placeholderWanted(): Boolean = c.settings.current.persistent.controls &&
-        (player.mediaItemCount == 0 || player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED)
+        (pausedForControls || player.mediaItemCount == 0 ||
+            player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED)
 
     private fun syncPlaceholder() {
         if (!::sessionPlayer.isInitialized || !::player.isInitialized) return
@@ -2599,10 +2611,15 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         return true
     }
 
-    /** Resumes the queue saved before Prism stopped (and adds it back if the player no longer has it). */
+    /** Resumes what was playing before Prism stopped, at the place it stopped; the queue file keeps that place. */
     private fun playLastPlayed(): Boolean {
-        if (queueFile.exists()) restoreQueue()
+        // Paused (Prism was only closed): the queue is still loaded, so resume it where it is, exactly. Stopped or a new
+        // process: the saved queue has the place it stopped at.
+        if (player.mediaItemCount == 0 || player.playbackState == Player.STATE_IDLE) {
+            if (queueFile.exists()) restoreQueue()
+        }
         if (player.mediaItemCount == 0) return false
+        pausedForControls = false
         if (player.playbackState == Player.STATE_IDLE) player.prepare()
         player.play()
         syncPlaceholder()
