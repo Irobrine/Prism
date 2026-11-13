@@ -148,6 +148,8 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -187,6 +189,16 @@ open class MainActivity : ComponentActivity() {
         }
         val c = container
         c.player.connect()
+        // Compatibility mode keeps its controls after closing: hiding the task from Recents stops vivo's swipe-away from
+        // force-stopping the app. Turning it off brings Prism back to Recents.
+        c.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            c.settings.flow.map { it.persistent.controls && it.persistent.compatibility }.distinctUntilChanged().collect { hide ->
+                runCatching {
+                    getSystemService(android.app.ActivityManager::class.java)
+                        ?.appTasks?.firstOrNull { it.taskInfo?.id == taskId }?.setExcludeFromRecents(hide)
+                }
+            }
+        }
         // The downloads start in the background (their index and cache come off the disk) while the first frame draws;
         // screens read c.downloadState meanwhile, so they never wait for them (1.7.9.3: Home's first frame waited 3.4 s
         // on a slow phone). Media3's download manager still answers on the main thread.
