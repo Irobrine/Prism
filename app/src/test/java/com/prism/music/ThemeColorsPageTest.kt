@@ -85,7 +85,7 @@ class ThemeColorsPageTest : ThemeLooksPageHarness() {
         )
         assertEquals("System", valueOf("Theme"))
         assertEquals("Fade", valueOf("Changing screens"))
-        assertEquals("Prism", valueOf("Preset"))
+        assertEquals(tr(R.string.app_name), valueOf("Preset"))
         assertEquals("Smooth", valueOf("Smooth or bands"))
         assertEquals("Your pick", valueOf("Accent from"))
         assertEquals("#3A86FF", valueOf("Accent color"))
@@ -196,7 +196,7 @@ class ThemeColorsPageTest : ThemeLooksPageHarness() {
         tap("Preset")
         // The lights that look alike are all there to tell apart, and White and your own come last.
         val options = sheetOptions()
-        for (name in listOf("Prism", "Sunset", "Ember", "Gold", "Ocean", "Ice", "Aurora")) assertTrue("$name in $options", name in options)
+        for (name in listOf(tr(R.string.app_name), "Sunset", "Ember", "Gold", "Ocean", "Ice", "Aurora")) assertTrue("$name in $options", name in options)
         assertEquals(listOf("White", "Your own"), options.takeLast(2))
         compose.onNode(hasTestTag(SettingsTags.SHEET_OPTION) and hasText("Sunset")).performClick()
         await { stored.spectrumPreset == "SUNSET" }

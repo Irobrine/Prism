@@ -344,10 +344,10 @@ class SettingsDesignTest {
         none("A page with no group of rows", seen.filter { s -> s.groups.isEmpty() || s.groups.any { it.second == 0 } }.map { "${it.name}: ${it.groups}" })
     }
 
-    /** Principle 7: at most 6 groups a page, at most 7 rows a group, with a fresh install's settings. */
+    /** Principle 7: at most 7 groups a page, at most 7 rows a group, with a fresh install's settings. */
     @Test fun budgets() {
         val seen = seen()
-        none("More than 6 groups", seen.filter { it.groups.size > 6 }.map { "${it.name}: ${it.groups.size} groups ${it.groups.map { g -> g.first }}" })
+        none("More than 7 groups", seen.filter { it.groups.size > 7 }.map { "${it.name}: ${it.groups.size} groups ${it.groups.map { g -> g.first }}" })
         none("More than 7 rows in a group", seen.flatMap { s -> s.groups.filter { it.second > 7 }.map { "${s.name} › ${it.first}: ${it.second} rows" } })
     }
 

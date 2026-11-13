@@ -5,6 +5,7 @@ import com.prism.music.data.friendlyMessage
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.DefaultAudioSink
@@ -15,9 +16,11 @@ import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import com.prism.music.data.prefs.PersistentAction
 import com.prism.music.data.prefs.SessionButton
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -41,12 +44,20 @@ import androidx.media3.session.SessionError
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.prism.music.MainActivity
+import com.prism.music.PrismActivity
 import com.prism.music.R
 import com.prism.music.container
+import com.prism.music.data.SongsFrom
 import com.prism.music.data.db.PlayEventEntity
 import com.prism.music.data.db.toEntity
+import com.prism.music.data.foryou.MadeForYou
 import com.prism.music.data.innertube.InnerTube
 import com.prism.music.data.model.Song
+import com.prism.music.data.model.SongItem
+import com.prism.music.data.model.quickPicks
+import com.prism.music.ui.screens.RecognizeActivity
+import com.prism.music.ui.theme.AppIcons
+import com.prism.music.ui.tv.TvDevice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -114,7 +125,9 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     // 1.7.4: buttons the listener can put beside play (Settings → Player → Buttons → Notification and car).
     private val back10Command = SessionCommand("prism.BACK_10", Bundle.EMPTY)
     private val ahead30Command = SessionCommand("prism.AHEAD_30", Bundle.EMPTY)
-    private val customCommands get() = listOf(likeCommand, shuffleCommand, repeatCommand, lyricsCommand, radioCommand, dislikeCommand, back10Command, ahead30Command)
+    /** The persistent card's buttons (Settings → Gestures & buttons → Persistent controls), one command each. */
+    private val persistentCommands = PersistentAction.entries.associateWith { SessionCommand("prism.PERSISTENT.${it.key}", Bundle.EMPTY) }
+    private val customCommands get() = listOf(likeCommand, shuffleCommand, repeatCommand, lyricsCommand, radioCommand, dislikeCommand, back10Command, ahead30Command) + persistentCommands.values
     /** What the media session (Android Auto, the notification) sees: the player, with lyrics laid over the title and cover. */
     private lateinit var sessionPlayer: LyricsOverlayPlayer
     private lateinit var carLyrics: CarLyrics
@@ -228,6 +241,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         lockScreen = com.prism.music.ui.lockscreen.LockScreenGate(this, c.settings.flow, player, scope).also { it.start() }
 
         sessionPlayer = LyricsOverlayPlayer(player)
+        // The persistent card's own item: no URI, only the title, subtitle and the app's icon. (Android needs a window
+        // in the session's timeline to show controls at all.)
+        sessionPlayer.setPlaceholderItem(placeholderItem())
+        sessionPlayer.onPlaceholderPlay = { scope.launch { runPersistentAction(PersistentAction.LIBRARY_SONGS) } }
         carLyrics = CarLyrics(this, c, player, sessionPlayer, scope)
         // The lyrics button works the car's switch in a car and the notification's elsewhere (#392).
         carLyrics.onPlaceChange = { updateButtons() }
@@ -285,6 +302,13 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         scope.launch { c.settings.flow.map { it.audioDiagnostics }.distinctUntilChanged().collect { on -> AudioDiagnostics.setEnabled(on) { AudioDiagnostics.about(c) } } }
         // The buttons beside play follow Settings → Player → Buttons as soon as they're changed.
         scope.launch { c.settings.flow.map { it.sessionButtons }.distinctUntilChanged().drop(1).collect { updateButtons() } }
+        // Persistent controls: the master switch and its four buttons, live.
+        scope.launch {
+            c.settings.flow.map { it.persistent.controls to it.persistent.buttons }.distinctUntilChanged().collect {
+                syncPlaceholder()
+                updateButtons()
+            }
+        }
         // The waveform progress bar picked: the playing song (and what's next) get their outlines now, not at the next song.
         scope.launch {
             c.settings.flow.map { it.scrubberStyle == com.prism.music.data.prefs.ScrubberStyle.WAVE }.distinctUntilChanged().drop(1).collect { on ->
@@ -348,6 +372,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 delay(1000)
                 // An episode's place is saved every few seconds while it plays.
                 if (++tick % 5 == 0 && player.isPlaying) saveEpisodePosition()
+                // The persistent card's notification was swiped away: put it back (the listener asked for it always).
+                if (tick % 30 == 0 && ::sessionPlayer.isInitialized && sessionPlayer.placeholder) triggerNotificationUpdate()
                 // Widgets' progress bars move on every 15 s (more often would cost battery for little); with the screen
                 // off nobody sees them, so they catch up the moment it's back on instead.
                 if (tick % 15 == 0 && player.isPlaying) pushWidgets(progressOnly = true)
@@ -419,6 +445,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         })
         restoreQueue()
         c.player.attach(this)
+        syncPlaceholder()
     }
 
     private lateinit var mix: MixEngine
@@ -522,9 +549,19 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      * #239 (1.8.3): while casting, the service stays in the foreground whatever the muted phone player is doing. Out of
      * it, Android blocks a background app's network a few seconds after it leaves the screen: the speaker could no longer
      * be reached (or fetch the song from the phone), and casting ended as "lost the connection" ~30 s later.
+     *
+     * 1.8.5: the persistent controls stay foreground too, while they're on: the placeholder has no playback, and a
+     * paused song must keep its controls. (The deprecated [onUpdateNotification] can't change this: the service uses
+     * the flag given to this method when it starts the foreground service.)
      */
-    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) =
-        super.onUpdateNotification(session, startInForegroundRequired || c.castingNow)
+    @OptIn(UnstableApi::class)
+    override fun onUpdateNotificationAsync(
+        session: MediaSession,
+        startInForegroundRequired: Boolean,
+    ): ListenableFuture<Void?> = super.onUpdateNotificationAsync(
+        session,
+        startInForegroundRequired || c.castingNow || c.settings.current.persistent.controls,
+    )
 
     /** Whether this service is in the foreground now (only known on Android 10+; below, it says yes). */
     private fun inForeground(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || foregroundServiceType != 0
@@ -536,6 +573,20 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         if (rootIntent?.component?.className == com.prism.music.ui.lockscreen.LockScreenActivity::class.java.name) return
         android.util.Log.i("PrismControl", "swiped away: wants to play ${player.playWhenReady}, ${player.mediaItemCount} songs, stop on swipe ${c.settings.current.stopOnSwipeAway}")
         saveQueue(now = true)
+        // Persistent controls (1.8.5): Prism closes and the card stays. The song is stopped only with "Stop when swiped
+        // away" on; off, what was playing (or paused) keeps its own controls.
+        if (c.settings.current.persistent.controls) {
+            flushPlayTime()
+            saveEpisodePosition()
+            if (c.settings.current.stopOnSwipeAway) {
+                player.pause()
+                player.stop()
+            }
+            setNotificationClosed(false)
+            syncPlaceholder()
+            triggerNotificationUpdate()
+            return
+        }
         // Settings → Playback → "Stop when swiped away" (#45): closing Prism from Recents ends the music too (some
         // phones, Samsung's among them, otherwise keep it playing with no app on screen).
         if (c.settings.current.stopOnSwipeAway) {
@@ -595,6 +646,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+        syncPlaceholder()
         // Song ↔ video and the like swap the item but it's still the same listen: the play time
         // keeps adding up, and nothing that starts a new song (history, lyrics, prefetch) runs again.
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED && mediaItem != null &&
@@ -873,6 +925,13 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      */
     private fun closedFromNotification() {
         if (player.isPlaying) return
+        if (c.settings.current.persistent.controls) {
+            // "Always": the card is put back, and Prism keeps running to show it.
+            android.util.Log.i("PrismControl", "the card was swiped away: putting the persistent controls back")
+            setNotificationClosed(false)
+            triggerNotificationUpdate()
+            return
+        }
         android.util.Log.i("PrismControl", "the notification was swiped away: stopping until something plays")
         AudioDiagnostics.log("control", "the notification was swiped away: Prism stops until something plays")
         setNotificationClosed(true)
@@ -904,6 +963,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        syncPlaceholder()
         // #216: the explicit song left current when none that may play came after it stays paused, whatever presses Play.
         if (!playWhenReady || c.queue.followingHost) return
         val song = player.currentMediaItem?.toSong() ?: return
@@ -922,6 +982,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      * radio song cold, since the suggestions arrive after the song has started.
      */
     override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+        syncPlaceholder()
         // The processors that follow songs across gapless moves count by the timeline as it is now (a queue change
         // doesn't flush them), and learn a song's length once it's known.
         edges.timelineChanged(timeline)
@@ -953,6 +1014,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private var stalledAt = 0L
 
     override fun onPlaybackStateChanged(playbackState: Int) {
+        syncPlaceholder()
         val now = SystemClock.elapsedRealtime()
         if (playbackState == Player.STATE_BUFFERING && player.playWhenReady && startedLoading == null) stalledAt = now
         else if (playbackState == Player.STATE_READY && stalledAt > 0) {
@@ -2287,6 +2349,18 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      */
     private fun updateButtons() {
         if (!::session.isInitialized) return
+        if (::sessionPlayer.isInitialized && sessionPlayer.placeholder) {
+            // The persistent card: four buttons the listener picked. The back/forward places are free because the
+            // placeholder player takes previous/next away (see LyricsOverlayPlayer).
+            val slots = intArrayOf(
+                CommandButton.SLOT_BACK, CommandButton.SLOT_FORWARD, CommandButton.SLOT_OVERFLOW, CommandButton.SLOT_OVERFLOW,
+            )
+            val buttons = c.settings.current.persistent.buttons.take(PersistentAction.SLOTS).mapIndexed { i, action ->
+                persistentButton(action, slots.getOrElse(i) { CommandButton.SLOT_OVERFLOW })
+            }
+            session.setMediaButtonPreferences(buttons)
+            return
+        }
         val id = player.currentMediaItem?.mediaId
         val liked = id != null && id in c.library.likedIds.value
         fun button(icon: Int, name: String, command: SessionCommand) =
@@ -2320,6 +2394,194 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         ) else emptyList()) + custom
         session.setMediaButtonPreferences(buttons)
         pushWidgets()
+    }
+
+    // ---- Persistent media controls (1.8.5): the card when nothing plays, its four actions and the service staying up
+
+    /** The placeholder item: no URI (nothing to play), just the title, subtitle and Prism's own icon. */
+    private fun placeholderItem(): MediaItem {
+        val artwork = Uri.parse("android.resource://$packageName/${AppIcons.current(this).foreground}")
+        return MediaItem.Builder()
+            .setMediaId("prism:persistent-placeholder")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(tr(R.string.app_name))
+                    .setArtist(tr(R.string.persistent_nothing_playing))
+                    .setArtworkUri(artwork)
+                    .build()
+            )
+            .build()
+    }
+
+    /**
+     * Whether the persistent card shows: switched on, and nothing is playing. A paused song is ready and keeps its own
+     * controls; stopped, ended, or an empty queue gives the card. Closing Prism stops the player (see [onTaskRemoved]),
+     * so the card is what is left.
+     */
+    private fun placeholderWanted(): Boolean = c.settings.current.persistent.controls &&
+        (player.mediaItemCount == 0 || player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED)
+
+    private fun syncPlaceholder() {
+        if (!::sessionPlayer.isInitialized || !::player.isInitialized) return
+        val on = placeholderWanted()
+        if (sessionPlayer.placeholder == on) return
+        sessionPlayer.setPlaceholder(on)
+        if (on) setNotificationClosed(false)
+        updateButtons()
+    }
+
+    /** One button of the persistent card: its icon, the command the service handles, and the slot it prefers. */
+    private fun persistentButton(action: PersistentAction, slot: Int): CommandButton {
+        val builder = when (action) {
+            PersistentAction.QUICK_PICKS -> CommandButton.Builder(CommandButton.ICON_SHUFFLE_STAR)
+            PersistentAction.LIBRARY_SONGS -> CommandButton.Builder(CommandButton.ICON_SHUFFLE_ON)
+            PersistentAction.LAST_PLAYED -> CommandButton.Builder(CommandButton.ICON_PLAY)
+            PersistentAction.DAILY_1, PersistentAction.DAILY_2, PersistentAction.DAILY_3, PersistentAction.DAILY_4 ->
+                CommandButton.Builder(CommandButton.ICON_UNDEFINED).setCustomIconResId(R.drawable.ic_auto_dj)
+            PersistentAction.OPEN_HOME -> CommandButton.Builder(CommandButton.ICON_FEED)
+            PersistentAction.OPEN_SEARCH -> CommandButton.Builder(CommandButton.ICON_UNDEFINED).setCustomIconResId(R.drawable.ic_s_search)
+            PersistentAction.OPEN_LIBRARY -> CommandButton.Builder(CommandButton.ICON_ALBUM)
+            PersistentAction.OPEN_REPLAY -> CommandButton.Builder(CommandButton.ICON_SYNC)
+            PersistentAction.OPEN_SETTINGS -> CommandButton.Builder(CommandButton.ICON_SETTINGS)
+            PersistentAction.OPEN_LOCAL -> CommandButton.Builder(CommandButton.ICON_ARTIST)
+            PersistentAction.OPEN_DOWNLOADS -> CommandButton.Builder(CommandButton.ICON_UNDEFINED).setCustomIconResId(R.drawable.ic_s_downloads)
+            PersistentAction.OPEN_LIKED -> CommandButton.Builder(CommandButton.ICON_HEART_FILLED)
+            PersistentAction.OPEN_PODCASTS -> CommandButton.Builder(CommandButton.ICON_FEED)
+            PersistentAction.RECOGNIZE -> CommandButton.Builder(CommandButton.ICON_UNDEFINED).setCustomIconResId(R.drawable.ic_tile_recognize)
+        }
+        return builder
+            .setDisplayName(action.label)
+            .setSessionCommand(persistentCommands.getValue(action))
+            .setSlots(slot)
+            .build()
+    }
+
+    /**
+     * Runs a persistent button's action. Playback actions never bring Prism's screen up; Open Tab is the one that does,
+     * and Recognize opens the same listening card the widget does.
+     */
+    private suspend fun runPersistentAction(action: PersistentAction) {
+        val played = when (action) {
+            PersistentAction.QUICK_PICKS -> shuffleQuickPicks() || shuffleLibrarySongs()
+            PersistentAction.LIBRARY_SONGS -> shuffleLibrarySongs()
+            PersistentAction.LAST_PLAYED -> playLastPlayed() || shuffleLibrarySongs()
+            PersistentAction.DAILY_1 -> shuffleDailyMix(1) || shuffleQuickPicks() || shuffleLibrarySongs()
+            PersistentAction.DAILY_2 -> shuffleDailyMix(2) || shuffleQuickPicks() || shuffleLibrarySongs()
+            PersistentAction.DAILY_3 -> shuffleDailyMix(3) || shuffleQuickPicks() || shuffleLibrarySongs()
+            PersistentAction.DAILY_4 -> shuffleDailyMix(4) || shuffleQuickPicks() || shuffleLibrarySongs()
+            PersistentAction.OPEN_HOME, PersistentAction.OPEN_SEARCH, PersistentAction.OPEN_LIBRARY,
+            PersistentAction.OPEN_REPLAY, PersistentAction.OPEN_SETTINGS, PersistentAction.OPEN_LOCAL,
+            PersistentAction.OPEN_DOWNLOADS, PersistentAction.OPEN_LIKED, PersistentAction.OPEN_PODCASTS -> {
+                openTab(action)
+                true
+            }
+            PersistentAction.RECOGNIZE -> {
+                openRecognizer()
+                true
+            }
+        }
+        if (!played) toast(tr(R.string.persistent_no_songs))
+    }
+
+    /** Quick picks, made afresh (YouTube's own and the set around the listener's artists), then shuffled. */
+    private suspend fun shuffleQuickPicks(): Boolean {
+        toast(tr(R.string.persistent_getting_quick_picks))
+        val settings = c.settings.current
+        val owner = settings.accountName
+        val shelves = withTimeoutOrNull(20_000) {
+            runCatching { c.ytm.fullHomePages(pages = 3, maxPages = 8) { got -> got.quickPicks(owner) != null } }.getOrNull()?.first
+        }.orEmpty()
+        val youtube = shelves.quickPicks(owner)?.items?.filterIsInstance<SongItem>()?.map { it.song }.orEmpty()
+        var songs = withTimeoutOrNull(25_000) {
+            runCatching {
+                c.yourMusic.quickPicks(youtube, radioOf = { seed: Song -> c.ytm.next(seed.id, playlistId = "RDAMVM${seed.id}").songs })
+            }.getOrNull()
+        }.orEmpty()
+        if (songs.isEmpty()) songs = youtube
+        if (songs.isEmpty()) {
+            val whose = "${settings.authUser}|${settings.dataSyncId}|${settings.accountName}"
+            songs = runCatching { c.homeCache.readPicks(java.time.LocalDate.now().toString(), whose) }.getOrNull().orEmpty()
+        }
+        if (songs.isEmpty()) songs = runCatching { c.yourMusic.offlinePicks() }.getOrDefault(emptyList())
+        if (songs.isEmpty()) return false
+        c.player.playQueue(songs, 0, QueueSource(QueueKind.OTHER, tr(R.string.persistent_quick_picks)), shuffle = true)
+        return true
+    }
+
+    /**
+     * Library → Songs as the listener has it (liked songs plus the playlists picked under "From"), refreshed first: the
+     * library syncs, and each YouTube playlist is checked for the songs added since it was last read.
+     */
+    private suspend fun shuffleLibrarySongs(): Boolean {
+        toast(tr(R.string.persistent_getting_library_songs))
+        if (c.settings.current.isLoggedIn) runCatching { c.library.sync() }
+        // The flow that Home and Library read gets the freshly synced likes on its own collector: give it a moment.
+        kotlinx.coroutines.delay(250)
+        val from = SongsFrom.decode(c.library.sortOf(SongsFrom.KEY))
+        val own = c.prismLibrary.lists.value.associateBy { it.id }
+        val lists = from.playlists.map { id ->
+            own[id]?.songs ?: runCatching {
+                c.playlistSongs.refresh(id)
+                c.playlistSongs.songs(id)
+            }.getOrNull().orEmpty()
+        }
+        val songs = if (from.isDefault) c.library.likedShown.value else SongsFrom.merge(c.library.likedShown.value, lists, from)
+        if (songs.isEmpty()) return false
+        c.player.playQueue(songs, 0, QueueSource(QueueKind.LIBRARY, tr(R.string.library)), shuffle = true)
+        return true
+    }
+
+    /** Resumes the queue saved before Prism stopped (and adds it back if the player no longer has it). */
+    private fun playLastPlayed(): Boolean {
+        if (queueFile.exists()) restoreQueue()
+        if (player.mediaItemCount == 0) return false
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        player.play()
+        syncPlaceholder()
+        return true
+    }
+
+    /** A Daily Mix, made again if needed; the caller falls back to Quick picks, then Library songs. */
+    private suspend fun shuffleDailyMix(n: Int): Boolean {
+        val id = MadeForYou.daily(n)
+        var mix = c.forYou.mix(id)
+        if (mix == null || mix.songs.isEmpty()) {
+            toast(tr(R.string.persistent_making_mix, n))
+            withTimeoutOrNull(60_000) { runCatching { c.forYou.refresh(force = true) } }
+            mix = c.forYou.mix(id)
+        }
+        val songs = mix?.songs.orEmpty()
+        if (songs.isEmpty()) return false
+        c.player.playQueue(songs, 0, QueueSource(QueueKind.OTHER, mix?.title ?: tr(R.string.persistent_daily_mix, n)), shuffle = true)
+        return true
+    }
+
+    /** Open Tab: the app comes up (or forward) on the tab, with search's keyboard as the tab bar leaves it. */
+    private fun openTab(action: PersistentAction) {
+        val host = action.key.removePrefix("open_")
+        // From the notification shade the activity may already be running: SINGLE_TOP hands it the tab through
+        // [MainActivity.onNewIntent]; when it isn't, this starts it there. (The system keeps its shade over a start
+        // made by an app; only a notification's own PendingIntent closes it.)
+        val intent = Intent(this, if (TvDevice.isTv(this)) com.prism.music.TvActivity::class.java else PrismActivity::class.java)
+            .setAction(Intent.ACTION_VIEW)
+            .setData(Uri.parse("prism://$host"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        runCatching { startActivity(intent) }.onFailure {
+            AudioDiagnostics.log("control", "couldn't open $host: ${it.message}")
+        }
+    }
+
+    /** The widget's listening card, from the controls. */
+    private fun openRecognizer() {
+        val intent = Intent(this, RecognizeActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        runCatching { startActivity(intent) }.onFailure {
+            AudioDiagnostics.log("control", "couldn't open recognition: ${it.message}")
+        }
+    }
+
+    private fun toast(message: String) {
+        runCatching { android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show() }
     }
 
     /** Home screen widgets follow what's playing (nothing happens when none is placed). */
@@ -2613,6 +2875,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
+            persistentCommands.entries.firstOrNull { it.value.customAction == customCommand.customAction }?.let { (action, _) ->
+                scope.launch { runPersistentAction(action) }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             when (customCommand.customAction) {
                 likeCommand.customAction -> player.currentMediaItem?.toSong()?.let { c.library.toggleLike(it) }
                 shuffleCommand.customAction -> {

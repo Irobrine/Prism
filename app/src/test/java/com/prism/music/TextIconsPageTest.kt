@@ -85,7 +85,7 @@ class TextIconsPageTest : TextTabsPageHarness(SettingsPageId.TEXT_ICONS) {
         assertEquals(SettingsTags.ROW_SWITCH, type(icons, "Likes as stars"))
         assertEquals(SettingsTags.ROW_SWITCH, type(shapes, "Square video covers"))
         // Each says its value in words.
-        assertEquals("Prism", valueOf(rowNode(text, "Font")))
+        assertEquals(tr(R.string.app_name), valueOf(rowNode(text, "Font")))
         assertEquals("100%", valueOf(rowNode(text, "App text size")))
         assertEquals("Same as the text", valueOf(rowNode(text, "Titles")))
         assertEquals("Regular, rounded ends", valueOf(rowNode(icons, "Icon weight")))
@@ -212,7 +212,7 @@ class TextIconsPageTest : TextTabsPageHarness(SettingsPageId.TEXT_ICONS) {
         compose.onNodeWithTag(SettingsTags.RESET_ITEM).performClick()
         val listed = compose.onAllNodes(hasTestTag(SettingsTags.RESET_CHANGE)).fetchSemanticsNodes().map { it.config[SemanticsProperties.Text].joinToString { t -> t.text } }
         assertEquals(
-            listOf("Font: System → Prism", "Fill: Filled → Outline", "Songs' covers: Circle → Rounded", "Square video covers: Off → On"),
+            listOf("Font: System → ${tr(R.string.app_name)}", "Fill: Filled → Outline", "Songs' covers: Circle → Rounded", "Square video covers: Off → On"),
             listed,
         )
         compose.onNodeWithTag(SettingsTags.RESET_CONFIRM).performClick()

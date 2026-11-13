@@ -24,7 +24,9 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -70,6 +72,31 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     private val window = Timeline.Window()
     /** The play order last shown (shown place -> real place), while shuffled; null when shown as stored. */
     @Volatile private var shown: IntArray? = null
+
+    /**
+     * Persistent media controls: when true (and nothing plays), the session sees one metadata-only item — "Prism /
+     * Nothing playing" — so the notification and the system's media controls stay. The app's own player is untouched.
+     */
+    var placeholder: Boolean = false
+        private set
+    /** The placeholder item: no URI, only what the controls show. */
+    var placeholderItem: MediaItem? = null
+        private set
+    private var placeholderTimeline: Timeline? = null
+    /** The placeholder card's play button: shuffle the listener's Library songs. */
+    var onPlaceholderPlay: (() -> Unit)? = null
+
+    fun setPlaceholderItem(item: MediaItem) {
+        placeholderItem = item
+        placeholderTimeline = null
+        if (placeholder) invalidateState()
+    }
+
+    fun setPlaceholder(on: Boolean) {
+        if (placeholder == on) return
+        placeholder = on
+        invalidateState()
+    }
 
     fun show(o: Overlay?) {
         if (o == null && overlay == null) return
@@ -122,6 +149,10 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     var gentle: ((play: Boolean) -> Boolean)? = null
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): com.google.common.util.concurrent.ListenableFuture<*> {
+        if (placeholder) {
+            if (playWhenReady) onPlaceholderPlay?.invoke()
+            return com.google.common.util.concurrent.Futures.immediateVoidFuture()
+        }
         if (gentle?.invoke(playWhenReady) == true) return com.google.common.util.concurrent.Futures.immediateVoidFuture()
         return super.handleSetPlayWhenReady(playWhenReady)
     }
@@ -135,6 +166,7 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     override fun getState(): State {
         var s = super.getState()
         shown = null
+        if (placeholder) return placeholderState(s)
         remote?.volume?.let { v ->
             s = s.buildUpon()
                 .setDeviceInfo(androidx.media3.common.DeviceInfo.Builder(androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE).setMinVolume(0).setMaxVolume(100).build())
@@ -169,6 +201,41 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
             .apply { if (o.artwork != null) { setArtworkData(o.artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER); setArtworkUri(null) } }
             .build()
         return s.buildUpon().setPlaylist(s.timeline, s.currentTracks, meta).build()
+    }
+
+    /**
+     * The session's state when nothing plays ([placeholder]): one metadata-only item with no URI, in a ready but
+     * paused state. Ready (not idle) so Android keeps the notification and its foreground service up, paused so the
+     * system shows Play; next/previous are taken away so the four persistent buttons get those places in the media
+     * controls. The real player is not involved.
+     */
+    private fun placeholderState(s: State): State {
+        val item = placeholderItem ?: return s
+        val timeline = placeholderTimeline ?: PlaceholderTimeline(item).also { placeholderTimeline = it }
+        val commands = s.availableCommands.buildUpon().apply {
+            remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+            remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            remove(Player.COMMAND_SEEK_TO_NEXT)
+            remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            remove(Player.COMMAND_SEEK_BACK)
+            remove(Player.COMMAND_SEEK_FORWARD)
+            remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            remove(Player.COMMAND_PREPARE)
+            remove(Player.COMMAND_STOP)
+        }.build()
+        return s.buildUpon()
+            .setPlaylist(timeline, androidx.media3.common.Tracks.EMPTY, item.mediaMetadata)
+            .setPlaybackState(Player.STATE_READY)
+            .setPlayerError(null)
+            .setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+            .setContentPositionMs(0)
+            .setCurrentMediaItemIndex(0)
+            .setCurrentAd(C.INDEX_UNSET, C.INDEX_UNSET)
+            .setIsLoading(false)
+            .setAvailableCommands(commands)
+            .setShuffleModeEnabled(false)
+            .setRepeatMode(Player.REPEAT_MODE_OFF)
+            .build()
     }
 
     private companion object {

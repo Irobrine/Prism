@@ -1320,6 +1320,13 @@ private fun handleDeepLink(uri: Uri, nav: Navigator, c: AppContainer) {
         uri.scheme == "prism" && uri.host == "search" -> nav.go(Routes.SEARCH)
         uri.scheme == "prism" && uri.host == "liked" -> nav.go(Routes.liked())
         uri.scheme == "prism" && uri.host == "downloads" -> nav.go(Routes.DOWNLOADS)
+        // The persistent media controls' Open Tab buttons (1.8.5).
+        uri.scheme == "prism" && uri.host == "home" -> nav.go(Routes.HOME)
+        uri.scheme == "prism" && uri.host == "library" -> nav.go(Routes.LIBRARY)
+        uri.scheme == "prism" && uri.host == "replay" -> nav.go(Routes.REPLAY)
+        uri.scheme == "prism" && uri.host == "settings" -> nav.go(Routes.SETTINGS)
+        uri.scheme == "prism" && uri.host == "local" -> nav.go(Routes.LOCAL)
+        uri.scheme == "prism" && uri.host == "podcasts" -> nav.go(Routes.PODCASTS)
         // The 1 December notification: that year's Rewind.
         uri.scheme == "prism" && uri.host == "rewind" -> {
             path.firstOrNull()?.toIntOrNull()?.let { c.rewindRequest.value = it }
