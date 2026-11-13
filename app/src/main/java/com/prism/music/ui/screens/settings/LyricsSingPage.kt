@@ -160,6 +160,7 @@ val lyricsSingIndex: List<SettingEntry> by lazy {
             SettingEntry(page, g.sources, tr(R.string.lyrics_source_button), tr(R.string.change_lyrics_source)),
             SettingEntry(page, g.sources, tr(R.string.ls_offset), tr(R.string.ls_offset_keywords)),
             SettingEntry(page, g.sources, tr(R.string.show_furigana), tr(R.string.hiragana_readings_above_kanji) + " " + tr(R.string.furigana_uses_the_japanese_reading_data)),
+            SettingEntry(page, g.sources, tr(R.string.furigana_parts), tr(R.string.furigana_parts_info), needs = SettingNeeds.furigana),
             // Sing and music files
             SettingEntry(page, g.sing, tr(R.string.sing_s_voice_separation), tr(R.string.karaoke_vocals_remove_instrumental_download_mode)),
             SettingEntry(page, g.sing, tr(R.string.get_songs_ready_while_sing_is), tr(R.string.karaoke_prepare_ahead_background_preload_vocals)),
@@ -383,4 +384,5 @@ internal fun resetLyricsSing(prefs: SettingsRepository, d: AppSettings) {
     prefs.setLyricsFileWords(d.lyricsFileWords)
     prefs.setLyricsFileTranslation(d.lyricsFileTranslation)
     prefs.setLyricsFurigana(d.lyricsFurigana)
+    prefs.setLyricsFuriganaParts(d.lyricsFuriganaParts)
 }

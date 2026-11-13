@@ -1862,6 +1862,8 @@
     <string name="romanization_native_script">romanization native script</string>
     <string name="show_furigana">Show furigana</string>
     <string name="hiragana_readings_above_kanji">Hiragana readings above the kanji in Japanese lyrics</string>
+    <string name="furigana_parts">Read numbers and counters separately</string>
+    <string name="furigana_parts_info">Shows にじゅっ above 20 and ぷん above 分 instead of にじゅっぷん over both.</string>
     <string name="furigana_uses_the_japanese_reading_data">Uses the Japanese reading data (downloaded once below).</string>
     <string name="japanese_kanji_readings">Japanese kanji readings</string>
     <string name="ipadic" translatable="false">IPADIC</string>

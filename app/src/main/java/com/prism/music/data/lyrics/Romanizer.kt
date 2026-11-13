@@ -14,7 +14,6 @@ import com.prism.music.data.lyrics.roman.JapaneseEngine
 import com.prism.music.data.lyrics.roman.JapaneseKanji
 import com.prism.music.data.lyrics.roman.JapaneseReader
 import com.prism.music.data.lyrics.roman.Kana
-import com.prism.music.data.lyrics.roman.RubyReader
 import com.prism.music.data.lyrics.roman.Script
 import com.prism.music.data.lyrics.roman.SudachiJapanese
 import com.prism.music.data.lyrics.roman.plainLatin
@@ -48,6 +47,9 @@ import java.io.IOException
  * keep a karaoke line's word timings; Google Translate's romanization (the endpoint [LyricsTranslator] uses) for Chinese
  * (pinyin), Arabic, Hebrew, the Indian scripts and the rest, spread over the line's timing; and Android's own
  * transliterator when that can't be reached. Results are kept per song, so they work offline after the first time.
+ *
+ * Google's romanization is line-level and has no ruby, so a line the local reader can read uses that reader for both
+ * the romanization and the furigana. Google stays the fallback when no local dictionary can read the line.
  */
 class Romanizer(
     private val http: OkHttpClient,
@@ -58,8 +60,8 @@ class Romanizer(
     private val songPrefs: android.content.SharedPreferences? = null,
     /** The Japanese reader to use without the downloaded dictionary (tests read from Kuromoji's own). */
     private val japaneseForTests: Japanese? = null,
-    /** Which Japanese dictionary the listener chose (Settings → Lyrics); IPADIC unless they picked Sudachi. */
-    private val japaneseEngine: () -> JapaneseEngine = { JapaneseEngine.IPADIC },
+    /** Furigana's number+counter setting: true puts the number and the counter on their own spans/readings. */
+    private val furiganaParts: () -> Boolean = { false },
 ) {
     private val _overrides = MutableStateFlow(
         songPrefs?.all?.mapNotNull { (k, v) -> (v as? Boolean)?.let { k to it } }?.toMap().orEmpty()
@@ -84,11 +86,23 @@ class Romanizer(
         runCatching { localSpelling(LyricLine(0, text), scripts, japanese) }.getOrNull()?.first?.takeIf { it.isNotBlank() && it != text }
     }
 
-    /** Whether kanji can be read on the phone (the chosen Japanese dictionary is downloaded). */
-    val japaneseReady: Boolean get() = japaneseForTests != null || models.ready(japaneseEngine().model)
+    /** The dictionary that reads Japanese now: Sudachi whenever it's on the phone, else IPADIC. */
+    private fun localEngine(): JapaneseEngine? = when {
+        japaneseForTests != null -> null
+        models.ready(ModelStore.Model.SUDACHI) -> JapaneseEngine.SUDACHI
+        models.ready(ModelStore.Model.JAPANESE) -> JapaneseEngine.IPADIC
+        else -> null
+    }
 
-    /** Whether furigana can be read: either dictionary can give the kana, and Sudachi is preferred when both are here. */
-    val furiganaReady: Boolean get() = japaneseForTests != null || models.ready(ModelStore.Model.SUDACHI) || models.ready(ModelStore.Model.JAPANESE)
+    /** The engine and its dictionary's version, for caches: a new download reads the songs again. */
+    val readingKey: String
+        get() = localEngine()?.let { "${it.name}:${it.model.sha256}" } ?: if (japaneseForTests != null) "test" else "none"
+
+    /** Whether kanji can be read on the phone (Sudachi or IPADIC is downloaded). */
+    val japaneseReady: Boolean get() = japaneseForTests != null || localEngine() != null
+
+    /** Furigana uses the same reader as the romanization, so the two always agree. */
+    val furiganaReady: Boolean get() = japaneseReady
 
     @Serializable
     private data class Stored(val t: String, val w: List<String>? = null, val b: String? = null, val bw: List<String>? = null)
@@ -110,8 +124,7 @@ class Romanizer(
 
     private suspend fun japaneseReader(): JapaneseReader? {
         japaneseForTests?.let { return it }
-        val engine = japaneseEngine()
-        if (!models.ready(engine.model)) return null
+        val engine = localEngine() ?: return null
         val reader = jaLock.withLock {
             val held = japanese
             if (held?.first == engine) held.second
@@ -151,7 +164,7 @@ class Romanizer(
         withContext(Dispatchers.Default) {
             val japaneseSong = Script.KANA in Script.foreignIn(title) || lines.any { Script.KANA in Script.foreignIn(it.text) }
             val jaReady = japaneseReady
-            val key = "$songId|$VERSION|${if (jaReady) japaneseEngine().name else "-"}|${if (japaneseSong) "j" else ""}|${skip.sorted().joinToString(",")}|" +
+            val key = "$songId|$VERSION|$readingKey|${if (furiganaParts()) "parts" else "whole"}|${if (japaneseSong) "j" else ""}|${skip.sorted().joinToString(",")}|" +
                 lines.joinToString("\n") { it.text + "|" + it.backgroundLine?.text.orEmpty() }.hashCode()
             synchronized(memory) { memory[key] }?.let { return@withContext it }
             runCatching { dao.get(key) }.getOrNull()?.let { saved ->
@@ -215,93 +228,69 @@ class Romanizer(
             result
         }
 
-    private val rubyMemory = object : LinkedHashMap<String, List<RubySpan>>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<RubySpan>>?) = size > 128
+    /** A line's romanization pieces and its furigana, worked out by the same reader and split setting. */
+    private data class LineReading(val pieces: List<String>, val spans: List<RubySpan>)
+
+    private val readingMemory = object : LinkedHashMap<String, LineReading>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LineReading>?) = size > 128
     }
 
-    // The dictionary that gives the kana over the kanji: Sudachi when it's on the phone (it reads more names and slang),
-    // else IPADIC. Each is reused when it's the reader already loaded; otherwise it's loaded for furigana and let go a
-    // few minutes after the last line.
-    private val furiganaLock = Mutex()
-    @Volatile private var furiganaJapanese: Japanese? = null
-    @Volatile private var furiganaSudachi: SudachiJapanese? = null
-    private var furiganaReleaseJob: Job? = null
-
     /**
-     * Each line's kanji with the hiragana above it ([RubySpan]), line for line; null while the Japanese reading data
-     * isn't on the phone. Lines that need none come back empty.
+     * Each line's kanji with the hiragana above it ([RubySpan]), line for line; null while no Japanese dictionary is on
+     * the phone. A number+counter run is read even in a line with no kanji, so 20分 shows にじゅっぷん in both views.
      */
     suspend fun furigana(lines: List<LyricLine>): List<List<RubySpan>>? {
-        if (lines.none { hasKanji(it.text) }) return emptyList()
-        val reader = furiganaReader() ?: return null
+        if (lines.none { hasKanji(it.text) || it.text.any { c -> c.isDigit() } }) return emptyList()
+        val reader = japaneseReader() ?: return null
+        val split = furiganaParts()
         return withContext(Dispatchers.Default) {
             lines.map { line ->
-                synchronized(rubyMemory) { rubyMemory[line.text] } ?: run {
-                    // A line cleaned of the source's parenthesized readings carries them as [LyricLine.sourceRuby]. Raw
-                    // lines (from other callers) are parsed here, and the dictionary reads the words without them.
-                    val spans = if (line.sourceRuby.isNotEmpty()) {
-                        mergeFurigana(line.sourceRuby, reader.furigana(JapaneseKanji.fromChinese(line.text)))
-                    } else {
-                        val source = SourceFurigana.of(line.text)
-                        val dictionary = reader.furigana(JapaneseKanji.fromChinese(source?.clean ?: line.text))
-                        source?.merge(dictionary) ?: dictionary
-                    }
-                    synchronized(rubyMemory) { rubyMemory[line.text] = spans }
-                    spans
+                // Raw lines (from other callers) still carry their readings in parentheses; the player passes cleaned
+                // lines with [LyricLine.sourceRuby] instead.
+                val raw = if (line.sourceRuby.isEmpty()) SourceFurigana.of(line.text) else null
+                if (raw != null) {
+                    raw.merge(reader.furigana(JapaneseKanji.fromChinese(raw.clean), split))
+                } else {
+                    readingOf(line, reader, split).spans
                 }
             }
         }
     }
 
     /**
-     * The reader that gives the kana above the kanji. Sudachi comes first whenever its dictionary is on the phone, even
-     * if IPADIC is the engine chosen for the romanization; without it, IPADIC. Null while neither is on the phone.
+     * A line's pieces and furigana, from the same [reader] and split setting, kept by dictionary version and the
+     * source's own readings. The romanization and the furigana of one line can't then drift apart.
      */
-    private suspend fun furiganaReader(): RubyReader? {
-        japaneseForTests?.let { japanese -> return RubyReader { text -> japanese.furigana(text) } }
-        if (models.ready(ModelStore.Model.SUDACHI)) {
-            sudachiForFurigana()?.let { sudachi -> return RubyReader { text -> sudachi.furigana(text) } }
-        }
-        if (!models.ready(ModelStore.Model.JAPANESE)) return null
-        val japanese = japaneseForFurigana() ?: return null
-        return RubyReader { text -> japanese.furigana(text) }
+    private fun readingOf(line: LyricLine, reader: JapaneseReader, splitCounters: Boolean): LineReading {
+        val key = "$readingKey|${if (splitCounters) "parts" else "whole"}|${line.text}|" +
+            line.sourceRuby.joinToString(";") { "${it.start}-${it.end}:${it.reading}" }
+        synchronized(readingMemory) { readingMemory[key] }?.let { return it }
+        val text = JapaneseKanji.fromChinese(line.text)
+        val pieces = reader.pieces(text, splitCounters).toMutableList()
+        val dictionary = reader.furigana(text, splitCounters)
+        val spans = if (line.sourceRuby.isEmpty()) dictionary else mergeFurigana(line.sourceRuby, dictionary)
+        if (line.sourceRuby.isNotEmpty()) applySourceRuby(pieces, line.sourceRuby, dictionary)
+        val reading = LineReading(pieces, spans)
+        synchronized(readingMemory) { readingMemory[key] = reading }
+        return reading
     }
 
-    /** The Sudachi reader, reusing the one the romanization already loaded when that's Sudachi. */
-    private suspend fun sudachiForFurigana(): SudachiJapanese? {
-        (japanese?.takeIf { it.first == JapaneseEngine.SUDACHI }?.second as? SudachiJapanese)?.let { return it }
-        val sudachi = furiganaLock.withLock {
-            furiganaSudachi ?: runCatching {
-                withContext(Dispatchers.Default) { SudachiJapanese.load(models.dir(ModelStore.Model.SUDACHI)) }
-            }.onFailure { android.util.Log.w("PrismRoman", "Couldn't load Sudachi for furigana: $it") }
-                .getOrNull()?.also { furiganaSudachi = it }
-        } ?: return null
-        releaseFuriganaLater()
-        return sudachi
-    }
-
-    /** The IPADIC reader, reusing the one the romanization already loaded when that's IPADIC. */
-    private suspend fun japaneseForFurigana(): Japanese? {
-        (japanese?.takeIf { it.first == JapaneseEngine.IPADIC }?.second as? Japanese)?.let { return it }
-        val japanese = furiganaLock.withLock {
-            furiganaJapanese ?: runCatching {
-                withContext(Dispatchers.Default) { Japanese.load(models.dir(ModelStore.Model.JAPANESE)) }
-            }.onFailure { android.util.Log.w("PrismRoman", "Couldn't load IPADIC for furigana: $it") }
-                .getOrNull()?.also { furiganaJapanese = it }
-        } ?: return null
-        releaseFuriganaLater()
-        return japanese
-    }
-
-    private fun releaseFuriganaLater() {
-        furiganaReleaseJob?.cancel()
-        furiganaReleaseJob = scope.launch {
-            delay(RELEASE_AFTER_MS)
-            furiganaLock.withLock {
-                runCatching { furiganaSudachi?.close() }
-                furiganaSudachi = null
-                furiganaJapanese = null
-            }
+    /**
+     * Source readings win over the dictionary's: the romanization of the kanji run is replaced by the source's reading,
+     * keeping the okurigana the dictionary read around it (食べる with 食(しょく) becomes shokuberu, not taberu).
+     */
+    private fun applySourceRuby(pieces: MutableList<String>, source: List<RubySpan>, dictionary: List<RubySpan>) {
+        for (s in source) {
+            val to = Kana.romanize(s.reading).lowercase()
+            if (to.isEmpty() || pieces.isEmpty()) continue
+            val d = dictionary.firstOrNull { it.start == s.start && it.end == s.end }
+                ?: dictionary.firstOrNull { it.start < s.end && s.start < it.end }
+            val from = d?.reading?.let { Kana.romanize(it).lowercase() }
+            var i = s.start.coerceIn(0, pieces.lastIndex)
+            while (i >= 0 && pieces[i].isEmpty()) i--
+            if (i < 0) i = s.start.coerceIn(0, pieces.lastIndex)
+            val piece = pieces[i]
+            pieces[i] = if (from != null && from.isNotEmpty() && from in piece) piece.replaceFirst(from, to) else to
         }
     }
 
@@ -318,9 +307,16 @@ class Romanizer(
     }
 
     private suspend fun localSpelling(line: LyricLine, scripts: Set<Script>, japaneseSong: Boolean): Pair<String, List<String>?>? {
+        // Google's romanization endpoint returns no ruby, so it can't be preferred for both views without making them
+        // disagree. The local reader (Sudachi, else IPADIC) reads both whenever it can; Google stays the fallback.
         val japanese = if (japaneseSong && (Script.KANA in scripts || Script.HAN in scripts)) japaneseReader() else null
+        val split = furiganaParts()
         val engine: ((String) -> List<String>)? = when {
-            japanese != null && scripts.all { it == Script.KANA || it == Script.HAN } -> japanese::pieces
+            // The same reading gives the furigana, so a source's own reading is spelled here too.
+            japanese != null && scripts.all { it == Script.KANA || it == Script.HAN } -> { text ->
+                val readingLine = if (text == line.text) line else line.copy(text = text)
+                readingOf(readingLine, japanese, split).pieces
+            }
             Script.HAN in scripts -> null
             scripts.all { it == Script.KANA } -> Kana::pieces
             scripts.all { it == Script.HANGUL } -> Hangul::pieces
@@ -442,7 +438,9 @@ class Romanizer(
         // しがつ): those songs are spelled again.
         // 6: counters change with the number before them (20分 is にじゅっぷん, 3本 さんぼん) and the romanization spells
         // the whole number and counter (futari, not "2futari"): those songs are spelled again.
-        private const val VERSION = 6
+        // 7: Sudachi reads both romanization and furigana when it's on the phone, source ruby reaches both, and the
+        // number+counter setting changes their pieces: those songs are spelled again.
+        private const val VERSION = 7
         private const val RELEASE_AFTER_MS = 3 * 60_000L
         /** Line-by-line requests are only made for this many lines (a long song's worth). */
         private const val MAX_SINGLE = 80

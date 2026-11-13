@@ -64,7 +64,9 @@ fun rememberFurigana(state: LyricsState): List<List<RubySpan>>? {
     val japanese = remember(state.song.id, state.song.title, lines) {
         Script.KANA in Script.foreignIn(state.song.title) || lines.any { Script.KANA in Script.foreignIn(it.text) }
     }
-    if (!japanese || !lines.any { hasKanji(it.text) }) return null
+    if (!japanese) return null
+    // A line with only a number and a counter (20分, 20ふん) still has a reading worth showing.
+    if (lines.none { hasKanji(it.text) || it.text.any { c -> c.isDigit() } }) return null
     val modelStates by c.models.states.collectAsState()
     val ready = remember(modelStates, settings) { c.romanizer.furiganaReady }
     val ruby by produceState<List<List<RubySpan>>?>(null, state.song.id, lines, ready, settings) {

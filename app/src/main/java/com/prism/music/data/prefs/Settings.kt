@@ -374,6 +374,8 @@ data class BehaviorPrefs(
     val embeddedLyrics: Boolean = false,
     /** Hiragana (furigana) above the kanji in Japanese lyrics ([AppSettings.lyricsFurigana]). */
     val lyricsFurigana: Boolean = true,
+    /** A number and its counter get their own readings (20分: にじゅっ + ぷん) instead of one over both. */
+    val lyricsFuriganaParts: Boolean = false,
     /** #207, #249 (1.8.2): folders Local files leaves out ([com.prism.music.data.local.LocalMusic.folderOf]). The files stay as they are. */
     val localSkipFolders: Set<String> = emptySet(),
     /** #298 (1.8.2): playlists whose new songs download by themselves, by [com.prism.music.download.PlaylistDownloads.keepKey]. */
@@ -1764,6 +1766,7 @@ data class AppSettings(
     val lyricsGapMark: LyricsGapMark get() = lyricsLook.gapMark
     // The furigana switch lives in [behavior] (the constructor is near the JVM's limit); it reads as before.
     val lyricsFurigana: Boolean get() = behavior.lyricsFurigana
+    val lyricsFuriganaParts: Boolean get() = behavior.lyricsFuriganaParts
 
     /**
      * What Prism draws with: these settings, or with [performanceMode] the lighter look. Blurred glass, frosted pages
@@ -1901,6 +1904,7 @@ class SettingsRepository(
         val romanize = stringPreferencesKey("romanize_lyrics")
         val romanizeAll = booleanPreferencesKey("romanize_all")
         val lyricsFurigana = booleanPreferencesKey("lyrics_furigana")
+        val lyricsFuriganaParts = booleanPreferencesKey("lyrics_furigana_parts")
         val singOnCellular = booleanPreferencesKey("sing_cellular")
         val singAlwaysReady = booleanPreferencesKey("sing_always_ready")
         val singCacheMb = intPreferencesKey("sing_cache_mb")
@@ -2315,7 +2319,7 @@ class SettingsRepository(
                 "onboarded", "cookie", "visitor_data", "data_sync_id", "auth_user", "discord_presence", "account_name", "account_email",
                 "account_avatar", "haptics", "immersive_player", "preload", "preload_cellular", "canvas_enabled", "canvas_on_cellular",
                 "soft_spatial", "soft_spatial_amount", "lyrics_on_player", "lyrics_order", "lyrics_off", "prefer_synced", "skip_censored",
-                "lyrics_translate", "lyrics_translate_to", "romanize_lyrics", "romanize_all", "lyrics_furigana", "sing_cellular", "sing_always_ready",
+                "lyrics_translate", "lyrics_translate_to", "romanize_lyrics", "romanize_all", "lyrics_furigana", "lyrics_furigana_parts", "sing_cellular", "sing_always_ready",
                 "sing_cache_mb", "dj_flow", "release_notifications", "rewind_notification", "web_remote", "handoff_available",
                 "car_lyrics", "car_lyrics_style", "car_lyrics_on_phone", "car_lyrics_keep_title", "auto_grid", "nerd_stats",
                 "show_quality", "square_video_covers", "lyrics_on_mobile_data", "best_part_button", "show_video_switch",
@@ -2693,6 +2697,7 @@ class SettingsRepository(
                 lyricsSteady = p[K.lyricsSteady] ?: d.behavior.lyricsSteady,
                 embeddedLyrics = p[K.embeddedLyrics] ?: d.behavior.embeddedLyrics,
                 lyricsFurigana = p[K.lyricsFurigana] ?: d.behavior.lyricsFurigana,
+                lyricsFuriganaParts = p[K.lyricsFuriganaParts] ?: d.behavior.lyricsFuriganaParts,
                 localSkipFolders = p[K.localSkipFolders]?.split('\n')?.filter { it.isNotBlank() }?.toSet() ?: d.behavior.localSkipFolders,
                 keptPlaylists = p[K.keptPlaylists]?.split('\n')?.filter { it.isNotBlank() }?.toSet() ?: d.behavior.keptPlaylists,
                 rowSwipes = p[K.rowSwipes] ?: d.behavior.rowSwipes,
@@ -3143,6 +3148,8 @@ class SettingsRepository(
     fun setRomanize(v: RomanizeMode) = edit { it[K.romanize] = v.name }
     fun setRomanizeAll(v: Boolean) = edit { it[K.romanizeAll] = v }
     fun setLyricsFurigana(v: Boolean) = edit { it[K.lyricsFurigana] = v }
+
+    fun setLyricsFuriganaParts(v: Boolean) = edit { it[K.lyricsFuriganaParts] = v }
     fun setSingOnCellular(v: Boolean) = edit { it[K.singOnCellular] = v }
     fun setSingAlwaysReady(v: Boolean) = edit { it[K.singAlwaysReady] = v }
     fun setSingCacheMb(v: Int) = edit { it[K.singCacheMb] = v }

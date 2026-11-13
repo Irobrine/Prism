@@ -62,6 +62,7 @@ object SettingNeeds {
     val measuring = turnOn(tr(R.string.normalize_volume_or_crossfade_songs)) { it.normalize || it.mix }
     val translate = turnOn(tr(R.string.translate_lyrics)) { it.lyricsTranslate }
     val romanize = Needs(tr(R.string.pick_a_romanize_lyrics_option_first)) { it.romanize != com.prism.music.data.prefs.RomanizeMode.OFF }
+    val furigana = turnOn(tr(R.string.show_furigana)) { it.lyricsFurigana }
     val smart = turnOn(tr(R.string.smart_downloads)) { it.smartDownloads }
     val webRemote = turnOn(tr(R.string.control_from_a_browser)) { it.webRemote }
     val ownFiles = turnOn(tr(R.string.use_your_own_song_files)) { it.sound.ownLossyFiles }

@@ -24,7 +24,7 @@ class SudachiJapanese private constructor(
     private val lock = Any()
     private var closed = false
 
-    override fun pieces(text: String): List<String> {
+    override fun pieces(text: String, splitCounters: Boolean): List<String> {
         // Sudachi's tokenizer keeps one lattice while it works: one line at a time, so two songs never share it.
         val tokens = synchronized(lock) {
             runCatching { tokenizer.tokenize(Tokenizer.SplitMode.C, text) }.getOrElse {
@@ -58,7 +58,7 @@ class SudachiJapanese private constructor(
             for (k in 1 until len) out[at + k] = ""
             first = false
         }
-        JapaneseCounters.apply(out, text, runs)
+        JapaneseCounters.apply(out, text, runs, splitCounters)
         return out
     }
 
@@ -68,7 +68,7 @@ class SudachiJapanese private constructor(
      * Each run of kanji in [text] with the hiragana it's read as: 君の名は → きみ above 君, な above 名. Okurigana and
      * other kana shared by the word and its reading are left out of the reading, so only the kanji is annotated.
      */
-    override fun furigana(text: String): List<RubySpan> {
+    override fun furigana(text: String, splitCounters: Boolean): List<RubySpan> {
         if (text.isEmpty()) return emptyList()
         val out = ArrayList<RubySpan>()
         // As [pieces]: read the digits as Japanese numerals, so a counter keeps its reading (2人 is ふたり).
@@ -86,8 +86,13 @@ class SudachiJapanese private constructor(
             if (at < coveredUntil) continue
             val run = runByStart[at]
             if (run != null) {
-                val reading = toHiragana(run.reading.all)
-                if (reading.isNotEmpty()) out += RubySpan(run.start, run.end, reading)
+                if (splitCounters && run.reading.number.isNotEmpty() && run.counterStart in run.start until run.end) {
+                    if (run.reading.number.isNotEmpty()) out += RubySpan(run.start, run.counterStart, toHiragana(run.reading.number))
+                    if (run.reading.counter.isNotEmpty()) out += RubySpan(run.counterStart, run.end, toHiragana(run.reading.counter))
+                } else {
+                    val reading = toHiragana(run.reading.all)
+                    if (reading.isNotEmpty()) out += RubySpan(run.start, run.end, reading)
+                }
                 coveredUntil = run.end
                 continue
             }

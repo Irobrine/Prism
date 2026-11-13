@@ -24,7 +24,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseR
      * it when it starts a new word), nothing on the rest. A number with a counter is spelled out as it's read (20分 is
      * nijuppun); a number on its own stays the number it was written as.
      */
-    override fun pieces(text: String): List<String> {
+    override fun pieces(text: String, splitCounters: Boolean): List<String> {
         val out = MutableList(text.length) { text[it].toString() }
         // Numbers are fed to Kuromoji as Japanese numerals (2人 → 二人) so it reads the counter as Japanese. Kuromoji
         // still reads a counter on its own (20分 → 二〇分 → にれいふん), so [counterRuns] reads the number with the
@@ -63,7 +63,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseR
             }
             first = false
         }
-        JapaneseCounters.apply(out, text, runs)
+        JapaneseCounters.apply(out, text, runs, splitCounters)
         return out
     }
 
@@ -74,7 +74,7 @@ class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseR
      * other kana shared by the word and its reading are left out of the reading, so only the kanji is annotated. A
      * number with a counter is read as one phrase, so its reading goes above both (20分 → にじゅっぷん).
      */
-    fun furigana(text: String): List<RubySpan> {
+    override fun furigana(text: String, splitCounters: Boolean): List<RubySpan> {
         if (text.isEmpty()) return emptyList()
         val out = ArrayList<RubySpan>()
         // As [pieces]: Kuromoji reads 2人 as 二人, while the line keeps its Arabic number.
@@ -87,8 +87,13 @@ class Japanese private constructor(private val tokenizer: Tokenizer) : JapaneseR
             if (at < coveredUntil) continue
             val run = runByStart[at]
             if (run != null) {
-                val reading = Kana.toHiragana(run.reading.all)
-                if (reading.isNotEmpty()) out += RubySpan(run.start, run.end, reading)
+                if (splitCounters && run.reading.number.isNotEmpty() && run.counterStart in run.start until run.end) {
+                    if (run.reading.number.isNotEmpty()) out += RubySpan(run.start, run.counterStart, Kana.toHiragana(run.reading.number))
+                    if (run.reading.counter.isNotEmpty()) out += RubySpan(run.counterStart, run.end, Kana.toHiragana(run.reading.counter))
+                } else {
+                    val reading = Kana.toHiragana(run.reading.all)
+                    if (reading.isNotEmpty()) out += RubySpan(run.start, run.end, reading)
+                }
                 coveredUntil = run.end
                 continue
             }

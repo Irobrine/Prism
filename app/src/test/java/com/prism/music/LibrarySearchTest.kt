@@ -94,7 +94,7 @@ class LibrarySearchTest {
     @Test fun aRomanizedTitleIsFoundByItsSpelling() = runBlocking {
         val song = s("j", "とりのうた", "Lia")
         val korean = s("k", "사랑", "IU")
-        val spellings = TitleSpellings(dao, CoroutineScope(Dispatchers.Default), { false }) { romanizer().spellTitle(it) }
+        val spellings = TitleSpellings(dao, CoroutineScope(Dispatchers.Default), { "none" }) { romanizer().spellTitle(it) }
         spellings.want(listOf(song.title, korean.title, "Hot Fuss"))
         val until = System.currentTimeMillis() + 10_000
         while (spellings.known.value.size < 2 && System.currentTimeMillis() < until) Thread.sleep(20)

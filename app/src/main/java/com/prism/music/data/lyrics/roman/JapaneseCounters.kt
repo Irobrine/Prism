@@ -22,8 +22,9 @@ internal object JapaneseCounters {
     /** A token of a line: where its surface starts, and the surface itself (the reader's own token, in its own words). */
     data class Token(val start: Int, val surface: String)
 
-    /** A number and its counter as they sit in a line, and the reading they share. */
-    data class Run(val start: Int, val end: Int, val reading: Reading)
+    /** A number and its counter as they sit in a line, and the reading they share. [counterStart] is where the counter
+     * begins (the numeral part ends), so a reading can sit above each half. */
+    data class Run(val start: Int, val counterStart: Int, val end: Int, val reading: Reading)
 
     /**
      * Every number followed by a counter in [text], as [tokens] put them: 20分, 一ヶ月, 二十歳. A reader may keep the
@@ -46,6 +47,7 @@ internal object JapaneseCounters {
             if (prefix == 0) { i++; continue }
             var number = first.surface.substring(0, prefix)
             var counter: String? = null
+            var counterStart = at + prefix
             var end = at + prefix
             var next = i + 1
             if (prefix == first.surface.length) {
@@ -66,6 +68,7 @@ internal object JapaneseCounters {
                     if (matched != null) {
                         number += t.surface.substring(0, tPrefix)
                         counter = matched
+                        counterStart = t.start + tPrefix
                         end = t.start + t.surface.length
                         next++
                     }
@@ -77,6 +80,7 @@ internal object JapaneseCounters {
                         val matched = exact(t.surface)
                         if (matched != null) {
                             counter = matched
+                            counterStart = t.start
                             end = t.start + t.surface.length
                             next++
                         }
@@ -87,6 +91,7 @@ internal object JapaneseCounters {
                 val matched = exact(first.surface.substring(prefix))
                 if (matched != null) {
                     counter = matched
+                    counterStart = at + prefix
                     end = at + first.surface.length
                 }
             }
@@ -106,7 +111,7 @@ internal object JapaneseCounters {
             val compoundPerson = counter == "人" && (after == '称' || after == '前')
             val reading = counter?.let { c -> number(number)?.let { n -> reading(c, n, compoundPerson) } }
             if (reading != null) {
-                runs += Run(at, end, reading)
+                runs += Run(at, counterStart, end, reading)
                 i = next
             } else {
                 i++
@@ -120,7 +125,7 @@ internal object JapaneseCounters {
      * number and counter are spelled out, as the furigana above them is: 20分 is nijuppun, not "20pun", and 二人 is
      * futari, not "2futari".
      */
-    fun apply(out: MutableList<String>, text: String, runs: List<Run>) {
+    fun apply(out: MutableList<String>, text: String, runs: List<Run>, splitCounters: Boolean = false) {
         for (run in runs) {
             // What the run's first word had in front of it: the space between it and the word before. A number a reader
             // saw as digits never got one, so it's added when a word comes right before it.
@@ -130,7 +135,23 @@ internal object JapaneseCounters {
                 if (isJapanese(before) && !isNumeral(before)) leading = " "
             }
             for (i in run.start until run.end) out[i] = ""
-            out[run.start] = leading + Kana.romanize(run.reading.all).lowercase()
+            // A split reading sits on the same halves the furigana uses: the number on the digits, the counter on the
+            // counter. Fused readings (2人 ふたり, 20日 はつか) have no number half to split.
+            if (splitCounters && run.reading.number.isNotEmpty() && run.counterStart in run.start until run.end) {
+                // A number ending in っ gives its consonant to the counter: 二十本 is nijuppon, not nijuupon.
+                var counter = Kana.romanize(run.reading.counter).lowercase()
+                if (run.reading.number.endsWith('ッ') && counter.isNotEmpty()) {
+                    counter = when {
+                        counter.startsWith("ch") -> "t$counter"
+                        counter.first() in "aeiou" -> counter
+                        else -> counter.first() + counter
+                    }
+                }
+                out[run.start] = leading + Kana.romanize(run.reading.number).lowercase()
+                out[run.counterStart] = counter
+            } else {
+                out[run.start] = leading + Kana.romanize(run.reading.all).lowercase()
+            }
         }
     }
 
@@ -218,6 +239,46 @@ internal object JapaneseCounters {
                 put("${surface}間") { n -> months(n)?.let { Reading(it.number, it.counter + "カン") } }
             }
         }
+
+        // Counters written in kana after the number (20ふん, 3ほん) take the same readings as their kanji. Only a
+        // numeral right before them reaches these, so ordinary words that happen to end the same way stay words.
+        fun alias(surface: String, vararg aliases: String) {
+            val rule = get(surface) ?: return
+            for (alias in aliases) put(alias, rule)
+        }
+        alias("分", "ふん", "ぷん")
+        alias("人", "にん")
+        alias("本", "ほん", "ぼん", "ぽん")
+        alias("枚", "まい")
+        alias("個", "こ")
+        alias("歳", "さい")
+        alias("年", "ねん")
+        alias("円", "えん")
+        alias("秒", "びょう")
+        alias("時", "じ")
+        alias("月", "がつ")
+        alias("日", "にち")
+        alias("倍", "ばい")
+        alias("番", "ばん")
+        alias("割", "わり")
+        alias("名", "めい")
+        alias("台", "だい")
+        alias("度", "ど")
+        alias("冊", "さつ")
+        alias("足", "そく", "ぞく")
+        alias("頭", "とう")
+        alias("点", "てん")
+        alias("着", "ちゃく")
+        alias("通", "つう")
+        alias("件", "けん")
+        alias("曲", "きょく")
+        alias("発", "はつ", "ぱつ")
+        alias("泊", "はく", "ぱく")
+        alias("社", "しゃ")
+        alias("国", "こく")
+        alias("校", "こう")
+        alias("週", "しゅう")
+        alias("ヶ月", "かげつ")
     }
 
     /**

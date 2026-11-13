@@ -5172,6 +5172,8 @@
     <string name="tour_183_also_songs_from">Треки Медіатеки з вибраних плейлистів</string>
     <string name="tour_183_also_lock">Повтор і «Далі» на екрані блокування</string>
     <string name="tour_183_also_uploads">Завантаження й видалення в Завантаженнях</string>
+    <string name="furigana_parts">Read numbers and counters separately</string>
+    <string name="furigana_parts_info">Shows にじゅっ above 20 and ぷん above 分 instead of にじゅっぷん over both.</string>
     <string name="show_furigana">Показувати фуріґану</string>
     <string name="hiragana_readings_above_kanji">Читання хіраґаною над кандзі в японських текстах</string>
     <string name="furigana_uses_the_japanese_reading_data">Використовує японські дані читання (завантажуються один раз нижче).</string>

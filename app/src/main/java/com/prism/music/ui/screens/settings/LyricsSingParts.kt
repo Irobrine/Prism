@@ -502,6 +502,11 @@ internal fun LsSourceRows(d: AppSettings) {
         info = tr(R.string.hiragana_readings_above_kanji) + "\n" + tr(R.string.furigana_uses_the_japanese_reading_data),
         changed = s.lyricsFurigana != d.lyricsFurigana,
     ) { prefs.setLyricsFurigana(it) }
+    if (s.lyricsFurigana) SwitchRow(
+        tr(R.string.furigana_parts), s.lyricsFuriganaParts,
+        info = tr(R.string.furigana_parts_info),
+        changed = s.lyricsFuriganaParts != d.lyricsFuriganaParts,
+    ) { prefs.setLyricsFuriganaParts(it) }
 }
 
 /**

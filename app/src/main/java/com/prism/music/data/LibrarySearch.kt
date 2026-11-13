@@ -107,13 +107,13 @@ object LibrarySearch {
 /**
  * Titles in other scripts spelled in Latin letters for searching (#363), with the phone's engines ([spell]): worked out
  * in the background in small batches when a search wants them (never at start-up), and kept in the `romanized` table so
- * each title is spelled once. [japaneseReady]: whether kanji can be read now (a title spelled without the dictionary is
- * spelled again once it's there).
+ * each title is spelled once. [japaneseKey]: the dictionary that can read kanji now (a title spelled without one is
+ * spelled again once it's there, or when a different dictionary is used).
  */
 class TitleSpellings(
     private val dao: RomanizedDao,
     private val scope: CoroutineScope,
-    private val japaneseReady: () -> Boolean,
+    private val japaneseKey: () -> String,
     private val spell: suspend (String) -> String?,
 ) {
     private val _known = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -123,7 +123,7 @@ class TitleSpellings(
     private val queue = ConcurrentLinkedQueue<String>()
     @Volatile private var job: Job? = null
 
-    private fun key(text: String) = "title:$VERSION:${if (japaneseReady()) "ja" else "-"}:$text"
+    private fun key(text: String) = "title:$VERSION:${japaneseKey()}:$text"
 
     /** Spells those of [titles] in other scripts not spelled yet, in the background. */
     fun want(titles: Collection<String>) {

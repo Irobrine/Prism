@@ -5028,6 +5028,8 @@
     <string name="tour_183_also_songs_from">আপনার বাছা প্লেলিস্ট থেকে লাইব্রেরির গান</string>
     <string name="tour_183_also_lock">লক স্ক্রিনে রিপিট ও এরপর</string>
     <string name="tour_183_also_uploads">আপলোডে আপলোড ও মুছে ফেলা</string>
+    <string name="furigana_parts">Read numbers and counters separately</string>
+    <string name="furigana_parts_info">Shows にじゅっ above 20 and ぷん above 分 instead of にじゅっぷん over both.</string>
     <string name="show_furigana">ফুরিগানা দেখান</string>
     <string name="hiragana_readings_above_kanji">জাপানি গানের কথায় কাঞ্জির উপরে হিরাগানা পাঠ</string>
     <string name="furigana_uses_the_japanese_reading_data">জাপানি পড়ার ডেটা ব্যবহার করে (নিচে একবার ডাউনলোড হয়)।</string>
