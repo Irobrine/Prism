@@ -1,7 +1,10 @@
 package com.prism.music.ui.screens.settings
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -37,6 +40,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.prism.music.R
@@ -125,27 +130,39 @@ private val DOUBLE_TAP_STEPS = listOf(3, 5, 10, 15)
 @Composable
 fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boolean = true, onSearch: (() -> Unit)? = null) {
     val s = LocalAppSettings.current
-    val prefs = LocalContainer.current.settings
+    val container = LocalContainer.current
+    val prefs = container.settings
     val d = remember { AppSettings() }
     val reset = ListeningResets()
     val onOff: (Boolean) -> String = { ListeningResets.onOff(it) }
     val seconds: (Int) -> String = { ListeningResets.seconds(it) }
     val holdText: (Int) -> String = { if (it == 0) tr(R.string.off) else seconds(it) }
     val context = LocalContext.current
-    var persistentSetup by rememberSaveable { mutableStateOf(false) }
+    var persistentSetup by rememberSaveable { mutableStateOf(0) }
     var batteryFree by remember { mutableStateOf(ignoringBattery(context)) }
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var notificationsOn by remember { mutableStateOf(notificationsAllowed(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         batteryFree = ignoringBattery(context)
         overlayAllowed = Settings.canDrawOverlays(context)
+        notificationsOn = notificationsAllowed(context)
     }
+    // Where "battery" lives on phones whose maker has its own permission page (vivo's Autostart, background pop-ups).
+    val maker = remember { com.prism.music.ui.lockscreen.LockScreenMaker.of() }
     val openBattery: () -> Unit = {
-        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
-        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-        runCatching { context.startActivity(if (direct.resolveActivity(context.packageManager) != null) direct else fallback) }
+        if (maker != null) com.prism.music.ui.lockscreen.LockScreenMaker.openPage(context, maker)
+        else {
+            val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+            val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            runCatching { context.startActivity(if (direct.resolveActivity(context.packageManager) != null) direct else fallback) }
+        }
     }
     val openOverlay: () -> Unit = {
         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+        runCatching { context.startActivity(intent) }
+    }
+    val openNotifications: () -> Unit = {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         runCatching { context.startActivity(intent) }
     }
     // The four persistent buttons as they are and as Prism comes (each is a row of this page's reset).
@@ -272,9 +289,19 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
                 info = tr(R.string.persistent_controls_info), changed = persistentChanged,
             ) { on ->
                 prefs.setPersistentControls(on)
-                if (on) persistentSetup = true
+                if (on) {
+                    if (!notificationsOn) container.notificationPrompt?.invoke()
+                    persistentSetup = 1
+                }
             }
             if (s.persistent.controls) {
+                if (!notificationsOn) {
+                    LinkRow(
+                        tr(R.string.persistent_notifications),
+                        value = tr(R.string.off),
+                        info = tr(R.string.persistent_notifications_info), external = true,
+                    ) { openNotifications() }
+                }
                 LinkRow(
                     tr(R.string.persistent_battery),
                     value = if (batteryFree) tr(R.string.persistent_battery_allowed) else tr(R.string.persistent_battery_ask),
@@ -306,13 +333,31 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
             ) { prefs.setPipMode(it) }
         }
     }
-    if (persistentSetup) AlertDialog(
-        onDismissRequest = { persistentSetup = false },
-        title = { Text(tr(R.string.persistent_setup_title)) },
-        text = { Text(tr(R.string.persistent_setup_text)) },
-        confirmButton = { TextButton(onClick = { persistentSetup = false; openBattery() }) { Text(tr(R.string.persistent_setup_battery)) } },
-        dismissButton = { TextButton(onClick = { persistentSetup = false; openOverlay() }) { Text(tr(R.string.persistent_setup_overlay)) } },
-    )
+    // Two steps, one after the other: background first, then display over other apps.
+    when (persistentSetup) {
+        1 -> AlertDialog(
+            onDismissRequest = { persistentSetup = 2 },
+            title = { Text(tr(R.string.persistent_battery)) },
+            text = { Text(tr(R.string.persistent_battery_info)) },
+            confirmButton = { TextButton(onClick = { persistentSetup = 2; openBattery() }) { Text(tr(R.string.persistent_setup_battery)) } },
+            dismissButton = { TextButton(onClick = { persistentSetup = 2 }) { Text(tr(R.string.persistent_setup_later)) } },
+        )
+        2 -> AlertDialog(
+            onDismissRequest = { persistentSetup = 0 },
+            title = { Text(tr(R.string.persistent_overlay)) },
+            text = { Text(tr(R.string.persistent_overlay_info)) },
+            confirmButton = { TextButton(onClick = { persistentSetup = 0; openOverlay() }) { Text(tr(R.string.persistent_setup_overlay)) } },
+            dismissButton = { TextButton(onClick = { persistentSetup = 0 }) { Text(tr(R.string.persistent_setup_later)) } },
+        )
+    }
+}
+
+/** Whether Android lets Prism post notifications (the 13+ permission, and the app's own switch). */
+private fun notificationsAllowed(context: android.content.Context): Boolean {
+    if (Build.VERSION.SDK_INT >= 33 &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) return false
+    return NotificationManagerCompat.from(context).areNotificationsEnabled()
 }
 
 /** Whether Android lets Prism run without battery restrictions ("Unrestricted", or "Not optimized"). */
@@ -442,6 +487,7 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
         SettingEntry(page, outside, tr(R.string.gb_lyrics_in_notification), tr(R.string.gb_lyrics_in_notification_keywords)),
         SettingEntry(page, persistent, tr(R.string.persistent_controls), tr(R.string.persistent_controls_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_battery), tr(R.string.persistent_battery_info)),
+        SettingEntry(page, persistent, tr(R.string.persistent_notifications), tr(R.string.persistent_notifications_info)),
         SettingEntry(page, persistent, tr(R.string.persistent_overlay), tr(R.string.persistent_overlay_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[0]), tr(R.string.persistent_buttons_info)),
         SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[1]), tr(R.string.persistent_buttons_info)),
