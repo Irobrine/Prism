@@ -39,9 +39,36 @@ class RubySourceTest {
         val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
         assertEquals("君の名前", clean.text)
         assertEquals(listOf("君", "の名前"), clean.words.map { it.text })
-        // A reading's share of the word's time goes with it; the next word keeps its own start, so the line still ends on time.
-        assertEquals(listOf(100L to 180L, 500L to 725L), clean.words.map { it.startMs to it.endMs })
+        // A word keeps its own start and end: the reading takes no sung time, so the word is sung over its whole span
+        // and the line still ends on time.
+        assertEquals(listOf(100L to 500L, 500L to 1_100L), clean.words.map { it.startMs to it.endMs })
         assertEquals(listOf(RubySpan(0, 1, "きみ"), RubySpan(2, 4, "なまえ")), clean.sourceRuby)
+    }
+
+    @Test
+    fun aReadingInsideAWordLeavesOneWordOverItsWholeTime() {
+        val line = LyricLine(100, "君(きみ)の", 700, words = listOf(LyricWord(100, 700, "君(きみ)の")))
+        val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
+        assertEquals("君の", clean.text)
+        assertEquals(listOf("君の"), clean.words.map { it.text })
+        assertEquals(listOf(100L to 700L), clean.words.map { it.startMs to it.endMs })
+    }
+
+    @Test
+    fun aWordThatWasOnlyAReadingKeepsTheWordsAfterItOnTime() {
+        val line = LyricLine(
+            100, "君(きみ)の", 700,
+            words = listOf(LyricWord(100, 300, "君"), LyricWord(300, 500, "(きみ)"), LyricWord(500, 700, "の")),
+        )
+        val clean = SourceFurigana.of(line.text)!!.cleanLine(line)
+        assertEquals(listOf("君", "", "の"), clean.words.map { it.text })
+        assertEquals(listOf(100L to 300L, 300L to 500L, 500L to 700L), clean.words.map { it.startMs to it.endMs })
+    }
+
+    @Test
+    fun leavesWordTimingsAloneWhenTheWordsDontCoverTheLine() {
+        val line = LyricLine(100, "君(きみ)の", 700, words = listOf(LyricWord(100, 500, "君(きみ)")))
+        assertEquals(line, SourceFurigana.of(line.text)!!.cleanLine(line))
     }
 
     @Test

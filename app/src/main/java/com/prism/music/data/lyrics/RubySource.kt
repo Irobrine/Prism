@@ -1,7 +1,5 @@
 package com.prism.music.data.lyrics
 
-import kotlin.math.roundToLong
-
 /**
  * A line whose source writes furigana in parentheses right after the kanji it belongs to, as KuGou does:
  * 君(きみ)の名前(なまえ) — with either kind of parentheses, and spaces before them allowed. [clean] is the line with
@@ -29,34 +27,32 @@ internal class SourceFurigana private constructor(
     fun merge(dictionary: List<RubySpan>): List<RubySpan> = mergeFurigana(spans, dictionary.map(::map))
 
     /**
-     * [line] with its annotation text taken out and its word texts shortened the same way, so its timings (and every
-     * animation drawn from them) still line up. [cleanSpans] ride along as its source furigana.
+     * [line] with its annotation text taken out and its word texts shortened the same way, each word keeping its own
+     * start and end, so its timings (and every animation drawn from them) still line up. [cleanSpans] ride along as its
+     * source furigana.
      */
-    fun cleanLine(line: LyricLine): LyricLine =
-        line.copy(text = clean, words = line.words.clean(removed), sourceRuby = cleanSpans)
+    fun cleanLine(line: LyricLine): LyricLine {
+        // The indexes below line the words up with the line's own characters; leave it as it is when they don't.
+        if (line.words.isNotEmpty() && line.words.joinToString("") { it.text }.trimEnd() != line.text) return line
+        return line.copy(text = clean, words = line.words.clean(removed), sourceRuby = cleanSpans)
+    }
 
+    /**
+     * Each word with the annotations' characters taken out of its text and its own start and end kept: a reading takes
+     * no sung time, so what's left is sung over the word's whole span. A word that was only a reading stays as an
+     * empty word, so the words after it keep their source starts and the line still ends when it did.
+     */
     private fun List<LyricWord>.clean(removed: BooleanArray): List<LyricWord> {
         var at = 0
         val out = ArrayList<LyricWord>(size)
         for (word in this) {
             val length = word.text.length
-            if (length == 0) { out += word; continue }
-            val start = word.startMs
-            val duration = (word.endMs - word.startMs).coerceAtLeast(0)
-            var i = 0
-            while (i < length) {
-                if (at + i < removed.size && removed[at + i]) { i++; continue }
-                val from = i
-                while (i < length && (at + i >= removed.size || !removed[at + i])) i++
-                // A reading's characters take no sung time: each kept run keeps the part of the word's timing its
-                // characters had, and the next word keeps its own source start. The line still ends when it did.
-                out += word.copy(
-                    startMs = (start + duration.toDouble() * from / length).roundToLong(),
-                    endMs = (start + duration.toDouble() * i / length).roundToLong(),
-                    text = word.text.substring(from, i),
-                )
+            val text = StringBuilder(length)
+            for (i in 0 until length) {
+                if (at + i >= removed.size || !removed[at + i]) text.append(word.text[i])
             }
             at += length
+            out += if (text.length == length) word else word.copy(text = text.toString())
         }
         return out
     }
