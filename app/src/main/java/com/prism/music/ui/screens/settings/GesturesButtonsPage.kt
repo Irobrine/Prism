@@ -1,5 +1,9 @@
 package com.prism.music.ui.screens.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,8 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,15 +32,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.prism.music.R
 import com.prism.music.data.prefs.AppSettings
+import com.prism.music.data.prefs.PersistentAction
 import com.prism.music.data.prefs.PipMode
 import com.prism.music.data.prefs.PlayerGesture
 import com.prism.music.data.prefs.SessionButton
+import com.prism.music.data.prefs.persistentButtonsOf
 import com.prism.music.tr
 import com.prism.music.ui.components.ReorderList
 import com.prism.music.ui.screens.InfoMark
@@ -49,6 +60,11 @@ import com.prism.music.ui.theme.PrismIcons
 import kotlin.math.roundToInt
 
 private val page = SettingsPageId.GESTURES_BUTTONS
+
+/** The four persistent card buttons' row titles (no placeholders: Settings search reads them as written). */
+private val PERSISTENT_BUTTON_TITLES = listOf(
+    R.string.persistent_button_1, R.string.persistent_button_2, R.string.persistent_button_3, R.string.persistent_button_4,
+)
 
 /**
  * Where the cover's swipes, double tap and long press work: one row over the two switches of before 1.8.4,
@@ -114,6 +130,26 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     val onOff: (Boolean) -> String = { ListeningResets.onOff(it) }
     val seconds: (Int) -> String = { ListeningResets.seconds(it) }
     val holdText: (Int) -> String = { if (it == 0) tr(R.string.off) else seconds(it) }
+    val context = LocalContext.current
+    var persistentSetup by rememberSaveable { mutableStateOf(false) }
+    var batteryFree by remember { mutableStateOf(ignoringBattery(context)) }
+    var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        batteryFree = ignoringBattery(context)
+        overlayAllowed = Settings.canDrawOverlays(context)
+    }
+    val openBattery: () -> Unit = {
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        runCatching { context.startActivity(if (direct.resolveActivity(context.packageManager) != null) direct else fallback) }
+    }
+    val openOverlay: () -> Unit = {
+        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+        runCatching { context.startActivity(intent) }
+    }
+    // The four persistent buttons as they are and as Prism comes (each is a row of this page's reset).
+    val nowButtons = remember(s.persistent.buttons) { persistentButtonsOf(s.persistent.buttons) }
+    val defaultButtons = remember { persistentButtonsOf(d.persistent.buttons) }
 
     val coverTitle = tr(R.string.gb_on_the_cover)
     val miniTitle = tr(R.string.gb_on_the_mini_player)
@@ -154,6 +190,12 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
     val tabsChanged = reset.add(tr(R.string.swipe_between_tabs), s.swipeTabs, d.swipeTabs, onOff) { prefs.setSwipeTabs(it) }
     val rowsChanged = reset.add(tr(R.string.gb_row_swipes), s.behavior.rowSwipes, d.behavior.rowSwipes, onOff) { prefs.setRowSwipes(it) }
     val buttonsChanged = reset.add(tr(R.string.buttons), s.sessionButtons, d.sessionButtons, ::buttonsText) { prefs.setSessionButtons(it) }
+    val persistentChanged = reset.add(tr(R.string.persistent_controls), s.persistent.controls, d.persistent.controls, onOff) { prefs.setPersistentControls(it) }
+    val persistentButtonChanged = (0 until PersistentAction.SLOTS).map { i ->
+        reset.add(tr(PERSISTENT_BUTTON_TITLES[i]), nowButtons[i], defaultButtons[i], { it.label }) { picked ->
+            prefs.setPersistentButtons(prefs.current.persistent.buttons.toMutableList().also { it[i] = picked })
+        }
+    }
     val notificationLyricsChanged = reset.add(tr(R.string.gb_lyrics_in_notification), s.carLyricsOnPhone, d.carLyricsOnPhone, onOff) { prefs.setCarLyricsOnPhone(it) }
     val portraitChanged = reset.add(tr(R.string.lock_to_portrait), s.behavior.lockPortrait, d.behavior.lockPortrait, onOff) { prefs.setLockPortrait(it) }
     val pipChanged = reset.add(tr(R.string.picture_in_picture), s.behavior.pip, d.behavior.pip, { it.label }) { prefs.setPipMode(it) }
@@ -203,6 +245,38 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
                 info = tr(R.string.gb_lyrics_in_notification_info), changed = notificationLyricsChanged,
             ) { prefs.setCarLyricsOnPhone(it) }
         }
+        group(tr(R.string.persistent_controls_title), info = tr(R.string.persistent_autostart_info)) {
+            SwitchRow(
+                tr(R.string.persistent_controls), s.persistent.controls,
+                info = tr(R.string.persistent_controls_info), changed = persistentChanged,
+            ) { on ->
+                prefs.setPersistentControls(on)
+                if (on) persistentSetup = true
+            }
+            if (s.persistent.controls) {
+                LinkRow(
+                    tr(R.string.persistent_battery),
+                    value = if (batteryFree) tr(R.string.persistent_battery_allowed) else tr(R.string.persistent_battery_ask),
+                    info = tr(R.string.persistent_battery_info), external = true,
+                ) { openBattery() }
+                LinkRow(
+                    tr(R.string.persistent_overlay),
+                    value = if (overlayAllowed) tr(R.string.persistent_overlay_allowed) else tr(R.string.persistent_overlay_ask),
+                    info = tr(R.string.persistent_overlay_info), external = true,
+                ) { openOverlay() }
+                for (i in 0 until PersistentAction.SLOTS) {
+                    val here = nowButtons[i]
+                    PickListRow(
+                        tr(PERSISTENT_BUTTON_TITLES[i]),
+                        PersistentAction.entries, here, { it.label },
+                        info = if (i == 0) tr(R.string.persistent_buttons_info) else null,
+                        changed = persistentButtonChanged[i],
+                    ) { picked ->
+                        prefs.setPersistentButtons(prefs.current.persistent.buttons.toMutableList().also { it[i] = picked })
+                    }
+                }
+            }
+        }
         group(tr(R.string.screen)) {
             SwitchRow(tr(R.string.lock_to_portrait), s.behavior.lockPortrait, info = tr(R.string.on_a_phone_prism_no_longer), changed = portraitChanged) { prefs.setLockPortrait(it) }
             ChoiceRow(
@@ -211,7 +285,18 @@ fun GesturesButtonsPage(bottomPadding: Dp, find: String? = null, showBack: Boole
             ) { prefs.setPipMode(it) }
         }
     }
+    if (persistentSetup) AlertDialog(
+        onDismissRequest = { persistentSetup = false },
+        title = { Text(tr(R.string.persistent_setup_title)) },
+        text = { Text(tr(R.string.persistent_setup_text)) },
+        confirmButton = { TextButton(onClick = { persistentSetup = false; openBattery() }) { Text(tr(R.string.persistent_setup_battery)) } },
+        dismissButton = { TextButton(onClick = { persistentSetup = false; openOverlay() }) { Text(tr(R.string.persistent_setup_overlay)) } },
+    )
 }
+
+/** Whether Android lets Prism run without battery restrictions ("Unrestricted", or "Not optimized"). */
+private fun ignoringBattery(context: android.content.Context): Boolean =
+    (context.getSystemService(android.content.Context.POWER_SERVICE) as? PowerManager)?.isIgnoringBatteryOptimizations(context.packageName) == true
 
 /** The buttons in their order, in words ("Like · Shuffle · Repeat"). */
 private fun buttonsText(buttons: List<SessionButton>): String = buttons.joinToString(" · ") { it.label }
@@ -302,6 +387,7 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
     val mini = tr(R.string.gb_on_the_mini_player)
     val touch = tr(R.string.gb_swipes_and_touch)
     val outside = tr(R.string.notification_and_car)
+    val persistent = tr(R.string.persistent_controls_title)
     val screen = tr(R.string.screen)
     val gestureWords = tr(R.string.swipe_double_tap_long_press_cover)
     listOf(
@@ -330,6 +416,14 @@ val gesturesButtonsIndex: List<SettingEntry> by lazy {
         SettingEntry(page, touch, tr(R.string.gb_row_swipes), tr(R.string.gb_row_swipes_keywords)),
         SettingEntry(page, outside, tr(R.string.buttons), tr(R.string.notification_lock_screen_android_auto_car)),
         SettingEntry(page, outside, tr(R.string.gb_lyrics_in_notification), tr(R.string.gb_lyrics_in_notification_keywords)),
+        SettingEntry(page, persistent, tr(R.string.persistent_controls), tr(R.string.persistent_controls_info)),
+        SettingEntry(page, persistent, tr(R.string.persistent_battery), tr(R.string.persistent_battery_info)),
+        SettingEntry(page, persistent, tr(R.string.persistent_overlay), tr(R.string.persistent_overlay_info)),
+        SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[0]), tr(R.string.persistent_buttons_info)),
+        SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[1]), tr(R.string.persistent_buttons_info)),
+        SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[2]), tr(R.string.persistent_buttons_info)),
+        SettingEntry(page, persistent, tr(PERSISTENT_BUTTON_TITLES[3]), tr(R.string.persistent_buttons_info)),
+        SettingEntry(page, persistent, tr(R.string.persistent_autostart_info), tr(R.string.persistent_autostart_keywords)),
         SettingEntry(page, screen, tr(R.string.lock_to_portrait), tr(R.string.rotation_orientation_landscape_upright)),
         SettingEntry(page, screen, tr(R.string.picture_in_picture), tr(R.string.pip_video_float_window_leave)),
     )

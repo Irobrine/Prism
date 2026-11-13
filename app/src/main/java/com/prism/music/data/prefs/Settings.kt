@@ -279,6 +279,12 @@ enum class TabTint(val label: String) { INK(tr(R.string.ink)), ACCENT(tr(R.strin
 /**
  * How Prism behaves, added in 1.7.8 (not part of a Look). Nested (see [ShapeLook]). Every default keeps 1.7.7's way.
  */
+/** Persistent media controls (1.8.5): whether the card stays, and the four buttons it shows. */
+data class PersistentPrefs(
+    val controls: Boolean = false,
+    val buttons: List<PersistentAction> = PersistentAction.DEFAULT,
+)
+
 data class BehaviorPrefs(
     /** Phones stay upright (#190); tablets keep their own layouts. */
     val lockPortrait: Boolean = false,
@@ -840,6 +846,13 @@ fun parseTabNames(v: String): Map<NavTab, String> = v.split('|').mapNotNull { pa
     val tab = NavTab.entries.firstOrNull { it.name == part.substringBefore('=') } ?: return@mapNotNull null
     cleanTabName(part.substringAfter('=', "")).takeIf { it.isNotEmpty() }?.let { tab to it }
 }.toMap()
+
+/** Exactly [PersistentAction.SLOTS] buttons: what was kept, then how Prism comes for any slot left empty. Slots may repeat. */
+fun persistentButtonsOf(stored: List<PersistentAction>): List<PersistentAction> {
+    val kept = stored.take(PersistentAction.SLOTS)
+    return kept + (kept.size until PersistentAction.SLOTS).map { PersistentAction.DEFAULT[it] }
+}
+
 /** The tab bar's height (1.7.6): its floating, docked and minimal heights. */
 enum class NavBarSize(val label: String, val floating: Int, val docked: Int, val minimal: Int) {
     COMPACT(tr(R.string.compact), 56, 54, 48), STANDARD(tr(R.string.standard), 64, 60, 54), TALL(tr(R.string.tall), 72, 68, 60),
@@ -955,6 +968,40 @@ enum class SessionButton(val label: String) {
     companion object {
         /** As 1.7 had them (like and shuffle beside play on the phone). */
         val DEFAULT = listOf(LIKE, SHUFFLE, REPEAT, CAR_LYRICS, RADIO, DISLIKE)
+    }
+}
+
+/**
+ * What a button of the persistent media controls does when nothing is playing (Settings → Gestures & buttons →
+ * Persistent controls). Each one is a session command, handled by [com.prism.music.playback.PlaybackService].
+ */
+enum class PersistentAction(val label: String, val key: String) {
+    QUICK_PICKS(tr(R.string.persistent_quick_picks), "quick_picks"),
+    LIBRARY_SONGS(tr(R.string.persistent_library_songs), "library_songs"),
+    LAST_PLAYED(tr(R.string.persistent_last_played), "last_played"),
+    DAILY_1(tr(R.string.persistent_daily_mix, 1), "daily_1"),
+    DAILY_2(tr(R.string.persistent_daily_mix, 2), "daily_2"),
+    DAILY_3(tr(R.string.persistent_daily_mix, 3), "daily_3"),
+    DAILY_4(tr(R.string.persistent_daily_mix, 4), "daily_4"),
+    OPEN_HOME(tr(R.string.persistent_open_home), "open_home"),
+    OPEN_SEARCH(tr(R.string.persistent_open_search), "open_search"),
+    OPEN_LIBRARY(tr(R.string.persistent_open_library), "open_library"),
+    OPEN_REPLAY(tr(R.string.persistent_open_replay), "open_replay"),
+    OPEN_SETTINGS(tr(R.string.persistent_open_settings), "open_settings"),
+    OPEN_LOCAL(tr(R.string.persistent_open_local), "open_local"),
+    OPEN_DOWNLOADS(tr(R.string.persistent_open_downloads), "open_downloads"),
+    OPEN_LIKED(tr(R.string.persistent_open_liked), "open_liked"),
+    OPEN_PODCASTS(tr(R.string.persistent_open_podcasts), "open_podcasts"),
+    RECOGNIZE(tr(R.string.persistent_recognize), "recognize");
+
+    companion object {
+        /** The four buttons Prism comes with: Quick picks, Library songs, the last song and recognition. */
+        val DEFAULT = listOf(QUICK_PICKS, LIBRARY_SONGS, LAST_PLAYED, RECOGNIZE)
+
+        /** The most buttons the phone's media controls can show beside play/pause (the system shows up to five in all). */
+        const val SLOTS = 4
+
+        fun ofKey(key: String): PersistentAction? = entries.firstOrNull { it.key == key }
     }
 }
 
@@ -1660,6 +1707,11 @@ data class AppSettings(
     val playerButtons: List<PlayerButton> = PlayerButton.DEFAULT,
     /** The buttons beside play in the notification, on the lock screen and in Android Auto, in order. */
     val sessionButtons: List<SessionButton> = SessionButton.DEFAULT,
+    /**
+     * Persistent media controls: a card for when nothing plays (even after Prism is closed), with four buttons of its
+     * own. A nested group, as AppSettings' constructor is near the JVM's argument limit.
+     */
+    val persistent: PersistentPrefs = PersistentPrefs(),
     val scrubberColor: ScrubberColor = ScrubberColor.SPECTRUM,
     val playerTitleAlign: PlayerTitleAlign = PlayerTitleAlign.START,
     val playerTitleSize: PlayerTitleSize = PlayerTitleSize.MEDIUM,
@@ -2028,6 +2080,8 @@ class SettingsRepository(
         val playerDeck = stringPreferencesKey("player_deck")
         val playerButtons = stringPreferencesKey("player_buttons")
         val sessionButtons = stringPreferencesKey("session_buttons")
+        val persistentControls = booleanPreferencesKey("persistent_controls")
+        val persistentButtons = stringPreferencesKey("persistent_buttons")
         val scrubberColor = stringPreferencesKey("scrubber_color")
         val playerTitleAlign = stringPreferencesKey("player_title_align")
         val playerTitleSize = stringPreferencesKey("player_title_size")
@@ -2319,6 +2373,8 @@ class SettingsRepository(
                 "library_start_tab", "library_tiles", "library_playlists_first",
                 // 1.7.4: what buttons and gestures do is how you use Prism, not how it looks.
                 "session_buttons", "cover_swipe_left", "cover_swipe_right", "cover_swipe_up", "cover_double_tap", "cover_long_press",
+                // 1.8.5: the persistent media controls and their buttons.
+                "persistent_controls", "persistent_buttons",
                 "mini_swipe_left", "mini_swipe_right", "mini_swipe_down", "mini_swipe_up",
                 // 1.7.8 ([BehaviorPrefs]).
                 "lock_screen_player", "lock_screen_layout", "lock_screen_volume", "lock_screen_like", "lock_screen_output", "lock_screen_paused", "lock_screen_hide_song",
@@ -2731,6 +2787,10 @@ class SettingsRepository(
             playerDeck = p.enumList(K.playerDeck, d.playerDeck).let { it + (DeckPart.entries - it.toSet()) },
             playerButtons = p.enumList(K.playerButtons, d.playerButtons),
             sessionButtons = p.enumList(K.sessionButtons, d.sessionButtons),
+            persistent = PersistentPrefs(
+                controls = p[K.persistentControls] ?: d.persistent.controls,
+                buttons = persistentButtonsOf(p.enumList(K.persistentButtons, d.persistent.buttons)),
+            ),
             scrubberColor = p.enum(K.scrubberColor, d.scrubberColor),
             playerTitleAlign = p.enum(K.playerTitleAlign, d.playerTitleAlign),
             playerTitleSize = p.enum(K.playerTitleSize, d.playerTitleSize),
@@ -3274,6 +3334,8 @@ class SettingsRepository(
     fun setPlayerDeck(v: List<DeckPart>) = edit { it[K.playerDeck] = v.joinToString(",") { p -> p.name } }
     fun setPlayerButtons(v: List<PlayerButton>) = edit { it[K.playerButtons] = v.joinToString(",") { b -> b.name } }
     fun setSessionButtons(v: List<SessionButton>) = edit { it[K.sessionButtons] = v.joinToString(",") { b -> b.name } }
+    fun setPersistentControls(v: Boolean) = edit { it[K.persistentControls] = v }
+    fun setPersistentButtons(v: List<PersistentAction>) = edit { it[K.persistentButtons] = persistentButtonsOf(v).joinToString(",") { a -> a.name } }
     fun setScrubberColor(v: ScrubberColor) = edit { it[K.scrubberColor] = v.name }
     fun setPlayerTitleAlign(v: PlayerTitleAlign) = edit { it[K.playerTitleAlign] = v.name }
     fun setPlayerTitleSize(v: PlayerTitleSize) = edit { it[K.playerTitleSize] = v.name }

@@ -200,6 +200,15 @@ class PrismApp : Application(), coil3.SingletonImageLoader.Factory {
         }
         // A restored backup's settings (since 1.7.8 kept as values beside the store) go in at once, before Home shows.
         container.scope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { container.backup.applyRestoredSettings() } }
+        // Persistent media controls (1.8.5): when they're on, the playback service runs even with nothing playing, so
+        // the card is there from the start (and after Prism is closed).
+        container.scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            container.settings.flow.map { it.persistent.controls }.distinctUntilChanged().collect { on ->
+                if (on) runCatching {
+                    startService(android.content.Intent(this@PrismApp, com.prism.music.playback.PlaybackServices.target(this@PrismApp)))
+                }
+            }
+        }
         // Downloads a restore left waiting carry on once the first screen is up (the download manager's calls go on the
         // main thread).
         container.scope.launch(kotlinx.coroutines.Dispatchers.Main) {
