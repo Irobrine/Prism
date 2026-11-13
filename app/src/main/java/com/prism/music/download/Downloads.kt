@@ -75,6 +75,26 @@ private data class VideoPart(val song: Song, val videoId: String)
 /** Request ids of a video download's parts (kept apart from song downloads, so they don't list as songs). */
 private const val VIDEO_PICTURE = "vpic:"
 private const val VIDEO_AUDIO = "vaud:"
+
+/**
+ * Where a download waits in the queue, lower first: the song playing now, then the songs after it in the order they'll
+ * play, then everything else. A download already coming down is never moved, so it finishes first.
+ */
+object DownloadPriority {
+    /** The song (or video) streaming now: the next one to start. */
+    const val PLAYING = 0
+    /** The songs after it; [ahead] gives each its turn. */
+    const val AHEAD = 1
+    /** Anything else (a playlist's Download all, Smart Downloads, a like). */
+    const val REST = Int.MAX_VALUE
+
+    /** The rank of the [index]th song after the one playing (0 is the next song). */
+    fun ahead(index: Int): Int = AHEAD + index.coerceAtLeast(0)
+}
+
+/** [items] in the order a download queue should run them: by [priorityOf], keeping their own order where it's equal. */
+internal fun <T> inDownloadPriorityOrder(items: List<T>, id: (T) -> String, priorityOf: (String) -> Int): List<T> =
+    items.sortedWith(compareBy { priorityOf(id(it)) })
 /** How often a download YouTube refused (403) tries again by itself ([DownloadRepository.retryFailed]). */
 private const val AUTO_RETRY_GAP_MS = 6 * 60 * 60_000L
 private fun isVideoPart(id: String) = id.startsWith(VIDEO_PICTURE) || id.startsWith(VIDEO_AUDIO)
@@ -255,11 +275,13 @@ class DownloadRepository(private val context: Context, private val c: AppContain
                     _videoParts.update { it + (download.request.id to download) }
                     publishVideos()
                     applyRequirements()
+                    if (download.state == Download.STATE_QUEUED && download.request.id in awaitingPlacement) scheduleReorder()
                     return
                 }
                 _media.update { it + (download.request.id to download.info()) }
                 publish()
                 applyRequirements()
+                if (download.state == Download.STATE_QUEUED && download.request.id in awaitingPlacement) scheduleReorder()
                 when (download.state) {
                     Download.STATE_FAILED -> {
                         noteFailure(download.request.id, DownloadFailures.describe(finalException))
@@ -283,12 +305,29 @@ class DownloadRepository(private val context: Context, private val c: AppContain
             }
 
             override fun onDownloadRemoved(manager: DownloadManager, download: Download) {
+                // A waiting download taken out to be put in priority order comes straight back: it keeps its format,
+                // its cover and its place in the list (only its turn changes).
+                if (reorderRemoved(download.request.id)) {
+                    if (isVideoPart(download.request.id)) {
+                        _videoParts.update { it - download.request.id }
+                        publishVideos()
+                    } else {
+                        _media.update { it - download.request.id }
+                        publish()
+                        applyRequirements()
+                    }
+                    return
+                }
                 if (isVideoPart(download.request.id)) {
                     _videoParts.update { it - download.request.id }
+                    priorities.remove(download.request.id)
+                    awaitingPlacement.remove(download.request.id)
                     publishVideos()
                     return
                 }
                 _media.update { it - download.request.id }
+                priorities.remove(download.request.id)
+                awaitingPlacement.remove(download.request.id)
                 publish()
                 applyRequirements()
                 noteFailure(download.request.id, null)
@@ -355,9 +394,96 @@ class DownloadRepository(private val context: Context, private val c: AppContain
      * else straight into the download manager, since Android doesn't let an app start a service from the background
      * (Smart Downloads' worker ran into that).
      */
-    private fun add(request: DownloadRequest) {
+    private fun add(request: DownloadRequest, priority: Int = DownloadPriority.REST) {
+        if (priority != DownloadPriority.REST) {
+            priorities[request.id] = priority
+            awaitingPlacement += request.id
+        }
         if (c.visible.value) DownloadService.sendAddDownload(context, PrismDownloadService::class.java, request, false)
         else mainHandler.post { manager.addDownload(request) }
+        if (priority != DownloadPriority.REST) scheduleReorder()
+    }
+
+    /**
+     * Ranks of the downloads added for what's playing and the songs after it, by request id. Everything else ranks
+     * [DownloadPriority.REST], so a batch added for a playlist keeps its own order after them.
+     */
+    private val priorities = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /**
+     * Downloads ranked ahead that the manager hasn't shown as queued yet: as soon as it does (the add is a message
+     * away), the waiting queue is put in order, so a slow add isn't left at the end.
+     */
+    private val awaitingPlacement = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** One reorder is enough for a burst (the playing song, then the songs after it, each added a moment apart). */
+    private var reorderScheduled = false
+
+    /** The waiting downloads being taken out before they're added back in order, and the requests to add back. */
+    private var reorderRemoveIds: MutableSet<String>? = null
+    private var reorderAdds: List<DownloadRequest>? = null
+    /** A newer priority arrived while the waiting ones were being taken out: order them once more after this. */
+    private var reorderAgain = false
+
+    /** Lets the requests just added reach the download manager, then puts the waiting ones in priority order. */
+    private fun scheduleReorder() {
+        if (reorderRemoveIds != null) { reorderAgain = true; return }
+        if (reorderScheduled) return
+        reorderScheduled = true
+        mainHandler.postDelayed({
+            reorderScheduled = false
+            reorderWaiting()
+        }, REORDER_AFTER_ADD_MS)
+    }
+
+    /**
+     * A download started for what's playing now, or one of the songs after it, goes ahead of the rest still waiting:
+     * it's put after the ones already coming down (which finish first, as the listener asked) and before a playlist's
+     * remaining songs. Waiting downloads are taken out and added back in that order; one already downloading isn't
+     * touched, so it keeps its bytes and finishes where it was.
+     */
+    private fun reorderWaiting() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) { mainHandler.post { reorderWaiting() }; return }
+        if (reorderRemoveIds != null) { reorderAgain = true; return }
+        val all = runCatching { manager.currentDownloads }.getOrDefault(emptyList())
+        // These have reached the manager; one still to come triggers another look from onDownloadChanged.
+        awaitingPlacement.removeAll(all.map { it.request.id }.toSet())
+        // Only ones that haven't started: taking a download out throws away what it has got, and a part-downloaded
+        // one (a queue saved from the last run) is left to finish like the ones downloading now.
+        val waiting = all.filter { it.state == Download.STATE_QUEUED && it.bytesDownloaded == 0L }
+        if (waiting.size < 2) return
+        val desired = inDownloadPriorityOrder(waiting, { it.request.id }) { priorities[it] ?: DownloadPriority.REST }
+        if (desired.map { it.request.id } == waiting.map { it.request.id }) return
+        // Out first. Each removal is a task of its own: adding one back early would only merge with it and keep its
+        // old place, so they're added once they've all been taken out (onDownloadRemoved), in the wanted order.
+        reorderRemoveIds = waiting.map { it.request.id }.toMutableSet()
+        reorderAdds = desired.map { it.request }
+        waiting.forEach { manager.removeDownload(it.request.id) }
+        // A removal that doesn't answer (a manager quirk) mustn't leave the queue half gone.
+        mainHandler.postDelayed({ if (reorderRemoveIds != null) finishReorder(addMissing = true) }, REORDER_REMOVAL_TIMEOUT_MS)
+    }
+
+    /** One of the waiting downloads was taken out for a reorder; once all are, they go back in their new order. */
+    private fun reorderRemoved(id: String): Boolean {
+        val pending = reorderRemoveIds ?: return false
+        if (!pending.remove(id)) return false
+        if (pending.isEmpty()) finishReorder()
+        return true
+    }
+
+    /** Adds the waiting downloads back in their new order (all new to the manager, so their order is kept). */
+    private fun finishReorder(addMissing: Boolean = false) {
+        val ids = reorderRemoveIds ?: return
+        val adds = reorderAdds
+        reorderRemoveIds = null
+        reorderAdds = null
+        // On the timeout path a removal may still be on its way: add them all the same rather than leave them out.
+        if (adds != null) adds.forEach { manager.addDownload(it) }
+        if (addMissing) ids.clear()
+        if (reorderAgain) {
+            reorderAgain = false
+            scheduleReorder()
+        }
     }
 
 
@@ -533,14 +659,23 @@ class DownloadRepository(private val context: Context, private val c: AppContain
     /** True when this song is only here as a lossless file on the phone (not downloaded by Prism). */
     fun isLosslessOnly(id: String) = id in _lossless.value && id !in _media.value
 
-    fun download(song: Song, asIs: Boolean = false) {
+    fun download(song: Song, asIs: Boolean = false, priority: Int = DownloadPriority.REST) {
         // A file on the phone is already offline. (Episodes from a feed don't download yet.)
         if (song.isLocal || song.isRss) return
         c.keptPlaylists.forgive(setOf(song.id, keptAs(song.id)) + _standIns.value.filterValues { it == song.id }.keys)
         // A lossless file that was taken out of Downloads just comes back.
         if (c.losslessSync.unhide(song.id)) return
         // (A music video already downloaded as its song counts as downloaded.)
-        if (_downloads.value[keptAs(song.id)]?.state.let { it == Download.STATE_COMPLETED || it == Download.STATE_DOWNLOADING || it == Download.STATE_QUEUED }) return
+        val kept = keptAs(song.id)
+        val here = _downloads.value[kept]?.state
+        if (here == Download.STATE_COMPLETED || here == Download.STATE_DOWNLOADING || here == Download.STATE_QUEUED) {
+            // Already waiting: it may now be the song playing (or one ahead), so its place in the queue moves up.
+            if (here == Download.STATE_QUEUED && priority != DownloadPriority.REST) {
+                priorities[kept] = priority
+                scheduleReorder()
+            }
+            return
+        }
         // A music video comes down as its song (#186) when it would play as its song: the audio, without the video's
         // intro and outro. When there's no song for it, the video's own sound, as before.
         if (!asIs && downloadsAsSong(song, c.settings.current)) {
@@ -550,7 +685,7 @@ class DownloadRepository(private val context: Context, private val c: AppContain
                     com.prism.music.playback.AudioDiagnostics.log("download", "${song.id} is a music video: downloading its song ${audio.id} instead")
                     standIn(song.id, audio.id)
                 }
-                download(audio ?: song, asIs = true)
+                download(audio ?: song, asIs = true, priority = priority)
             }
             return
         }
@@ -565,7 +700,7 @@ class DownloadRepository(private val context: Context, private val c: AppContain
             // ...and its loudness, so normalization works offline.
             if (!c.loudness.contains(song.id)) runCatching { c.ytm.playerExtras(song.id, c.streams.signatureTimestamp()).loudnessDb?.let { c.loudness.edit().putFloat(song.id, it.toFloat()).apply() } }
         }
-        add(request)
+        add(request, priority)
         // Downloads show their progress in a notification: the first one the listener starts asks, if nothing has.
         if (appOnScreen()) c.askNotifications()
     }
@@ -605,10 +740,23 @@ class DownloadRepository(private val context: Context, private val c: AppContain
      * and, when the video isn't the song, the video's own audio, which its picture is timed to. The player's
      * video mode reads them from the download cache under the same keys it streams with.
      */
-    fun downloadVideo(song: Song) {
+    fun downloadVideo(song: Song, priority: Int = DownloadPriority.REST) {
         if (song.isLive) return
-        download(song)
-        if (_videos.value[song.id]?.state.let { it == Download.STATE_COMPLETED || it == Download.STATE_DOWNLOADING || it == Download.STATE_QUEUED }) return
+        download(song, priority = priority)
+        val videoState = _videos.value[song.id]?.state
+        if (videoState == Download.STATE_COMPLETED || videoState == Download.STATE_DOWNLOADING || videoState == Download.STATE_QUEUED) {
+            // Already waiting: saw a video that only now started streaming? Its parts move up with the song.
+            if (videoState == Download.STATE_QUEUED && priority != DownloadPriority.REST) {
+                (listOf(VIDEO_PICTURE, VIDEO_AUDIO).map { it + song.id }).forEach { id ->
+                    if (_videoParts.value[id]?.state == Download.STATE_QUEUED) {
+                        priorities[id] = priority
+                        awaitingPlacement += id
+                    }
+                }
+                scheduleReorder()
+            }
+            return
+        }
         c.scope.launch {
             val videoId = if (song.isVideo) song.id else c.queue.counterparts[song.id]
                 ?: runCatching { kotlinx.coroutines.withContext(Dispatchers.IO) { c.ytm.findMusicVideo(song) } }.getOrNull()?.also { c.queue.counterparts[song.id] = it }
@@ -616,11 +764,11 @@ class DownloadRepository(private val context: Context, private val c: AppContain
             val data = InnerTube.json.encodeToString(VideoPart.serializer(), VideoPart(song, videoId)).toByteArray()
             val picture = DownloadRequest.Builder(VIDEO_PICTURE + song.id, android.net.Uri.parse("prism://video/$videoId"))
                 .setCustomCacheKey("video:$videoId").setData(data).build()
-            add(picture)
+            add(picture, priority)
             if (videoId != song.id) {
                 val audio = DownloadRequest.Builder(VIDEO_AUDIO + song.id, android.net.Uri.parse("prism://audio/$videoId"))
                     .setCustomCacheKey(videoId).setData(data).build()
-                add(audio)
+                add(audio, priority)
             }
         }
     }
@@ -799,6 +947,11 @@ private const val PREMIUM_KBPS = 200
 
 /** The stop reason [DownloadRepository] uses for a moment to restart a stalled download. */
 private const val STALL_STOP = 7
+
+/** How long a streamed download has to reach the manager before the waiting ones are put in priority order. */
+private const val REORDER_AFTER_ADD_MS = 150L
+/** If taking waiting downloads out to reorder them doesn't answer, they're added back anyway (never left out). */
+private const val REORDER_REMOVAL_TIMEOUT_MS = 10_000L
 
 /** Sizes offered for Smart Downloads' space (its picks and the songs you've streamed), in GB. */
 val SMART_DOWNLOAD_SIZES = listOf(0.25f, 0.5f, 1f, 2f, 3f, 5f, 7.5f, 10f, 15f, 20f, 30f, 50f)
