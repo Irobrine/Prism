@@ -737,8 +737,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             untilUnderWay(song.id, DOWNLOAD_ON_STREAM_MS)
             if (player.currentMediaItem?.mediaId != song.id) return@launch
             val now = c.settings.current
-            if (now.downloadOnStream) c.downloads.download(song)
-            if (videoMode && now.downloadVideoOnStream && player.currentMediaItem?.videoModeId != null) c.downloads.downloadVideo(song)
+            if (now.downloadOnStream) c.downloads.download(song, priority = com.prism.music.download.DownloadPriority.PLAYING)
+            if (videoMode && now.downloadVideoOnStream && player.currentMediaItem?.videoModeId != null) {
+                c.downloads.downloadVideo(song, priority = com.prism.music.download.DownloadPriority.PLAYING)
+            }
         }
     }
 
@@ -1691,11 +1693,11 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             if (player.currentMediaItem?.mediaId != playing) return@launch
             val n = c.settings.current.downloadQueueAhead.coerceIn(0, 5)
             if (n <= 0) return@launch
-            for (item in upcoming(n)) {
+            upcoming(n).forEachIndexed { index, item ->
                 if (player.currentMediaItem?.mediaId != playing) return@launch
-                val song = item.toSong() ?: continue
-                if (song.isLive || song.isEpisode || song.isLocal || song.isRss) continue
-                c.downloads.download(song)
+                val song = item.toSong() ?: return@forEachIndexed
+                if (song.isLive || song.isEpisode || song.isLocal || song.isRss) return@forEachIndexed
+                c.downloads.download(song, priority = com.prism.music.download.DownloadPriority.ahead(index))
                 delay(DOWNLOAD_AHEAD_GAP_MS)
             }
         }
