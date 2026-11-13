@@ -82,6 +82,13 @@ class RomanizeTest {
         assertEquals(listOf(RubySpan(0, 3, "にじゅういちにん")), ja.furigana("21人"))
         assertEquals(listOf(RubySpan(0, 3, "よんじゅうにん")), ja.furigana("40人"))
         assertEquals(listOf(RubySpan(0, 2, "ふたり")), ja.furigana("二人"))
+        // The setting puts a number and its counter on their own spans, and the romanization keeps the same split.
+        assertEquals(listOf(RubySpan(0, 2, "にじゅっ"), RubySpan(2, 3, "ぷん")), ja.furigana("20分", splitCounters = true))
+        assertEquals("nijuppun", ja.pieces("20分", splitCounters = true).joinToString(""))
+        assertEquals(listOf(RubySpan(0, 2, "ふたり")), ja.furigana("2人", splitCounters = true))
+        // A counter written in kana is read too, even in a line with no kanji.
+        assertEquals(listOf(RubySpan(0, 4, "にじゅっぷん")), ja.furigana("20ふん"))
+        assertEquals("nijuppun", ja.romanize("20ふん"))
         // 人 is にん in 一人称 and 一人前, not ひとり.
         assertEquals(listOf(RubySpan(0, 2, "いちにん"), RubySpan(2, 3, "しょう")), ja.furigana("一人称"))
         assertEquals(listOf(RubySpan(0, 2, "ににん"), RubySpan(2, 3, "まえ")), ja.furigana("二人前"))

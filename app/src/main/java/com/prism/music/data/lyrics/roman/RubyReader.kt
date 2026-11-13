@@ -3,10 +3,9 @@ package com.prism.music.data.lyrics.roman
 import com.prism.music.data.lyrics.RubySpan
 
 /**
- * A Japanese reader that gives the hiragana above a line's kanji, as well as spelling the line out in Latin letters.
- * Sudachi's reader implements this directly; [com.prism.music.data.lyrics.Romanizer] wraps Kuromoji's [Japanese], which
- * has the same method, so furigana asks for this rather than one particular reader.
+ * A reader that gives the hiragana above a line's kanji. [Japanese] and [SudachiJapanese] both implement it; the
+ * romanizer asks for this so furigana and the romanization use the same words and readings.
  */
 internal fun interface RubyReader {
-    fun furigana(text: String): List<RubySpan>
+    fun furigana(text: String, splitCounters: Boolean): List<RubySpan>
 }

@@ -5045,6 +5045,8 @@
     <string name="tour_183_also_songs_from">Songs in der Mediathek aus Playlists deiner Wahl</string>
     <string name="tour_183_also_lock">Wiederholen und Als Nächstes auf dem Sperrbildschirm</string>
     <string name="tour_183_also_uploads">Hochladen und Löschen in Uploads</string>
+    <string name="furigana_parts">Read numbers and counters separately</string>
+    <string name="furigana_parts_info">Shows にじゅっ above 20 and ぷん above 分 instead of にじゅっぷん over both.</string>
     <string name="show_furigana">Furigana anzeigen</string>
     <string name="hiragana_readings_above_kanji">Hiragana-Lesungen über den Kanji in japanischen Liedtexten</string>
     <string name="furigana_uses_the_japanese_reading_data">Nutzt die japanischen Lesedaten (einmalig unten heruntergeladen).</string>

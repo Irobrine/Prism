@@ -6,6 +6,8 @@ import com.prism.music.data.db.RomanizedEntity
 import com.prism.music.data.lyrics.LyricLine
 import com.prism.music.data.lyrics.LyricWord
 import com.prism.music.data.lyrics.Romanizer
+import com.prism.music.data.lyrics.RubySpan
+import com.prism.music.data.lyrics.roman.Japanese
 import com.prism.music.data.lyrics.roman.Script
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +78,36 @@ class RomanizerTest {
             assertNotNull(line)
             assertTrue("no kanji or kana left: ${line!!.text}", Script.foreignIn(line.text).isEmpty())
         }
+    }
+
+    /** The split setting reaches both views: 20分 has two ruby spans and the same pieces that spell にじゅっぷん. */
+    @Test
+    fun splitCountersReachBothViews() = runBlocking {
+        val ja = Romanizer(
+            http, dao, ModelStore(RuntimeEnvironment.getApplication(), http), CoroutineScope(Dispatchers.Default),
+            japaneseForTests = Japanese.bundled(), furiganaParts = { true },
+        )
+        val line = LyricLine(0, "20分")
+        assertEquals(listOf(RubySpan(0, 2, "にじゅっ"), RubySpan(2, 3, "ぷん")), ja.furigana(listOf(line))?.single())
+        assertEquals("nijuppun", ja.romanize("parts", listOf(line), skip = emptySet(), network = false, title = "か")[0]?.text)
+        // A line with no kanji still gets its number+counter reading.
+        assertEquals(
+            listOf(RubySpan(0, 2, "にじゅっ"), RubySpan(2, 4, "ぷん")),
+            ja.furigana(listOf(LyricLine(0, "20ふん")))?.single(),
+        )
+    }
+
+    /** A source's own reading wins over the dictionary in both views: 食(しょく) is shokuberu, not taberu. */
+    @Test
+    fun sourceRubyIsSpelledAndShown() = runBlocking {
+        val ja = Romanizer(
+            http, dao, ModelStore(RuntimeEnvironment.getApplication(), http), CoroutineScope(Dispatchers.Default),
+            japaneseForTests = Japanese.bundled(),
+        )
+        val line = LyricLine(0, "食べる", sourceRuby = listOf(RubySpan(0, 1, "しょく")))
+        val r = ja.romanize("source", listOf(line), skip = emptySet(), network = false)
+        assertEquals("shokuberu", r[0]?.text)
+        assertEquals(listOf(RubySpan(0, 1, "しょく")), ja.furigana(listOf(line))?.single())
     }
 
     @Test

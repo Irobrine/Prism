@@ -4973,6 +4973,8 @@
     <string name="tour_183_also_songs_from">選んだプレイリストからライブラリの曲を表示</string>
     <string name="tour_183_also_lock">ロック画面にリピートと次の曲</string>
     <string name="tour_183_also_uploads">アップロードでアップロードと削除</string>
+    <string name="furigana_parts">Read numbers and counters separately</string>
+    <string name="furigana_parts_info">Shows にじゅっ above 20 and ぷん above 分 instead of にじゅっぷん over both.</string>
     <string name="show_furigana">ふりがなを表示</string>
     <string name="hiragana_readings_above_kanji">日本語の歌詞の漢字の上にひらがなの読みを表示します</string>
     <string name="furigana_uses_the_japanese_reading_data">日本語の読みデータを使用します（下で一度だけダウンロード）。</string>

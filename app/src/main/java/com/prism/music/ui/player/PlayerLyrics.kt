@@ -1372,9 +1372,15 @@ fun LyricsPanel(
             // Japanese kanji were spelled out by Google (no reading data yet): offer the proper readings.
             val needsJapanese by c.romanizer.needsJapanese.collectAsState()
             val models by c.models.states.collectAsState()
-            // The dictionary the listener chose in Settings → Lyrics: Kuromoji's IPADIC, or Sudachi's full SudachiDict.
+            // Either dictionary can read the kanji; Sudachi is used when it's on the phone.
             val jaModel = com.prism.music.ui.theme.LocalAppSettings.current.japaneseEngine.model
-            val ja = models[jaModel]
+            val ja = if (models[com.prism.music.data.ModelStore.Model.SUDACHI] == com.prism.music.data.ModelStore.State.Ready ||
+                models[com.prism.music.data.ModelStore.Model.JAPANESE] == com.prism.music.data.ModelStore.State.Ready
+            ) {
+                com.prism.music.data.ModelStore.State.Ready
+            } else {
+                models[jaModel]
+            }
             if (roman != null && needsJapanese && ja != com.prism.music.data.ModelStore.State.Ready) {
                 val scope = rememberCoroutineScope()
                 Text(

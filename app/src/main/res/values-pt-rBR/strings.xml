@@ -5117,6 +5117,8 @@
     <string name="tour_183_also_songs_from">Músicas da Biblioteca a partir das playlists que você escolher</string>
     <string name="tour_183_also_lock">Repetir e A seguir na tela de bloqueio</string>
     <string name="tour_183_also_uploads">Enviar e excluir em Envios</string>
+    <string name="furigana_parts">Read numbers and counters separately</string>
+    <string name="furigana_parts_info">Shows にじゅっ above 20 and ぷん above 分 instead of にじゅっぷん over both.</string>
     <string name="show_furigana">Mostrar furigana</string>
     <string name="hiragana_readings_above_kanji">Leituras em hiragana acima dos kanji nas letras japonesas</string>
     <string name="furigana_uses_the_japanese_reading_data">Usa os dados de leitura japoneses (baixados uma vez abaixo).</string>
