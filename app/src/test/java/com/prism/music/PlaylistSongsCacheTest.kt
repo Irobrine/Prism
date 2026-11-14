@@ -73,6 +73,18 @@ class PlaylistSongsCacheTest {
         assertEquals(2, loads)
     }
 
+    @Test fun aKeptCopyPlaysWithoutAskingYouTube() = runBlocking {
+        var loads = 0
+        val load: suspend (String, KeptPlaylist?) -> PlaylistRead = { _, _ -> loads++; read("a", "b") }
+        PlaylistSongs(load, PlaylistSongsCache(dir.root)).songs("PLx")
+        // A new run of the app: the persistent card's Shuffle Library songs can start from it without a call to YouTube.
+        val fresh = PlaylistSongs({ _, _ -> loads++; read("z") }, PlaylistSongsCache(dir.root))
+        assertEquals("a,b", fresh.cached("PLx")!!.joinToString(",") { it.id })
+        assertEquals("the network wasn't asked", 1, loads)
+        // Prism's own lists are read from the phone as they are now, never from a kept copy.
+        assertNull(fresh.cached("prism:1"))
+    }
+
     @Test fun signingOutForgetsThem() = runBlocking {
         val cache = PlaylistSongsCache(dir.root)
         val lists = PlaylistSongs({ _, _ -> read("a") }, cache)

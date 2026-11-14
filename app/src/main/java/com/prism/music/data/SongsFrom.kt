@@ -87,6 +87,16 @@ class PlaylistSongs(
         }
     }
 
+    /**
+     * The playlist's songs as the phone already has them (the session's copy, or the one kept between starts), without
+     * asking YouTube. Null when none is kept.
+     */
+    suspend fun cached(id: String): List<Song>? {
+        kept[id]?.let { return it }
+        val disk = cache?.takeUnless { PrismLibrary.isPrismList(id) } ?: return null
+        return disk.read(id)?.songs?.takeIf { it.isNotEmpty() }
+    }
+
     /** Whether [id]'s songs are kept whole (a read that stopped short isn't). */
     fun isComplete(id: String): Boolean = kept.containsKey(id)
 
