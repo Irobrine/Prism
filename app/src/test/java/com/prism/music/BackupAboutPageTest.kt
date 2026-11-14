@@ -95,7 +95,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     @get:Rule val offline = object : TestWatcher() {
         override fun starting(description: Description) {
             val prefs = app.getSharedPreferences("updates", 0).edit().clear().putLong("checked_at", System.currentTimeMillis())
-            if (description.methodName in withUpdate) prefs.putString("latest_version", newer).putString("latest_url", "https://example.invalid/Prism.apk")
+            if (description.methodName in withUpdate) prefs.putString("latest_version", newer).putString("latest_url", "https://github.com/Irobrine/Prismatica/releases/download/v$newer/Prismatica.apk")
             prefs.commit()
             crashes.deleteRecursively()
         }

@@ -32,7 +32,7 @@ import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-/** A newer Prism on GitHub: its version and where to get it (the APK itself when the release has one). */
+/** A newer Prismatica on GitHub: its version and where to get it (the APK itself when the release has one). */
 data class AppUpdate(val version: String, val url: String) {
     val isApk: Boolean get() = url.endsWith(".apk", ignoreCase = true)
 }
@@ -57,12 +57,13 @@ sealed interface UpdateProgress {
 private class SignatureChanged : Exception()
 
 /**
- * Asks GitHub for Prism's latest release now and then (at most every six hours, or right away from
- * Settings → About), and can update
- * Prism in place: the APK is downloaded inside the app and passed to Android's installer, which
- * asks the listener to confirm (Android never lets an app install silently the first time). Only
- * the public release info and file are fetched; nothing about the listener is sent. Pre-releases
- * are never offered, and Android itself refuses an APK that isn't signed like the installed Prism.
+ * Asks GitHub for Prismatica's latest release now and then (at most every six hours, or right away
+ * from Settings → About), and can update Prismatica in place: the APK is downloaded inside the app
+ * and passed to Android's installer, which asks the listener to confirm (Android never lets an app
+ * install silently the first time). Only the public release info and file are fetched; nothing
+ * about the listener is sent. Pre-releases are never offered (1.8.5's "archaic" builds are marked
+ * so; GitHub's "latest" leaves them out), and Android itself refuses an APK that isn't signed like
+ * the installed Prismatica.
  */
 class UpdateChecker(private val context: Context, private val http: OkHttpClient, private val scope: CoroutineScope) {
     private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
@@ -83,6 +84,8 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     private fun saved(): AppUpdate? {
         val v = prefs.getString("latest_version", null) ?: return null
         val url = prefs.getString("latest_url", null) ?: return null
+        // A build before the updater asked for Prismatica's own releases kept Prism's answer: that APK isn't this app.
+        if (!url.startsWith("https://github.com/$REPO/")) return null
         return AppUpdate(v, url).takeIf { isNewer(v, BuildConfig.VERSION_NAME) && v != prefs.getString("dismissed", null) }
     }
 
@@ -137,13 +140,13 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
         }
     }
 
-    /** The latest version from where github.com/…/releases/latest redirects to. False when it can't tell. */
+    /** The latest version from where github.com/…/releases/latest redirects to, and that release's APK under [APK_NAME]. False when it can't tell. */
     private fun fetchFromReleasePage(): Boolean = runCatching {
         val req = Request.Builder().url("https://github.com/$REPO/releases/latest").header("User-Agent", "Prism/${BuildConfig.VERSION_NAME}").build()
         http.newBuilder().followRedirects(false).followSslRedirects(false).build().newCall(req).execute().use { r ->
             val version = versionFromLatestRedirect(r.header("Location")) ?: return@use false
             prefs.edit().putString("latest_version", version)
-                .putString("latest_url", "https://github.com/$REPO/releases/download/v$version/Prism.apk")
+                .putString("latest_url", "https://github.com/$REPO/releases/download/v$version/$APK_NAME")
                 .putLong("checked_at", System.currentTimeMillis()).apply()
             _available.value = saved()
             true
@@ -383,7 +386,9 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     enum class InstallStep { START, WAIT, REOPEN }
 
     companion object {
-        const val REPO = "Yigder/Prism"
+        /** Prismatica's own releases on GitHub (Prism's are another app), and the APK each one carries. */
+        const val REPO = "Irobrine/Prismatica"
+        const val APK_NAME = "Prismatica.apk"
 
         /** How long between background checks (#278: was six hours). */
         const val CHECK_EVERY_MS = 3_600_000L
