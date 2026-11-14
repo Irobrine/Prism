@@ -388,8 +388,9 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
                 delay(1000)
                 // An episode's place is saved every few seconds while it plays.
                 if (++tick % 5 == 0 && player.isPlaying) saveEpisodePosition()
-                // The persistent card's notification was swiped away: put it back (the listener asked for it always).
-                if (tick % 30 == 0 && ::sessionPlayer.isInitialized && sessionPlayer.placeholder) triggerNotificationUpdate()
+                // The persistent card can be swiped away too, and some phones leave no trace of that (no delete intent
+                // at all): put it back a moment later. Only while the screen is on, which is when it can be dismissed.
+                if (tick % 2 == 0 && ::sessionPlayer.isInitialized && sessionPlayer.placeholder && screenOn()) triggerNotificationUpdate()
                 // A paused song has no card on phones that hide a paused session (OriginOS). Once Prism is out of sight
                 // (the card swiped away, the app closed, the screen locked), the persistent controls take its place.
                 if (::sessionPlayer.isInitialized && !sessionPlayer.placeholder &&
@@ -934,6 +935,13 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      */
     private fun closedFromNotification() {
         if (c.settings.current.persistent.controls) {
+            // The persistent card itself was swiped away: put it straight back (it stays while the controls are on).
+            if (::sessionPlayer.isInitialized && sessionPlayer.placeholder) {
+                android.util.Log.i("PrismControl", "the persistent card was dismissed: putting it back")
+                setNotificationClosed(false)
+                triggerNotificationUpdate()
+                return
+            }
             // Dismissing a song's card leaves the persistent controls (rather than keeping the paused song).
             android.util.Log.i("PrismControl", "the card was dismissed: showing the persistent controls")
             player.pause()
