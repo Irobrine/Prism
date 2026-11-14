@@ -100,6 +100,19 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     }
     /** The placeholder card's play button: shuffle the listener's Library songs. */
     var onPlaceholderPlay: (() -> Unit)? = null
+    /** The phone paused or stopped the card: it was dismissed (see [PlaybackService.reactivatePersistentCard]). */
+    var onPlaceholderPaused: (() -> Unit)? = null
+    /**
+     * Reported as paused for a moment when the card's dismissal reached us: a pause and the play after it are what
+     * brings a media card the phone hid back.
+     */
+    var placeholderPulsing: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            placeholderTimeline = null
+            if (placeholder) invalidateState()
+        }
 
     fun setPlaceholderItem(item: MediaItem) {
         placeholderItem = item
@@ -165,11 +178,21 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): com.google.common.util.concurrent.ListenableFuture<*> {
         if (placeholder) {
-            if (playWhenReady && !placeholderAsPlaying) onPlaceholderPlay?.invoke()
+            if (playWhenReady) {
+                if (!placeholderAsPlaying) onPlaceholderPlay?.invoke()
+            } else onPlaceholderPaused?.invoke()
             return com.google.common.util.concurrent.Futures.immediateVoidFuture()
         }
         if (gentle?.invoke(playWhenReady) == true) return com.google.common.util.concurrent.Futures.immediateVoidFuture()
         return super.handleSetPlayWhenReady(playWhenReady)
+    }
+
+    override fun handleStop(): com.google.common.util.concurrent.ListenableFuture<*> {
+        if (placeholder) {
+            onPlaceholderPaused?.invoke()
+            return com.google.common.util.concurrent.Futures.immediateVoidFuture()
+        }
+        return super.handleStop()
     }
 
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): com.google.common.util.concurrent.ListenableFuture<*> {
@@ -226,7 +249,7 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
      */
     private fun placeholderState(s: State): State {
         val item = placeholderItem ?: return s
-        val asPlaying = placeholderAsPlaying
+        val asPlaying = placeholderAsPlaying && !placeholderPulsing
         val timeline = placeholderTimeline ?: PlaceholderTimeline(
             item,
             if (asPlaying) 3_600_000_000L else C.TIME_UNSET,
@@ -240,8 +263,8 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
             remove(Player.COMMAND_SEEK_FORWARD)
             remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             remove(Player.COMMAND_PREPARE)
-            remove(Player.COMMAND_STOP)
-            if (asPlaying) remove(Player.COMMAND_PLAY_PAUSE)
+            // PLAY_PAUSE and STOP stay available on purpose: a phone's swipe-away reaches a placeholder as a pause
+            // (or a stop), and that is how the card knows it was dismissed (its notification leaves the button out).
         }.build()
         val out = s.buildUpon()
             .setPlaylist(timeline, androidx.media3.common.Tracks.EMPTY, item.mediaMetadata)
