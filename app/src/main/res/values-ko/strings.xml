@@ -1518,6 +1518,9 @@
     <string name="page_titles">페이지 제목</string>
     <string name="album_playlist_cards">앨범 및 재생목록 카드</string>
     <string name="open_the_keyboard">키보드 열기</string>
+    <string name="keyboard_when_search_opens">검색을 열 때</string>
+    <string name="keyboard_second_tap">검색을 다시 탭할 때</string>
+    <string name="keyboard_second_tap_info">검색을 열면 바로 입력할 수 있게 하거나, 검색 탭을 다시 탭할 때까지 키보드를 내려 둡니다. 고정 미디어 컨트롤에서 검색을 열면 어느 쪽이든 키보드가 즉시 올라옵니다.</string>
     <string name="search_typing">검색 입력 타자</string>
     <string name="player_blur_cover_color">플레이어 흐림 커버 색상</string>
     <string name="show_background">배경 보이기</string>

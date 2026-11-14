@@ -1518,6 +1518,9 @@
     <string name="page_titles">Títulos das páginas</string>
     <string name="album_playlist_cards">Cartões de álbuns e playlists</string>
     <string name="open_the_keyboard">Abrir o teclado</string>
+    <string name="keyboard_when_search_opens">Ao abrir a Pesquisa</string>
+    <string name="keyboard_second_tap">Tocar em Pesquisa novamente</string>
+    <string name="keyboard_second_tap_info">Pronto para escrever ao abrir a Pesquisa, ou com o teclado escondido até o separador Pesquisa ser tocado novamente. Abrir a Pesquisa a partir dos controlos de multimédia persistentes continua a mostrá-lo de imediato.</string>
     <string name="search_typing">pesquisar escrever</string>
     <string name="player_blur_cover_color">leitor desfoque capa cor</string>
     <string name="show_background">Mostrar o fundo</string>

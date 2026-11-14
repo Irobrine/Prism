@@ -1518,6 +1518,9 @@
     <string name="page_titles">صفحات کے عنوانات</string>
     <string name="album_playlist_cards">البم اور پلے لسٹ کارڈز</string>
     <string name="open_the_keyboard">کی بورڈ کھولیں</string>
+    <string name="keyboard_when_search_opens">سرچ کھلنے پر</string>
+    <string name="keyboard_second_tap">سرچ پر دوبارہ ٹیپ</string>
+    <string name="keyboard_second_tap_info">سرچ کھلنے پر ٹائپ کے لیے تیار، یا کی بورڈ نیچے رہتا ہے جب تک سرچ ٹیب پر دوبارہ ٹیپ نہ کیا جائے۔ مستقل میڈیا کنٹرولز سے سرچ کھولنے پر بھی یہ فوراً اوپر آتا ہے۔</string>
     <string name="search_typing">تلاش ٹائپنگ</string>
     <string name="player_blur_cover_color">پلیئر دھندلاہٹ کور رنگ</string>
     <string name="show_background">پس منظر دکھائیں</string>

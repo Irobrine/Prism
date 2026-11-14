@@ -1518,6 +1518,9 @@
     <string name="page_titles">Titlurile paginilor</string>
     <string name="album_playlist_cards">Carduri de album și playlist</string>
     <string name="open_the_keyboard">Deschide tastatura</string>
+    <string name="keyboard_when_search_opens">Când se deschide Căutarea</string>
+    <string name="keyboard_second_tap">Atinge din nou Căutarea</string>
+    <string name="keyboard_second_tap_info">Pregătit pentru tastare când se deschide Căutarea, sau cu tastatura ascunsă până când fila Căutare este atinsă din nou. Deschiderea Căutării din controalele media persistente o afișează totuși imediat.</string>
     <string name="search_typing">căutare tastare</string>
     <string name="player_blur_cover_color">player estompare copertă culoare</string>
     <string name="show_background">Afișează fundalul</string>

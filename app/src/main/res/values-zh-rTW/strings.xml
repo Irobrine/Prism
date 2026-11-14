@@ -1518,6 +1518,9 @@
     <string name="page_titles">頁面標題</string>
     <string name="album_playlist_cards">專輯和播放清單卡片</string>
     <string name="open_the_keyboard">開啟鍵盤</string>
+    <string name="keyboard_when_search_opens">開啟搜尋時</string>
+    <string name="keyboard_second_tap">再次點按搜尋</string>
+    <string name="keyboard_second_tap_info">開啟搜尋時即可輸入，或保持鍵盤收起，直到再次點按搜尋分頁。從常駐媒體控制項開啟搜尋時仍會立即顯示鍵盤。</string>
     <string name="search_typing">搜尋 輸入</string>
     <string name="player_blur_cover_color">播放器 模糊 封面 顏色</string>
     <string name="show_background">顯示背景</string>

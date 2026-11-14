@@ -1518,6 +1518,9 @@
     <string name="page_titles">כותרות הדפים</string>
     <string name="album_playlist_cards">כרטיסי אלבום ופלייליסט</string>
     <string name="open_the_keyboard">פתיחת המקלדת</string>
+    <string name="keyboard_when_search_opens">כשהחיפוש נפתח</string>
+    <string name="keyboard_second_tap">הקשה נוספת על חיפוש</string>
+    <string name="keyboard_second_tap_info">מוכן להקלדה כשהחיפוש נפתח, או עם המקלדת למטה עד להקשה נוספת על לשונית החיפוש. פתיחת החיפוש מבקרות המדיה הקבועות עדיין מעלה אותה מיד.</string>
     <string name="search_typing">חיפוש הקלדה</string>
     <string name="player_blur_cover_color">נגן טשטוש עטיפה צבע</string>
     <string name="show_background">הצגת הרקע</string>

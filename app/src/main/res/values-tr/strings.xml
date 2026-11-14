@@ -1518,6 +1518,9 @@
     <string name="page_titles">Sayfa başlıkları</string>
     <string name="album_playlist_cards">Albüm ve çalma listesi kartları</string>
     <string name="open_the_keyboard">Klavyeyi aç</string>
+    <string name="keyboard_when_search_opens">Arama açıldığında</string>
+    <string name="keyboard_second_tap">Aramaya tekrar dokunma</string>
+    <string name="keyboard_second_tap_info">Arama açıldığında yazmaya hazırdır ya da Arama sekmesine tekrar dokunulana kadar klavye kapalı kalır. Aramayı kalıcı medya kontrollerinden açmak yine de klavyeyi hemen getirir.</string>
     <string name="search_typing">arama yazma</string>
     <string name="player_blur_cover_color">oynatıcı bulanıklık kapak rengi</string>
     <string name="show_background">Arka planı göster</string>

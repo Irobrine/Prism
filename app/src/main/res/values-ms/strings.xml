@@ -1518,6 +1518,9 @@
     <string name="page_titles">Tajuk halaman</string>
     <string name="album_playlist_cards">Kad album &amp; senarai main</string>
     <string name="open_the_keyboard">Buka papan kekunci</string>
+    <string name="keyboard_when_search_opens">Apabila Carian dibuka</string>
+    <string name="keyboard_second_tap">Ketik Carian sekali lagi</string>
+    <string name="keyboard_second_tap_info">Sedia menaip apabila Carian dibuka, atau papan kekunci kekal turun sehingga tab Carian diketuk sekali lagi. Membuka Carian daripada kawalan media berterusan tetap menaikkannya serta-merta.</string>
     <string name="search_typing">carian menaip</string>
     <string name="player_blur_cover_color">pemain kabur kulit warna</string>
     <string name="show_background">Tunjukkan latar belakang</string>

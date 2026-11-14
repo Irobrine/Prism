@@ -92,11 +92,25 @@ object Routes {
 /** Everything a screen needs to move around the app. */
 class Navigator(val nav: NavController, val openPlayer: () -> Unit, private val playMix: (PlaylistItem) -> Unit = {}) {
     /**
+     * Search's keyboard (#71, 1.8.6), asked for from outside Search's own screen: Search opened from somewhere other than
+     * its tab (the persistent media controls, a shortcut, a link), or its tab tapped while Search is showing. A count so
+     * each ask is a change; [SearchScreen] takes it and sets it back to zero.
+     */
+    val searchKeyboardRequests = MutableStateFlow(0L)
+
+    fun requestSearchKeyboard() { searchKeyboardRequests.value += 1 }
+
+    /** Search's keyboard came up (or couldn't): the next ask counts afresh. */
+    fun searchKeyboardTaken() { searchKeyboardRequests.value = 0L }
+
+    /**
      * Opens [route] on top. Only the very page that's showing is not opened twice (a double tap): launchSingleTop alone
      * compared the destination ("artist/{id}"), so a similar artist, another album or Licenses from About replaced the
      * page it was opened from, and Back skipped it.
      */
     fun go(route: String) {
+        // Search opened from anywhere but its tab comes up ready to type (1.8.6), even when it is already showing.
+        if (route == Routes.SEARCH) requestSearchKeyboard()
         if (currentRoute() == normalized(route)) return
         nav.navigate(route)
     }

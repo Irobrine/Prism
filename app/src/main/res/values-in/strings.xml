@@ -1518,6 +1518,9 @@
     <string name="page_titles">Judul halaman</string>
     <string name="album_playlist_cards">Kartu album &amp; playlist</string>
     <string name="open_the_keyboard">Buka keyboard</string>
+    <string name="keyboard_when_search_opens">Saat Penelusuran dibuka</string>
+    <string name="keyboard_second_tap">Ketuk Penelusuran lagi</string>
+    <string name="keyboard_second_tap_info">Siap mengetik saat Penelusuran dibuka, atau keyboard tetap turun hingga tab Penelusuran diketuk lagi. Membuka Penelusuran dari kontrol media persisten tetap menaikkannya seketika.</string>
     <string name="search_typing">telusuri mengetik cari</string>
     <string name="player_blur_cover_color">pemutar blur sampul warna</string>
     <string name="show_background">Tampilkan latar</string>

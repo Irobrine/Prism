@@ -611,6 +611,9 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                     restoreState = true
                 }
             }
+            // Search's tab tapped while Search is already showing (1.8.6): its keyboard comes up. Tapping it to open
+            // Search leaves the keyboard down when "Tapping Search again" is picked.
+            if (r == Routes.SEARCH && r == currentTab) navigator.requestSearchKeyboard()
         }
 
         // "Customize this" (1.7.3): the element tapped and, for a Home section, which one.

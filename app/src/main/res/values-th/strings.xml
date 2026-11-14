@@ -1518,6 +1518,9 @@
     <string name="page_titles">ชื่อหน้า</string>
     <string name="album_playlist_cards">การ์ดอัลบั้มและเพลย์ลิสต์</string>
     <string name="open_the_keyboard">เปิดแป้นพิมพ์</string>
+    <string name="keyboard_when_search_opens">เมื่อเปิดค้นหา</string>
+    <string name="keyboard_second_tap">แตะค้นหาอีกครั้ง</string>
+    <string name="keyboard_second_tap_info">พร้อมพิมพ์เมื่อเปิดค้นหา หรือซ่อนแป้นพิมพ์ไว้จนกว่าจะแตะแท็บค้นหาอีกครั้ง การเปิดค้นหาจากตัวควบคุมสื่อแบบถาวรยังคงเปิดแป้นพิมพ์ขึ้นมาทันที</string>
     <string name="search_typing">ค้นหา พิมพ์ แป้นพิมพ์</string>
     <string name="player_blur_cover_color">เพลเยอร์ เบลอ ปก สี</string>
     <string name="show_background">แสดงพื้นหลัง</string>
