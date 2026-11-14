@@ -13,6 +13,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -682,19 +683,34 @@ internal fun ShuffleGlyph(shuffle: Boolean, smart: Boolean, modifier: Modifier =
 @Composable
 private fun ModeGlyph(icon: ImageVector, description: String, active: Boolean, badge: String? = null, state: String? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val haptics = rememberHaptics()
-    val alpha by animateFloatAsState(if (active) 1f else 0.45f, label = "modeAlpha")
+    val alpha by animateFloatAsState(
+        if (active) 1f else 0.45f,
+        tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+        label = "modeAlpha",
+    )
     Box(
         modifier.size(44.dp)
             .then(if (state != null) Modifier.semantics { stateDescription = state; selected = active } else Modifier)
             .clickable(remember { MutableInteractionSource() }, indication = null, onClickLabel = description) { haptics.tick(); onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, description, tint = Color.White.copy(alpha = alpha), modifier = Modifier.size(24.dp))
+        // Shuffle's three faces (Off, On, Smart) hand over rather than swap glyphs.
+        Crossfade(icon, animationSpec = tween(180, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease), label = "modeGlyph") { ic ->
+            Icon(ic, description, tint = Color.White.copy(alpha = alpha), modifier = Modifier.size(24.dp))
+        }
         if (badge != null) Text(
             badge, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp),
         )
-        if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(4.dp).clip(CircleShape).background(Color.White))
+        val dot by animateFloatAsState(
+            if (active) 1f else 0f,
+            tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+            label = "modeDot",
+        )
+        if (dot > 0.01f) Box(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(4.dp).graphicsLayer { this.alpha = dot; scaleX = dot; scaleY = dot }
+                .clip(CircleShape).background(Color.White),
+        )
     }
 }
 
@@ -761,7 +777,11 @@ private fun TransportGlyph(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val alpha by animateFloatAsState(if (enabled) 1f else 0.3f, label = "transportAlpha")
+    val alpha by animateFloatAsState(
+        if (enabled) 1f else 0.3f,
+        tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+        label = "transportAlpha",
+    )
     val haptics = rememberHaptics()
     val tap by rememberUpdatedState(onClick)
     val tapEnabled by rememberUpdatedState(enabled)
@@ -959,7 +979,8 @@ fun PlayerActionRow(
             AnimatedContent(
                 queueOpen,
                 transitionSpec = {
-                    (fadeIn(tween(180, delayMillis = 140)) togetherWith fadeOut(tween(140))).using(SizeTransform(clip = false) { _, _ -> tween(220) })
+                    (fadeIn(tween(160, delayMillis = 100, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease)) togetherWith fadeOut(tween(120)))
+                        .using(SizeTransform(clip = false) { _, _ -> tween(200, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease) })
                 },
                 label = "pill",
             ) { modes ->
@@ -1125,7 +1146,9 @@ private fun speedText(speed: Float) = speed.toString().removeSuffix(".0") + "×"
 @Composable
 private fun Pill(content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.height(BOTTOM_ACTION_SIZE).animateContentSize(spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)),
+        Modifier.height(BOTTOM_ACTION_SIZE).animateContentSize(
+            tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+        ),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
@@ -1139,7 +1162,11 @@ private fun PillDivider() {
 /** The mark under a bottom-row glyph that's on (lyrics open, video playing, shuffle on): a short line of split light. */
 @Composable
 private fun BoxScope.OnMark(on: Boolean) {
-    val shown by animateFloatAsState(if (on) 1f else 0f, tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD), label = "onMark")
+    val shown by animateFloatAsState(
+        if (on) 1f else 0f,
+        tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+        label = "onMark",
+    )
     if (shown > 0f) Box(
         Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(width = 14.dp * shown, height = 2.dp)
             .clip(CircleShape).background(com.prism.music.ui.theme.PrismTokens.spectrum),
@@ -1160,15 +1187,24 @@ private fun PillSegment(
     onClick: () -> Unit,
 ) {
     val haptics = rememberHaptics()
+    val ease = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+    val ms = com.prism.music.ui.theme.PrismTokens.Motion.STANDARD
+    val bg by animateColorAsState(
+        if (highlighted && enabled) Color.White.copy(alpha = 0.16f) else Color.Transparent,
+        tween(ms, easing = ease), label = "segmentBg",
+    )
+    val tint by animateColorAsState(
+        Color.White.copy(alpha = when { !enabled -> 0.25f; highlighted -> 1f; else -> 0.7f }),
+        tween(ms, easing = ease), label = "segmentTint",
+    )
     Box(
         Modifier.width(width).height(BOTTOM_ACTION_SIZE).clip(CircleShape)
-            .background(if (highlighted && enabled) Color.White.copy(alpha = 0.16f) else Color.Transparent)
+            .background(bg)
             .semantics { selected = highlighted; if (state != null) stateDescription = state }
             .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled) { haptics.tick(); onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        val tint = Color.White.copy(alpha = when { !enabled -> 0.25f; highlighted -> 1f; else -> 0.7f })
-        Crossfade(Triple(icon, label, loading), animationSpec = tween(200), label = "segment") { (ic, lb, busy) ->
+        Crossfade(Triple(icon, label, loading), animationSpec = tween(200, easing = ease), label = "segment") { (ic, lb, busy) ->
             if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 1.5.dp, modifier = Modifier.size(20.dp))
             else if (ic != null) Icon(ic, description, tint = tint, modifier = Modifier.size(24.dp))
             else if (lb != null) Text(lb, color = tint, fontSize = 17.sp, fontWeight = FontWeight.Medium)
@@ -1180,14 +1216,27 @@ private fun PillSegment(
 @Composable
 private fun BottomGlyph(icon: ImageVector, description: String, highlighted: Boolean, onClick: () -> Unit, width: Dp = 56.dp, enabled: Boolean = true) {
     val haptics = rememberHaptics()
+    // Its capsule, ink and glyph (a heart filling in, a download done) ease together instead of switching at once.
+    val ease = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+    val ms = com.prism.music.ui.theme.PrismTokens.Motion.STANDARD
+    val bg by animateColorAsState(
+        if (highlighted && enabled) Color.White.copy(alpha = 0.16f) else Color.Transparent,
+        tween(ms, easing = ease), label = "bottomBg",
+    )
+    val tint by animateColorAsState(
+        Color.White.copy(alpha = when { !enabled -> 0.25f; highlighted -> 1f; else -> 0.7f }),
+        tween(ms, easing = ease), label = "bottomTint",
+    )
     Box(
         Modifier.size(width = width, height = BOTTOM_ACTION_SIZE).clip(CircleShape)
-            .background(if (highlighted && enabled) Color.White.copy(alpha = 0.16f) else Color.Transparent)
+            .background(bg)
             .semantics { selected = highlighted }
             .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled) { haptics.tick(); onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, description, tint = Color.White.copy(alpha = when { !enabled -> 0.25f; highlighted -> 1f; else -> 0.7f }), modifier = Modifier.size(25.dp))
+        Crossfade(icon, animationSpec = tween(180, easing = ease), label = "bottomGlyph") { ic ->
+            Icon(ic, description, tint = tint, modifier = Modifier.size(25.dp))
+        }
         OnMark(highlighted && enabled)
     }
 }
@@ -1195,10 +1244,13 @@ private fun BottomGlyph(icon: ImageVector, description: String, highlighted: Boo
 /** A bare button beside the credits (like, menu): Spectrum keeps them out of discs; [active] (liked) in full white. */
 @Composable
 fun CircleGlyph(icon: ImageVector, description: String, active: Boolean = false, onClick: () -> Unit) {
-    val ink by animateFloatAsState(if (active) 1f else 0.8f, label = "glyphInk")
+    val ease = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+    val ms = com.prism.music.ui.theme.PrismTokens.Motion.STANDARD
+    val ink by animateFloatAsState(if (active) 1f else 0.8f, tween(ms, easing = ease), label = "glyphInk")
+    val disc by animateColorAsState(Color.White.copy(alpha = if (active) 0.22f else 0.13f), tween(ms, easing = ease), label = "glyphDisc")
     val haptics = rememberHaptics()
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = if (active) 0.22f else 0.13f)).border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+        Modifier.size(40.dp).clip(CircleShape).background(disc).border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
             .clickable(remember { MutableInteractionSource() }, indication = null, onClickLabel = description) { haptics.click(); onClick() },
         contentAlignment = Alignment.Center,
     ) {

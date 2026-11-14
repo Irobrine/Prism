@@ -4,7 +4,8 @@ import com.prism.music.R
 import com.prism.music.tr
 import com.prism.music.ui.theme.PrismIcons
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -35,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,7 +65,6 @@ import com.prism.music.ui.theme.LocalContainer
 import com.prism.music.ui.theme.LocalUi
 import com.prism.music.ui.theme.hairline
 import androidx.compose.ui.draw.drawBehind
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -76,14 +77,18 @@ fun MiniPlayer(
     val pc = LocalContainer.current.player
     val song by pc.currentSong.collectAsState()
     val playing by pc.isPlaying.collectAsState()
-    val s = song ?: return
+    // Stopping clears the song at once. The card still has to be there to slide away, so it keeps the last one for its
+    // exit (it used to go blank on that frame and vanish without the animation the rest of the chrome has).
+    val last = remember { mutableStateOf<com.prism.music.data.model.Song?>(null) }
+    LaunchedEffect(song) { if (song != null) last.value = song }
+    val s = song ?: last.value ?: return
     val settings = LocalAppSettings.current
     val ui = LocalUi.current
     // Read only in the progress drawing below, so the playhead moving redraws that line, not the whole mini player.
     val position = rememberPositionState(fast = false)
-    val drag = remember { Animatable(0f) }
+    val drag = remember { DragOffset() }
     // Pulled down far enough, it stops the music and goes (#59).
-    val pull = remember { Animatable(0f) }
+    val pull = remember { DragOffset() }
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
     val haptics = com.prism.music.ui.theme.rememberHaptics()
@@ -142,38 +147,47 @@ fun MiniPlayer(
             .graphicsLayer { alpha = 1f - (pull.value / (height.toPx() * 1.6f)).coerceIn(0f, 0.85f) }
             .pointerInput(Unit) {
                 val stopAt = height.toPx() * 0.9f
+                val goneAt = height.toPx() * 1.6f
                 // Up (#149, 1.7.7): the card lifts a little against the finger (a third of the drag, at most a third of its
                 // height) and opens the player, or does what's set, once lifted past [upAt].
                 val upAt = -height.toPx() * 0.22f
                 val upMost = -height.toPx() * 0.34f
                 var raw = 0f
                 detectVerticalDragGestures(
-                    onDragStart = { raw = pull.value },
+                    onDragStart = {
+                        pull.cancel()
+                        raw = pull.value
+                    },
                     onDragEnd = {
-                        scope.launch {
-                            val up = container.settings.current.miniSwipeUp
-                            if (pull.value <= upAt && up != PlayerGesture.NONE) {
+                        val up = container.settings.current.miniSwipeUp
+                        // Pulled down: stop (#59) or whatever's set in Settings → Player → Gestures (1.7.4).
+                        val down = container.settings.current.miniSwipeDown
+                        when {
+                            pull.value <= upAt && up != PlayerGesture.NONE -> {
                                 haptics.gestureEnd()
                                 runMiniGesture(up)
-                                pull.animateTo(0f)
-                                return@launch
+                                pull.settle(scope, 0f)
                             }
-                            // Pulled down: stop (#59) or whatever's set in Settings → Player → Gestures (1.7.4).
-                            val down = container.settings.current.miniSwipeDown
-                            if (pull.value > stopAt && down != PlayerGesture.NONE) {
+                            pull.value > stopAt && down != PlayerGesture.NONE -> {
                                 haptics.gestureEnd()
                                 if (down == PlayerGesture.STOP) {
-                                    pull.animateTo(height.toPx() * 1.6f)
-                                    pc.stop()
-                                    pull.snapTo(0f)
+                                    // It falls away, then the music stops and the card's own exit takes it from there.
+                                    // The offset comes home only after that (or never: the card is gone) so the song
+                                    // kept for the exit doesn't flash back up at the top for a frame.
+                                    pull.settle(scope, goneAt, tween(160, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease)) {
+                                        pc.stop()
+                                        kotlinx.coroutines.delay(400)
+                                        pull.reset(0f)
+                                    }
                                 } else {
                                     runMiniGesture(down)
-                                    pull.animateTo(0f)
+                                    pull.settle(scope, 0f)
                                 }
-                            } else pull.animateTo(0f)
+                            }
+                            else -> pull.settle(scope, 0f)
                         }
                     },
-                    onDragCancel = { scope.launch { pull.animateTo(0f) } },
+                    onDragCancel = { pull.settle(scope, 0f) },
                 ) { change, d ->
                     change.consume()
                     raw += d
@@ -185,24 +199,25 @@ fun MiniPlayer(
                         else -> (raw / 3f).coerceAtLeast(upMost)
                     }
                     if ((pull.value < stopAt) != (after < stopAt) || (pull.value > upAt) != (after > upAt)) haptics.threshold()
-                    scope.launch { pull.snapTo(after) }
+                    pull.set(after)
                 }
             }
             .pointerInput(Unit) {
                 var rawX = 0f
                 detectHorizontalDragGestures(
-                    onDragStart = { rawX = drag.value },
+                    onDragStart = {
+                        drag.cancel()
+                        rawX = drag.value
+                    },
                     onDragEnd = {
-                        scope.launch {
-                            val now = container.settings.current
-                            val g = when {
-                                drag.value < -140 -> now.miniSwipeLeft
-                                drag.value > 140 -> now.miniSwipeRight
-                                else -> PlayerGesture.NONE
-                            }
-                            if (g != PlayerGesture.NONE) { haptics.gestureEnd(); runMiniGesture(g) }
-                            drag.animateTo(0f)
+                        val now = container.settings.current
+                        val g = when {
+                            drag.value < -140 -> now.miniSwipeLeft
+                            drag.value > 140 -> now.miniSwipeRight
+                            else -> PlayerGesture.NONE
                         }
+                        if (g != PlayerGesture.NONE) { haptics.gestureEnd(); runMiniGesture(g) }
+                        drag.settle(scope, 0f)
                     },
                 ) { _, d ->
                     val before = drag.value
@@ -211,7 +226,7 @@ fun MiniPlayer(
                     val now = container.settings.current
                     val after = if ((if (rawX < 0f) now.miniSwipeLeft else now.miniSwipeRight) == PlayerGesture.NONE) 0f else rawX
                     if ((kotlin.math.abs(before) < 140f) != (kotlin.math.abs(after) < 140f)) haptics.threshold()
-                    scope.launch { drag.snapTo(after) }
+                    drag.set(after)
                 }
             },
     ) {
@@ -233,11 +248,30 @@ fun MiniPlayer(
                 .padding(start = if (style == MiniPlayerStyle.PILL) 6.dp else if (bar) 16.dp else 8.dp, end = if (style == MiniPlayerStyle.PILL) 8.dp else if (bar) 8.dp else 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(com.prism.music.data.PlaylistCovers.artOf(s), with(CoverFlight) { Modifier.size(artSize).miniCover().graphicsLayer { alpha = if (returning) 0f else 1f } }, artShape, size = 226)
+            // The cover changes with the song too: a soft hand-over, not a cut from one picture to the next. While the
+            // player's cover is flying back, the mini player's own stays unseen (the flying one lands in its place).
+            AnimatedContent(
+                com.prism.music.data.PlaylistCovers.artOf(s),
+                transitionSpec = {
+                    val ease = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+                    fadeIn(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = ease)) togetherWith
+                        fadeOut(tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK))
+                },
+                modifier = Modifier.size(artSize).graphicsLayer { alpha = if (CoverFlight.returning) 0f else 1f },
+                label = "miniArt",
+            ) { art ->
+                Artwork(art, with(CoverFlight) { Modifier.fillMaxSize().miniCover() }, artShape, size = 226)
+            }
             Spacer(Modifier.width(12.dp))
             AnimatedContent(
                 s,
-                transitionSpec = { (slideInHorizontally { it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 3 } + fadeOut()) },
+                // A small, quick hand-over: the old title leaves as the new one arrives, without either sliding a third of
+                // the card or hanging about at the end of a spring.
+                transitionSpec = {
+                    val ease = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+                    (slideInHorizontally(tween(200, easing = ease)) { it / 6 } + fadeIn(tween(180, easing = ease))) togetherWith
+                        (slideOutHorizontally(tween(160, easing = ease)) { -it / 6 } + fadeOut(tween(120)))
+                },
                 modifier = Modifier.weight(1f),
                 label = "mini",
             ) { playing ->
@@ -261,10 +295,10 @@ fun MiniPlayer(
                 Box(
                     Modifier.size(40.dp).clip(CircleShape).background(scheme.onSurface).clickable { haptics.click(); pc.togglePlay() },
                     contentAlignment = Alignment.Center,
-                ) { Icon(if (playing) PrismIcons.Pause else PrismIcons.Play, tr(R.string.play_pause), Modifier.size(24.dp), tint = scheme.surface) }
+                ) { MiniPlayPause(playing, 24.dp, tint = scheme.surface) }
             } else {
                 IconButton(onClick = { haptics.click(); pc.togglePlay() }, modifier = Modifier.size(44.dp)) {
-                    Icon(if (playing) PrismIcons.Pause else PrismIcons.Play, tr(R.string.play_pause), Modifier.size(if (style == MiniPlayerStyle.SLIM) 26.dp else 28.dp))
+                    MiniPlayPause(playing, if (style == MiniPlayerStyle.SLIM) 26.dp else 28.dp)
                 }
             }
             if (settings.miniSkipButtons) {
@@ -281,6 +315,22 @@ fun MiniPlayer(
                 )
             }
         }
+    }
+}
+
+/**
+ * The mini player's play / pause, swapped with the same quick cross-fade as the full player's disc: before a plain cut
+ * from one glyph to the other, a small hard edge in the one control that's touched most.
+ */
+@Composable
+private fun MiniPlayPause(playing: Boolean, size: androidx.compose.ui.unit.Dp, tint: androidx.compose.ui.graphics.Color? = null) {
+    Crossfade(playing, animationSpec = tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK), label = "miniPlayPause") { p ->
+        Icon(
+            if (p) PrismIcons.Pause else PrismIcons.Play,
+            tr(R.string.play_pause),
+            Modifier.size(size),
+            tint = tint ?: androidx.compose.material3.LocalContentColor.current,
+        )
     }
 }
 

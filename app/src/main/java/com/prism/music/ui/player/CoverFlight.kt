@@ -48,18 +48,36 @@ object CoverFlight {
     /** Where the player's cover is, kept as it moves. */
     fun Modifier.playerCover(): Modifier = onGloballyPositioned { player = it.boundsInRoot() }
 
+    /**
+     * A flight that's been overtaken (the player closed before its cover landed, or opened again while one was flying
+     * back) mustn't clear the flags of the one now running: [run] tells the last one asked for from an older one.
+     */
+    private var run = 0
+
     /** The player is opening: the cover flies, if both ends are known within a moment. */
     suspend fun fly() {
+        val mine = ++run
+        // An opening takes over from a return at once: the mini's own cover has to be able to show while the player's
+        // place is being looked for, or it would stay hidden for up to the wait below.
+        returning = false
         if (mini == null) return
         val to = withTimeoutOrNull(300) { snapshotFlow { player }.filterNotNull().first() } ?: return
-        if (to.width <= 0f) return
+        // Closed while the player's cover was being looked for: nothing to fly to.
+        if (to.width <= 0f || run != mine) return
+        progress.snapTo(0f)
         flying = true
         try {
-            progress.snapTo(0f)
             progress.animateTo(1f, tween(FLIGHT_MS, easing = FastOutSlowInEasing))
         } finally {
-            flying = false
+            if (run == mine) flying = false
         }
+    }
+
+    /** The player left mid-flight: the cover stops showing at once (the animation winds down unseen). */
+    fun cancel() {
+        run++
+        flying = false
+        returning = false
     }
 
     /** #223: flying back to the mini player, which keeps its own cover unseen until it lands. */
@@ -75,13 +93,16 @@ object CoverFlight {
     /** The player is closing: the cover goes back from wherever it is, and the player's own place stays known until then. */
     suspend fun flyBack() {
         if (!canReturn()) return
+        val mine = ++run
         flying = true
         returning = true
         try {
             progress.animateTo(0f, tween(FLIGHT_MS, easing = FastOutSlowInEasing))
         } finally {
-            flying = false
-            returning = false
+            if (run == mine) {
+                flying = false
+                returning = false
+            }
         }
     }
 

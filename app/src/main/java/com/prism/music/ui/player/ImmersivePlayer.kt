@@ -199,7 +199,7 @@ fun ImmersivePlayer(
 
     var drag by remember { mutableFloatStateOf(0f) }
     // Sideways, the cover follows the finger a little; past the mark, letting go changes the song.
-    var swipe by remember { mutableFloatStateOf(0f) }
+    val swipe = remember { DragOffset() }
     val blurred = rememberFullArtworkBlur(com.prism.music.data.PlaylistCovers.artOf(song))
     Box(
         Modifier
@@ -227,19 +227,20 @@ fun ImmersivePlayer(
             }
             .pointerInput(Unit) {
                 val mark = 72.dp.toPx()
-                fun settle() { val from = swipe; scope.launch { animate(from, 0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { v, _ -> swipe = v } } }
+                fun settle() = swipe.settle(scope, 0f, spring(stiffness = Spring.StiffnessMediumLow))
                 detectHorizontalDragGestures(
+                    onDragStart = { swipe.cancel() },
                     onDragEnd = {
                         // Left for the next song, right for the previous one (or the start of this one), as on the player.
-                        if (swipe <= -mark) { haptics.gestureEnd(); c.player.next() }
-                        else if (swipe >= mark) { haptics.gestureEnd(); c.player.previous() }
+                        if (swipe.value <= -mark) { haptics.gestureEnd(); c.player.next() }
+                        else if (swipe.value >= mark) { haptics.gestureEnd(); c.player.previous() }
                         settle()
                     },
                     onDragCancel = { settle() },
                 ) { change, d ->
                     change.consume()
-                    if ((abs(swipe) < mark) != (abs(swipe + d) < mark)) haptics.threshold()
-                    swipe += d
+                    if ((abs(swipe.value) < mark) != (abs(swipe.value + d) < mark)) haptics.threshold()
+                    swipe.set(swipe.value + d)
                 }
             },
     ) {
@@ -247,7 +248,7 @@ fun ImmersivePlayer(
         // plainer behind the words.
         val ground = settings.immersiveBackground
         // A playing music video takes the cover's place, cropped to fill the screen (#170).
-        if (video) MusicVideoSurface(Modifier.fillMaxSize().graphicsLayer { translationX = swipe * 0.35f }, fill = true)
+        if (video) MusicVideoSurface(Modifier.fillMaxSize().graphicsLayer { translationX = swipe.value * 0.35f }, fill = true)
         val coverShown = !video && (ground == com.prism.music.data.prefs.LyricsBackground.PLAYER || ground == com.prism.music.data.prefs.LyricsBackground.CANVAS)
         if (!coverShown && !video) LyricsBackdrop(ground, settings, com.prism.music.data.PlaylistCovers.artOf(song), blurred, null, canvasSaved, isPlaying, Modifier.fillMaxSize())
 
@@ -263,7 +264,7 @@ fun ImmersivePlayer(
             var canvasCover by remember(canvas) { mutableFloatStateOf(0f) }
             Box(
                 (if (fill) Modifier.fillMaxSize() else Modifier.align(Alignment.TopCenter).requiredSize(side))
-                    .graphicsLayer { translationX = swipe * 0.35f },
+                    .graphicsLayer { translationX = swipe.value * 0.35f },
             ) {
                 AsyncImage(
                     hiRes(com.prism.music.data.PlaylistCovers.artOf(song), 1200), null, contentScale = ContentScale.Crop,
@@ -290,7 +291,11 @@ fun ImmersivePlayer(
 
         // ---- Shade where the lyrics are, so they (and the button, at the bottom) read over any cover.
         val black = { a: Float -> Color.Black.copy(alpha = a) }
-        Crossfade(place, label = "immersiveShade") { p ->
+        Crossfade(
+            place,
+            animationSpec = tween(com.prism.music.ui.theme.PrismTokens.Motion.EMPHASISED, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+            label = "immersiveShade",
+        ) { p ->
             val stops = when (p) {
                 ImmersiveLyrics.HIGH -> arrayOf(0f to black(0.62f), 0.42f to black(0.18f), 0.62f to Color.Transparent, 0.84f to black(0.2f), 1f to black(0.55f))
                 ImmersiveLyrics.MIDDLE -> arrayOf(0f to black(0.25f), 0.28f to black(0.3f), 0.5f to black(0.5f), 0.72f to black(0.3f), 1f to black(0.55f))
@@ -376,7 +381,15 @@ fun ImmersivePlayer(
                         .border(2.dp, com.prism.music.ui.theme.PrismTokens.spectrumRing(), CircleShape)
                         .clickable(onClickLabel = if (isPlaying) tr(R.string.widget_pause) else tr(R.string.widget_play)) { haptics.click(); poke++; c.player.togglePlay() },
                     contentAlignment = Alignment.Center,
-                ) { Icon(if (isPlaying) PrismIcons.Pause else PrismIcons.Play, if (isPlaying) tr(R.string.widget_pause) else tr(R.string.widget_play), Modifier.size(26.dp), tint = Color.Black) }
+                ) {
+                    Crossfade(isPlaying, animationSpec = tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK), label = "immersivePlayPause") { p ->
+                        Icon(
+                            if (p) PrismIcons.Pause else PrismIcons.Play,
+                            if (p) tr(R.string.widget_pause) else tr(R.string.widget_play),
+                            Modifier.size(26.dp), tint = Color.Black,
+                        )
+                    }
+                }
                 ImmersiveGlyph(PrismIcons.Next, tr(R.string.widget_next)) { haptics.tick(); poke++; c.player.next() }
                 HoldToLeaveButton(
                     onTap = { menu = true },

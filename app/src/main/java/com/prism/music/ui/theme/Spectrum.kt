@@ -122,6 +122,13 @@ object PrismTokens {
         const val QUICK = 120
         const val STANDARD = 240
         const val EMPHASISED = 380
+        /**
+         * A page or tab taking another's place. It used to be 700 ms, which read as lag on a tap and asked the phone to
+         * draw two whole screens at once for most of a second; at this length the change is still seen, at once.
+         */
+        const val SCREEN = 300
+        /** The one ease Prism moves with: quick off the mark, gentle into place. */
+        val Ease: androidx.compose.animation.core.Easing = androidx.compose.animation.core.FastOutSlowInEasing
     }
 }
 

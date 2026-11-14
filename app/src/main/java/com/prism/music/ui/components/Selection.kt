@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
@@ -195,7 +196,12 @@ object SelectionPlan {
 /** The bar while songs are picked: how many, All, ✕, and what to do with them. Takes the place of the mini player and tabs. */
 @Composable
 fun SelectionBar(selection: SongSelection, modifier: Modifier = Modifier) {
-    val picked = selection.picked ?: return
+    // Ending the selection empties [selection] at once; the bar keeps the last picks for its slide away, so leaving
+    // Select many is a hand-over back to the tabs rather than the bar disappearing before its exit runs.
+    val picks = selection.picked
+    val last = remember { mutableStateOf<Map<String, Song>?>(null) }
+    LaunchedEffect(picks) { if (picks != null) last.value = picks }
+    val picked = picks ?: last.value ?: return
     val c = LocalContainer.current
     val context = LocalContext.current
     val songs = picked.values.toList()

@@ -14,7 +14,7 @@ import android.view.LayoutInflater
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -24,6 +24,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -290,7 +292,12 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
     val settings by c.settings.flow.collectAsState()
-    val song = pc.currentSong.collectAsState().value ?: return
+    val playingSong by pc.currentSong.collectAsState()
+    // Stopping clears the song at once (the player's own stop gesture, the end of a queue). The screen keeps the last
+    // one for its slide away, instead of going blank on that frame and cutting out as the player closes.
+    val lastSong = remember { mutableStateOf<Song?>(null) }
+    LaunchedEffect(playingSong) { if (playingSong != null) lastSong.value = playingSong }
+    val song = playingSong ?: lastSong.value ?: return
     val isPlaying by pc.isPlaying.collectAsState()
     val buffering by pc.buffering.collectAsState()
     val videoMode by pc.videoMode.collectAsState()
@@ -438,7 +445,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
     }
     // How far the player has been pulled down (px). Closing slides it the rest of the way, from wherever it is, the same
     // way for Back and for a swipe (#26: a swipe used to hand over to a different exit animation part-way down).
-    val dismiss = remember { Animatable(0f) }
+    val dismiss = remember { DragOffset() }
     val screenPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     var closing by remember { mutableStateOf(false) }
     fun slideClosed() {
@@ -451,10 +458,10 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
             scope.launch { delay(CoverFlight.FLIGHT_MS + 100L); closing = false }
             return
         }
-        scope.launch {
-            dismiss.animateTo(screenPx, tween(if (settings.reduceMotion) 240 else 340, easing = FastOutSlowInEasing))
-            onCollapse()
-        }
+        dismiss.settle(
+            scope, screenPx,
+            tween(if (settings.reduceMotion) 240 else 340, easing = FastOutSlowInEasing),
+        ) { onCollapse() }
     }
     // Pulled down (or sliding closed), the page under the player shows again: its backgrounds move again.
     val cover = com.prism.music.ui.components.LocalPlayerCover.current
@@ -466,7 +473,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
         snapshotFlow { cover.leaving }.collect { leaving ->
             if (!leaving && (closing || dismiss.value != 0f)) {
                 closing = false
-                dismiss.animateTo(0f, spring())
+                dismiss.settle(scope, 0f, spring())
             }
         }
     }
@@ -516,10 +523,15 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
         spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
         label = "artScale",
     )
-    val swipe = remember { Animatable(0f) }
+    val swipe = remember { DragOffset() }
     val haptics = com.prism.music.ui.theme.rememberHaptics()
     var seekFlash by remember { mutableStateOf<SeekFlash?>(null) }
-    LaunchedEffect(seekFlash?.at) { if (seekFlash != null) { delay(750); seekFlash = null } }
+    // Kept for the label's fade out (it isn't cleared on the same frame it leaves).
+    val lastSeek = remember { mutableStateOf<SeekFlash?>(null) }
+    LaunchedEffect(seekFlash?.at) {
+        seekFlash?.let { lastSeek.value = it }
+        if (seekFlash != null) { delay(750); seekFlash = null }
+    }
 
     // ---------------------------------------------------------------- Canvas
     val metered = remember { context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered == true }
@@ -835,12 +847,14 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
         if (!inkLight) Box(Modifier.fillMaxWidth().height(statusTop + DISMISS_STRIP).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.32f), Color.Transparent))))
 
         val dismissGesture = Modifier.pointerInput(Unit) {
+            // The finger writes the offset as it moves (not one coroutine per delta, which could land out of order);
+            // it eases back when the finger lifts.
             detectVerticalDragGestures(
-                onDragEnd = { if (dismiss.value > 220f) slideClosed() else scope.launch { dismiss.animateTo(0f, spring()) } },
-                onDragCancel = { if (!closing) scope.launch { dismiss.animateTo(0f) } },
+                onDragEnd = { if (dismiss.value > 220f) slideClosed() else dismiss.settle(scope, 0f, spring()) },
+                onDragCancel = { if (!closing) dismiss.settle(scope, 0f, spring()) },
             ) { change, amount ->
                 change.consume()
-                if (!closing) scope.launch { dismiss.snapTo((dismiss.value + amount).coerceAtLeast(0f)) }
+                if (!closing) dismiss.set((dismiss.value + amount).coerceAtLeast(0f))
             }
         }
         // Settings → Player → Gestures (1.7.4): what a swipe, double tap or long press on the cover does. Read from the
@@ -862,7 +876,9 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                 com.prism.music.data.prefs.PlayerGesture.VIDEO -> if (videoAvailable || videoMode) pc.setVideoMode(!videoMode)
                 com.prism.music.data.prefs.PlayerGesture.SING -> onButton(com.prism.music.data.prefs.PlayerButton.SING)
                 com.prism.music.data.prefs.PlayerGesture.MENU -> showActions = true
-                com.prism.music.data.prefs.PlayerGesture.STOP -> { pc.stop(); slideClosed() }
+                // Stop first (the mini player mustn't come up for the song being stopped), then close. The screen keeps
+                // its last song for the exit, so the player slides away whole instead of going blank on the first frame.
+                com.prism.music.data.prefs.PlayerGesture.STOP -> { pc.stop(); onCollapse() }
                 // OPEN is the mini player's; the player is open already.
                 com.prism.music.data.prefs.PlayerGesture.SEEK_SIDES, com.prism.music.data.prefs.PlayerGesture.OPEN,
                 com.prism.music.data.prefs.PlayerGesture.NONE -> {}
@@ -884,19 +900,19 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                 onDragStart = { total = 0f },
                 onDragEnd = {
                     if (dismiss.value > 220f) slideClosed()
-                    else scope.launch {
+                    else {
                         val up = c.settings.current.coverSwipeUp
-                        if (total < -90f && up != com.prism.music.data.prefs.PlayerGesture.NONE) { dismiss.snapTo(0f); haptics.gestureEnd(); runGesture(up) }
-                        else dismiss.animateTo(0f, spring())
+                        if (total < -90f && up != com.prism.music.data.prefs.PlayerGesture.NONE) { dismiss.reset(0f); haptics.gestureEnd(); runGesture(up) }
+                        else dismiss.settle(scope, 0f, spring())
                     }
                 },
                 // An interrupted drag (a system gesture, a sheet opening) used to leave the player part-way down.
-                onDragCancel = { if (!closing) scope.launch { dismiss.animateTo(0f, spring()) } },
+                onDragCancel = { if (!closing) dismiss.settle(scope, 0f, spring()) },
             ) { change, amount ->
                 change.consume()
                 total += amount
                 // Back above where it started: follow the finger back to the top rather than stopping short of it.
-                if (!closing) scope.launch { dismiss.snapTo(total.coerceAtLeast(0f)) }
+                if (!closing) dismiss.set(total.coerceAtLeast(0f))
             }
         }
         val sleeveGesture = sleeveDrag(lyricsOpen, queueOpen, statsOpen)
@@ -930,8 +946,8 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
             var total = 0f
             val threshold = 72.dp.toPx()
             detectHorizontalDragGestures(
-                onDragStart = { total = 0f },
-                onDragCancel = { scope.launch { swipe.animateTo(0f) } },
+                onDragStart = { total = 0f; swipe.cancel() },
+                onDragCancel = { swipe.settle(scope, 0f, spring(stiffness = Spring.StiffnessMediumLow)) },
                 onDragEnd = {
                     val now = c.settings.current
                     val g = when {
@@ -940,7 +956,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                         else -> com.prism.music.data.prefs.PlayerGesture.NONE
                     }
                     if (g != com.prism.music.data.prefs.PlayerGesture.NONE) { haptics.gestureEnd(); runGesture(g) }
-                    scope.launch { swipe.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    swipe.settle(scope, 0f, spring(stiffness = Spring.StiffnessMediumLow))
                 },
             ) { _, d ->
                 val now = c.settings.current
@@ -948,7 +964,7 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                 val off = (if (total + d < 0f) now.coverSwipeLeft else now.coverSwipeRight) == com.prism.music.data.prefs.PlayerGesture.NONE
                 if (!off && (kotlin.math.abs(total) < threshold) != (kotlin.math.abs(total + d) < threshold)) haptics.threshold()
                 total += d
-                scope.launch { swipe.snapTo(if (off) 0f else total * 0.35f) }
+                swipe.set(if (off) 0f else total * 0.35f)
             }
         }
         val skipGesture = sideSwipe(lyricsOpen || queueOpen || statsOpen)
@@ -1150,16 +1166,13 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                                 CanvasPlayer(clip, canvasSaved, isPlaying, Modifier.fillMaxSize(), onCoverChanged = { canvasCover = it })
                             }
                         }
-                        seekFlash?.takeIf { !collapsePastHalf }?.let { f ->
-                            SeekLabel(f, Modifier.align(if (f.ahead) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 18.dp))
+                        SeekFlashLabel(seekFlash, lastSeek.value, !collapsePastHalf) { f ->
+                            Modifier.align(if (f.ahead) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 18.dp)
                         }
-                        playFlash?.let { at ->
-                            LaunchedEffect(at) { delay(700); playFlash = null }
-                            // What the tap did: paused shows pause, playing shows play.
-                            Box(Modifier.matchParentSize().clip(artShape).background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
-                                Icon(if (isPlaying) PrismIcons.Play else PrismIcons.Pause, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            }
-                        }
+                        if (playFlash != null) LaunchedEffect(playFlash) { delay(700); playFlash = null }
+                        // What the tap did: paused shows pause, playing shows play. It comes and goes softly rather than
+                        // flashing on and cutting off over the cover.
+                        PlayFlash(playFlash != null && !collapsePastHalf, artShape, isPlaying)
                     }
 
                     // The visualizer's Wave, behind the title.
@@ -1293,8 +1306,10 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
                     (!deckOnTap || coverDeck || lyricsOpen || queueOpen || statsOpen || (videoHidesDeck && !isPlaying))
                 AnimatedVisibility(
                     deckShown,
-                    enter = expandVertically(tween(420, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) + fadeIn(tween(420)),
-                    exit = shrinkVertically(tween(420, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) + fadeOut(tween(300)),
+                    // A tap brings the controls back; they shouldn't keep the thumb waiting. (A little longer than a tab,
+                    // as the deck is a whole row of room opening at the top.)
+                    enter = expandVertically(tween(300, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) + fadeIn(tween(220, easing = FastOutSlowInEasing)),
+                    exit = shrinkVertically(tween(260, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) + fadeOut(tween(200)),
                 ) {
                     // Settings → Controls & gestures → "Swipe up for the queue" (#200, #197): up on the controls opens the
                     // queue (from their right half) or the lyrics (left half); down closes whichever is open. One-handed,
@@ -1535,7 +1550,11 @@ private fun FullscreenVideo(song: Song, forceLandscape: Boolean, pip: Boolean = 
             .pointerInput(Unit) { detectTapGestures(onTap = { controls = !controls }, onDoubleTap = { pc.togglePlay() }) },
     ) {
         MusicVideoSurface(Modifier.fillMaxSize(), fill = false)
-        AnimatedVisibility(controls && !pip, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(
+            controls && !pip,
+            enter = fadeIn(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease)),
+            exit = fadeOut(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD)),
+        ) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
                 Column(Modifier.align(Alignment.TopStart).padding(24.dp)) {
                     Text(song.title, color = Color.White, style = MaterialTheme.typography.titleLarge, maxLines = 1)
@@ -1549,11 +1568,46 @@ private fun FullscreenVideo(song: Song, forceLandscape: Boolean, pip: Boolean = 
                     Modifier.align(Alignment.Center).size(72.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))
                         .clickable(remember { MutableInteractionSource() }, indication = null) { pc.togglePlay() },
                     contentAlignment = Alignment.Center,
-                ) { Icon(if (isPlaying) PrismIcons.Pause else PrismIcons.Play, tr(R.string.play_pause), tint = Color.White, modifier = Modifier.size(44.dp)) }
+                ) {
+                    // The same quick glyph hand-over as the player's disc, rather than a cut.
+                    Crossfade(isPlaying, animationSpec = tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK), label = "fullscreenPlayPause") { p ->
+                        Icon(if (p) PrismIcons.Pause else PrismIcons.Play, tr(R.string.play_pause), tint = Color.White, modifier = Modifier.size(44.dp))
+                    }
+                }
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 32.dp, vertical = 16.dp)) {
                     PlayheadScrubber(position, pc.duration)
                 }
             }
+        }
+    }
+}
+
+/** The seek label over the cover (double-tap back or ahead): it grows in and fades away with the label kept for the exit. */
+@Composable
+private fun SeekFlashLabel(flash: SeekFlash?, last: SeekFlash?, visible: Boolean, modifier: (SeekFlash) -> Modifier) {
+    val f = flash ?: last ?: return
+    AnimatedVisibility(
+        visible && flash != null,
+        modifier = modifier(f),
+        enter = fadeIn(tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK)) +
+            scaleIn(initialScale = 0.9f, animationSpec = tween(180, easing = FastOutSlowInEasing)),
+        exit = fadeOut(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = FastOutSlowInEasing)) +
+            scaleOut(targetScale = 0.96f, animationSpec = tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = FastOutSlowInEasing)),
+    ) {
+        SeekLabel(f, Modifier)
+    }
+}
+
+/** The pause / play shown over the cover after a tap on it: fades in and out instead of cutting on and off. */
+@Composable
+private fun PlayFlash(visible: Boolean, shape: androidx.compose.ui.graphics.Shape, isPlaying: Boolean) {
+    AnimatedVisibility(
+        visible,
+        enter = fadeIn(tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK)),
+        exit = fadeOut(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = FastOutSlowInEasing)),
+    ) {
+        Box(Modifier.fillMaxSize().clip(shape).background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+            Icon(if (isPlaying) PrismIcons.Play else PrismIcons.Pause, null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
     }
 }

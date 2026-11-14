@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -394,7 +395,9 @@ private fun navHeight(style: NavBarStyle, size: com.prism.music.data.prefs.NavBa
  */
 internal class PageSlides(on: Boolean, rtl: Boolean) {
     private val side = if (rtl) -1 else 1
-    private val ms = 360
+    // The same length as the cross-fade a page gets (PrismTokens.Motion.SCREEN): moving between screens shouldn't
+    // take longer just because it slides.
+    private val ms = 300
     val enter: EnterTransition? = if (!on) null else slideInHorizontally(tween(ms)) { it * side } + fadeIn(tween(ms / 2))
     val exit: ExitTransition? = if (!on) null else slideOutHorizontally(tween(ms)) { -it * side / 4 } + fadeOut(tween(ms))
     val popEnter: EnterTransition? = if (!on) null else slideInHorizontally(tween(ms)) { -it * side / 4 } + fadeIn(tween(ms))
@@ -406,6 +409,13 @@ private fun miniHeight(style: MiniPlayerStyle): Dp = when (style) {
     MiniPlayerStyle.SLIM -> 54.dp
     MiniPlayerStyle.PILL -> 56.dp
 }
+
+/**
+ * Whether two destinations are both top-level tabs, whose pages hand over quicker than one opened from a list or a
+ * card (a tab's own route with optional arguments, "liked?genre={genre}", still counts as that tab).
+ */
+internal fun bothAreTabs(fromRoute: String?, toRoute: String?, tabRoutes: Set<String>): Boolean =
+    fromRoute?.substringBefore('?') in tabRoutes && toRoute?.substringBefore('?') in tabRoutes
 
 @Composable
 private fun rememberArtworkColor(song: Song?, settings: com.prism.music.data.prefs.AppSettings): Color? {
@@ -536,12 +546,24 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
         val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
         val cutoutStart = WindowInsets.displayCutout.union(WindowInsets.navigationBars).asPaddingValues().calculateStartPadding(layoutDirection)
         val railInset = if (useRail) cutoutStart + RAIL_MARGIN + RAIL_WIDTH + 4.dp else 0.dp
-        // Room the pages leave at the bottom for the bar, the mini player and the system's own bar.
+        // Room the pages leave at the bottom for the bar, the mini player and the system's own bar. The mini player's
+        // room grows and shrinks with it, so the page doesn't jump by 72 dp the instant a song starts (or stops).
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val chromeEase = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+        val slotMs = if (settings.reduceMotion) 0 else com.prism.music.ui.theme.PrismTokens.Motion.STANDARD
+        val miniSlot by animateDpAsState(
+            if (song != null) miniHeight(settings.miniPlayerStyle) + 8.dp else 0.dp,
+            tween(slotMs, easing = chromeEase),
+            label = "miniSlot",
+        )
+        val sessionSlot by animateDpAsState(
+            if (inSession) 42.dp else 0.dp,
+            tween(slotMs, easing = chromeEase),
+            label = "sessionSlot",
+        )
         val bottomPadding = navInset +
             (if (useRail) 16.dp else navHeight(settings.navStyle, settings.navBarSize) + (if (settings.navStyle == NavBarStyle.DOCKED) 0.dp else 16.dp)) +
-            (if (song != null) miniHeight(settings.miniPlayerStyle) + 8.dp else 0.dp) +
-            (if (inSession) 42.dp else 0.dp)
+            miniSlot + sessionSlot
 
         // Decided once: the tab Prism opens on is the root every other tab sits on, and the welcome
         // screen is a real destination, so signing in from it navigates inside a graph that already exists.
@@ -573,6 +595,13 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
             if (barCompact && settings.navHideOnScroll) 1f else 0f,
             spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow), label = "bar",
         )
+        // The chrome (mini player, Together pill, the selection bar) rises into place and leaves the same way, at one
+        // speed everywhere; with reduced motion it's there at once.
+        val chromeMs = if (settings.reduceMotion) 0 else com.prism.music.ui.theme.PrismTokens.Motion.STANDARD
+        val chromeEnter = slideInVertically(tween(chromeMs, easing = chromeEase)) { it } +
+            fadeIn(tween(chromeMs, easing = chromeEase))
+        val chromeExit = slideOutVertically(tween(chromeMs, easing = chromeEase)) { it } +
+            fadeOut(tween(if (settings.reduceMotion) 0 else com.prism.music.ui.theme.PrismTokens.Motion.QUICK))
 
         LaunchedEffect(Unit) {
             c.player.errors.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -661,18 +690,31 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                     // The same cross-fade both ways, and for the back gesture too: left to its default,
                     // a predictive back (swipe from the edge) shrinks the page like a card instead.
                     // "Fades between screens" off (#227): pages swap at once, so a tap can't land on the one fading out.
-                    val fadeMs = if (settings.behavior.screenFades) 700 else 0
+                    // On: a short cross-fade, eased as the rest of Prism moves (it took 700 ms, which read as a delay).
+                    val fadeMs = when {
+                        !settings.behavior.screenFades -> 0
+                        settings.reduceMotion -> com.prism.music.ui.theme.PrismTokens.Motion.QUICK
+                        else -> com.prism.music.ui.theme.PrismTokens.Motion.SCREEN
+                    }
+                    val fadeEase = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+                    val fadeSpec = tween<Float>(fadeMs, easing = fadeEase)
+                    // Between two tabs, the bar has already said what happened: the pages hand over quicker than a page
+                    // opening from a list or a card does. (A tab's page with arguments, "liked?genre=…", is still its tab.)
+                    val tabRoutes = tabs.map { it.route.substringBefore('?') }.toSet()
+                    fun isTabSwap(from: androidx.navigation.NavBackStackEntry, to: androidx.navigation.NavBackStackEntry): Boolean =
+                        bothAreTabs(from.destination.route, to.destination.route, tabRoutes)
+                    val tabFadeSpec = tween<Float>(if (settings.reduceMotion) 0 else 180, easing = fadeEase)
                     // "Slide between screens" (#208, 1.7.9.2): a new page comes in from the side and Back takes it
                     // away the same way (from the left in right-to-left languages); the page underneath moves a little.
                     val slides = PageSlides(settings.behavior.screenFades && settings.behavior.pageSlide, androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl)
                     NavHost(
                         navController, startDestination = start,
-                        enterTransition = { slides.enter ?: if (fadeMs == 0) EnterTransition.None else fadeIn(tween(fadeMs)) },
-                        exitTransition = { slides.exit ?: if (fadeMs == 0) ExitTransition.None else fadeOut(tween(fadeMs)) },
-                        popEnterTransition = { slides.popEnter ?: if (fadeMs == 0) EnterTransition.None else fadeIn(tween(fadeMs)) },
-                        popExitTransition = { slides.popExit ?: if (fadeMs == 0) ExitTransition.None else fadeOut(tween(fadeMs)) },
-                        predictivePopEnterTransition = { slides.popEnter ?: if (fadeMs == 0) EnterTransition.None else fadeIn(tween(fadeMs)) },
-                        predictivePopExitTransition = { slides.popExit ?: if (fadeMs == 0) ExitTransition.None else fadeOut(tween(fadeMs)) },
+                        enterTransition = { slides.enter ?: if (fadeMs == 0) EnterTransition.None else fadeIn(if (isTabSwap(initialState, targetState)) tabFadeSpec else fadeSpec) },
+                        exitTransition = { slides.exit ?: if (fadeMs == 0) ExitTransition.None else fadeOut(if (isTabSwap(initialState, targetState)) tabFadeSpec else fadeSpec) },
+                        popEnterTransition = { slides.popEnter ?: if (fadeMs == 0) EnterTransition.None else fadeIn(if (isTabSwap(initialState, targetState)) tabFadeSpec else fadeSpec) },
+                        popExitTransition = { slides.popExit ?: if (fadeMs == 0) ExitTransition.None else fadeOut(if (isTabSwap(initialState, targetState)) tabFadeSpec else fadeSpec) },
+                        predictivePopEnterTransition = { slides.popEnter ?: if (fadeMs == 0) EnterTransition.None else fadeIn(if (isTabSwap(initialState, targetState)) tabFadeSpec else fadeSpec) },
+                        predictivePopExitTransition = { slides.popExit ?: if (fadeMs == 0) ExitTransition.None else fadeOut(if (isTabSwap(initialState, targetState)) tabFadeSpec else fadeSpec) },
                     ) {
                         composable(Routes.WELCOME) {
                             WelcomeScreen(
@@ -851,36 +893,36 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                             .padding(start = railInset).navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        AnimatedVisibility(inSession && !playerOpen && route != Routes.TOGETHER, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                        AnimatedVisibility(inSession && !playerOpen && route != Routes.TOGETHER, enter = chromeEnter, exit = chromeExit) {
                             TogetherPill(together, Modifier.padding(bottom = 8.dp)) { navigator.go(Routes.TOGETHER) }
                         }
-                        AnimatedVisibility(song != null && !playerOpen && !selection.selecting, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                        AnimatedVisibility(song != null && !playerOpen && !selection.selecting, enter = chromeEnter, exit = chromeExit) {
                             MiniPlayer(Modifier.widthIn(max = 720.dp).customizable(com.prism.music.ui.components.CustomizeTarget.MINI_PLAYER)) { playerOpen = true }
                         }
                     }
                 }
-                // Select many: its bar in the place of the mini player and tabs while songs are picked.
+                // Select many: its bar takes the place of the mini player and tabs while songs are picked. It's declared
+                // after the chrome so, during the hand-over, the bar that's arriving draws over the one leaving.
                 val picking = selection.selecting && showChrome
-                if (picking) com.prism.music.ui.components.SelectionBar(
-                    selection,
-                    Modifier.align(Alignment.BottomCenter).then(underPlayer).padding(start = if (useRail) railInset else 0.dp)
-                        .navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
-                )
                 // Floating chrome: mini player + tab bar
-                if (showChrome && !useRail && !picking) {
+                AnimatedVisibility(
+                    visible = showChrome && !useRail && !picking,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = chromeEnter, exit = chromeExit,
+                ) {
                     val docked = settings.navStyle == NavBarStyle.DOCKED
                     val keyboard = WindowInsets.ime
                     Column(
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(underPlayer)
+                        Modifier.fillMaxWidth().then(underPlayer)
                             .graphicsLayer { alpha = if (com.prism.music.ui.theme.hiddenByKeyboard(keyboard.getBottom(this), size.height)) 0f else 1f }
                             .then(if (docked) Modifier else Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)),
                     ) {
-                        AnimatedVisibility(inSession && !playerOpen && route != Routes.TOGETHER, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                        AnimatedVisibility(inSession && !playerOpen && route != Routes.TOGETHER, enter = chromeEnter, exit = chromeExit) {
                             TogetherPill(together, Modifier.padding(bottom = 8.dp)) { navigator.go(Routes.TOGETHER) }
                         }
                         // "Joined to the tab bar" (1.7.6): one piece of glass, the mini player on top of the tabs.
                         val joined = settings.miniPlayerJoined && settings.navStyle == NavBarStyle.FLOATING
-                        if (!joined) AnimatedVisibility(song != null && !playerOpen, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                        if (!joined) AnimatedVisibility(song != null && !playerOpen, enter = chromeEnter, exit = chromeExit) {
                             // Spectrum's bar (the Card style over the docked tab bar) sits right on the tab bar, edge to edge.
                             val flush = docked && settings.miniPlayerStyle == MiniPlayerStyle.CARD && !(settings.liquidGlass || settings.frostedGlass)
                             MiniPlayer(
@@ -889,12 +931,29 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                             ) { playerOpen = true }
                         }
                         val joinedMini: (@Composable () -> Unit)? = if (!joined) null else ({
-                            AnimatedVisibility(song != null && !playerOpen, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                            AnimatedVisibility(
+                                song != null && !playerOpen,
+                                enter = expandVertically(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = chromeEase), expandFrom = Alignment.Bottom) +
+                                    fadeIn(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = chromeEase)),
+                                exit = shrinkVertically(tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = chromeEase), shrinkTowards = Alignment.Bottom) +
+                                    fadeOut(tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK)),
+                            ) {
                                 MiniPlayer(Modifier.customizable(com.prism.music.ui.components.CustomizeTarget.MINI_PLAYER), bare = true) { playerOpen = true }
                             }
                         })
                         Box(Modifier.customizable(com.prism.music.ui.components.CustomizeTarget.TAB_BAR)) { TabBar(tabs, route, barT, settings, joinedMini, selectTab) }
                     }
+                }
+                AnimatedVisibility(
+                    visible = picking,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = chromeEnter, exit = chromeExit,
+                ) {
+                    com.prism.music.ui.components.SelectionBar(
+                        selection,
+                        Modifier.then(underPlayer).padding(start = if (useRail) railInset else 0.dp)
+                            .navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
                 }
                 }
 
@@ -906,6 +965,8 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                 val flyBack = com.prism.music.ui.player.CoverFlight.returnsWith(settings.view.coverFlight, settings.view.coverFlightBack, settings.reduceMotion) && coverKnown
                 LaunchedEffect(playerOpen) {
                     if (!playerOpen) {
+                        // A cover still flying out stops there: the player is gone, and only a flight back belongs now.
+                        com.prism.music.ui.player.CoverFlight.cancel()
                         if (flyBack) com.prism.music.ui.player.CoverFlight.flyBack()
                         com.prism.music.ui.player.CoverFlight.player = null
                     } else if (flight) com.prism.music.ui.player.CoverFlight.fly()
@@ -1004,13 +1065,20 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
 /** Above the mini player while a Listen Together session is on: who with, and a way back to it. */
 @Composable
 private fun TogetherPill(state: com.prism.music.playback.together.TogetherState, modifier: Modifier, onClick: () -> Unit) {
-    val (icon, text) = when (state) {
+    // Leaving the session empties [state] at once; the pill keeps the last one for its slide away (see MiniPlayer).
+    val shown = remember { mutableStateOf<com.prism.music.playback.together.TogetherState?>(null) }
+    LaunchedEffect(state) {
+        if (state is com.prism.music.playback.together.TogetherState.Hosting || state is com.prism.music.playback.together.TogetherState.Guest) shown.value = state
+    }
+    val shownState = (state as? com.prism.music.playback.together.TogetherState.Hosting ?: state as? com.prism.music.playback.together.TogetherState.Guest)
+        ?: shown.value ?: return
+    val (icon, text) = when (shownState) {
         is com.prism.music.playback.together.TogetherState.Hosting ->
-            PrismIcons.Radio to tr(R.string.hosting_code, state.code) + when (state.guests.size) { 0 -> ""; 1 -> tr(R.string.t_1_listening); else -> tr(R.string.listening_3, state.guests.size) }
+            PrismIcons.Radio to tr(R.string.hosting_code, shownState.code) + when (shownState.guests.size) { 0 -> ""; 1 -> tr(R.string.t_1_listening); else -> tr(R.string.listening_3, shownState.guests.size) }
         is com.prism.music.playback.together.TogetherState.Guest ->
-            PrismIcons.Groups to tr(R.string.with, state.hostName) + when {
-                !state.listenHere -> tr(R.string.adding_songs)
-                !state.inSync -> tr(R.string.out_of_step_2)
+            PrismIcons.Groups to tr(R.string.with, shownState.hostName) + when {
+                !shownState.listenHere -> tr(R.string.adding_songs)
+                !shownState.inSync -> tr(R.string.out_of_step_2)
                 else -> ""
             }
         else -> return
@@ -1057,7 +1125,11 @@ private fun NavRail(tabs: List<Tab>, route: String?, settings: AppSettings, onSe
             tabs.forEach { tab ->
                 val selected = isSelected(tab, route)
                 val fg = if (selected) scheme.primary else scheme.onSurfaceVariant
-                val indicator by animateColorAsState(if (selected) scheme.primary.copy(alpha = 0.16f) else Color.Transparent, label = "railTab")
+                val indicator by animateColorAsState(
+                    if (selected) scheme.primary.copy(alpha = 0.16f) else Color.Transparent,
+                    tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+                    label = "railTab",
+                )
                 val showLabel = settings.navLabels == NavLabels.ALWAYS || settings.navLabels == NavLabels.WORDS || (settings.navLabels == NavLabels.SELECTED && selected)
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(indicator)
@@ -1194,11 +1266,15 @@ internal fun navFill(fill: com.prism.music.data.prefs.NavBarFill): Color {
 @Composable
 private fun TabItem(tab: Tab, selected: Boolean, labels: NavLabels, compact: Float, modifier: Modifier, line: Boolean = false, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val fg by animateColorAsState(if (selected) scheme.onSurface else scheme.ink3, label = "tabInk")
+    // One speed and one ease for every part of a tab changing: ink, the lifted glass, the line. (Colors used a spring,
+    // which could overshoot the accent on its way in.)
+    val tabEase = com.prism.music.ui.theme.PrismTokens.Motion.Ease
+    val tabMs = com.prism.music.ui.theme.PrismTokens.Motion.STANDARD
+    val fg by animateColorAsState(if (selected) scheme.onSurface else scheme.ink3, tween(tabMs, easing = tabEase), label = "tabInk")
     // Aura × Spectrum: the current tab is lifted on the glass, with a short line of split light under it.
     val lifted = com.prism.music.ui.components.frostFill(2.6f)
-    val indicator by animateColorAsState(if (selected && !line) lifted else Color.Transparent, label = "tab")
-    val mark by animateFloatAsState(if (selected) 1f else 0f, tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD), label = "tabLine")
+    val indicator by animateColorAsState(if (selected && !line) lifted else Color.Transparent, tween(tabMs, easing = tabEase), label = "tab")
+    val mark by animateFloatAsState(if (selected) 1f else 0f, tween(tabMs, easing = tabEase), label = "tabLine")
     val dark = com.prism.music.ui.theme.LocalIsDark.current
     // Holding the Settings tab switches "Customize this" on and off (1.7.3).
     val c = LocalContainer.current
@@ -1257,7 +1333,12 @@ private fun TabItem(tab: Tab, selected: Boolean, labels: NavLabels, compact: Flo
                 // 24 dp as in the other label styles (#272: 22 here made every icon a little smaller with "Selected").
                 Icon(icon, tab.label, tint = fg, modifier = Modifier.size(24.dp).then(if (selected) Modifier.tabTint(tabTint) else Modifier))
             }
-            AnimatedVisibility(selected && compact < 0.5f, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            AnimatedVisibility(
+                selected && compact < 0.5f,
+                enter = expandVertically(tween(tabMs, easing = tabEase), expandFrom = Alignment.Bottom) + fadeIn(tween(tabMs, easing = tabEase)),
+                exit = shrinkVertically(tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK, easing = tabEase), shrinkTowards = Alignment.Bottom) +
+                    fadeOut(tween(com.prism.music.ui.theme.PrismTokens.Motion.QUICK)),
+            ) {
                 Text(
                     tab.label, color = fg, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -1288,7 +1369,11 @@ private fun TabItem(tab: Tab, selected: Boolean, labels: NavLabels, compact: Flo
 @Composable
 private fun MinimalTab(tab: Tab, selected: Boolean, height: Dp = 44.dp, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) scheme.onSurface else Color.Transparent, label = "minTab")
+    val bg by animateColorAsState(
+        if (selected) scheme.onSurface else Color.Transparent,
+        tween(com.prism.music.ui.theme.PrismTokens.Motion.STANDARD, easing = com.prism.music.ui.theme.PrismTokens.Motion.Ease),
+        label = "minTab",
+    )
     Box(
         Modifier.size(54.dp, height).clip(CircleShape).background(bg)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = tab.label, onClick = onClick),
