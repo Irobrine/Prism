@@ -1518,6 +1518,9 @@
     <string name="page_titles">Заголовки сторінок</string>
     <string name="album_playlist_cards">Картки альбомів і плейлистів</string>
     <string name="open_the_keyboard">Відкривати клавіатуру</string>
+    <string name="keyboard_when_search_opens">Коли відкривається Пошук</string>
+    <string name="keyboard_second_tap">Повторне торкання Пошуку</string>
+    <string name="keyboard_second_tap_info">Готово до введення під час відкриття Пошуку або клавіатура залишається прихованою, доки вкладку Пошук не торкнутися ще раз. Відкриття Пошуку з постійних елементів керування медіа все одно одразу показує її.</string>
     <string name="search_typing">пошук введення</string>
     <string name="player_blur_cover_color">плеєр розмиття обкладинка колір</string>
     <string name="show_background">Показувати фон</string>

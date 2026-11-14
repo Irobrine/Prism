@@ -1518,6 +1518,9 @@
     <string name="page_titles">عنوان صفحه‌ها</string>
     <string name="album_playlist_cards">کارت‌های آلبوم و فهرست پخش</string>
     <string name="open_the_keyboard">باز کردن صفحه‌کلید</string>
+    <string name="keyboard_when_search_opens">هنگام باز شدن جستجو</string>
+    <string name="keyboard_second_tap">ضربه دوباره به جستجو</string>
+    <string name="keyboard_second_tap_info">آماده تایپ هنگام باز شدن جستجو، یا با صفحه‌کلید پایین تا زمانی که دوباره روی زبانه جستجو ضربه بزنید. باز کردن جستجو از کنترل‌های دائمی رسانه باز هم آن را فوراً بالا می‌آورد.</string>
     <string name="search_typing">جستجو تایپ کردن</string>
     <string name="player_blur_cover_color">پخش‌کننده محو کاور رنگ</string>
     <string name="show_background">نمایش پس‌زمینه</string>

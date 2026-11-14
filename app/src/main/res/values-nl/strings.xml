@@ -1518,6 +1518,9 @@
     <string name="page_titles">Paginatitels</string>
     <string name="album_playlist_cards">Album- &amp; playlistkaarten</string>
     <string name="open_the_keyboard">Het toetsenbord openen</string>
+    <string name="keyboard_when_search_opens">Als Zoeken opent</string>
+    <string name="keyboard_second_tap">Nogmaals op Zoeken tikken</string>
+    <string name="keyboard_second_tap_info">Klaar om te typen als Zoeken opent, of met het toetsenbord omlaag tot de tab Zoeken opnieuw wordt aangetikt. Zoeken openen vanuit de blijvende mediaregelaars brengt het toch meteen omhoog.</string>
     <string name="search_typing">zoeken typen</string>
     <string name="player_blur_cover_color">speler vervaging cover kleur</string>
     <string name="show_background">Achtergrond tonen</string>

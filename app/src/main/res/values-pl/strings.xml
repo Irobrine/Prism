@@ -1518,6 +1518,9 @@
     <string name="page_titles">Tytuły stron</string>
     <string name="album_playlist_cards">Karty albumów i playlist</string>
     <string name="open_the_keyboard">Otwieraj klawiaturę</string>
+    <string name="keyboard_when_search_opens">Gdy Wyszukiwanie się otwiera</string>
+    <string name="keyboard_second_tap">Ponowne dotknięcie Wyszukiwania</string>
+    <string name="keyboard_second_tap_info">Gotowe do pisania po otwarciu Wyszukiwania lub z klawiaturą schowaną, dopóki karta Wyszukiwanie nie zostanie dotknięta ponownie. Otwarcie Wyszukiwania ze stałych elementów sterujących multimediami nadal od razu ją pokazuje.</string>
     <string name="search_typing">szukaj pisanie klawiatura</string>
     <string name="player_blur_cover_color">odtwarzacz rozmycie okładka kolor</string>
     <string name="show_background">Pokaż tło</string>

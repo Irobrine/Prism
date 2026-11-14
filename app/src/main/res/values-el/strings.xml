@@ -1518,6 +1518,9 @@
     <string name="page_titles">Τίτλοι σελίδων</string>
     <string name="album_playlist_cards">Κάρτες άλμπουμ &amp; playlist</string>
     <string name="open_the_keyboard">Άνοιγμα πληκτρολογίου</string>
+    <string name="keyboard_when_search_opens">Όταν ανοίγει η Αναζήτηση</string>
+    <string name="keyboard_second_tap">Πάτημα ξανά στην Αναζήτηση</string>
+    <string name="keyboard_second_tap_info">Έτοιμο για πληκτρολόγηση όταν ανοίγει η Αναζήτηση, ή με το πληκτρολόγιο κρυμμένο μέχρι να πατηθεί ξανά η καρτέλα Αναζήτηση. Το άνοιγμα της Αναζήτησης από τα μόνιμα στοιχεία ελέγχου μέσων το εμφανίζει πάντως αμέσως.</string>
     <string name="search_typing">αναζήτηση πληκτρολόγηση</string>
     <string name="player_blur_cover_color">player θάμπωμα εξώφυλλο χρώμα</string>
     <string name="show_background">Εμφάνιση φόντου</string>

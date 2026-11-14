@@ -1518,6 +1518,9 @@
     <string name="page_titles">Oldalcímek</string>
     <string name="album_playlist_cards">Album- és lejátszásilista-kártyák</string>
     <string name="open_the_keyboard">Billentyűzet megnyitása</string>
+    <string name="keyboard_when_search_opens">A Keresés megnyitásakor</string>
+    <string name="keyboard_second_tap">Újabb koppintás a Keresésre</string>
+    <string name="keyboard_second_tap_info">Gépelésre kész a Keresés megnyitásakor, vagy a billentyűzet lent marad, amíg a Keresés lapjára újra nem koppint. A Keresés megnyitása az állandó médiaszabályzókból ettől még azonnal felhozza.</string>
     <string name="search_typing">keresés gépelés</string>
     <string name="player_blur_cover_color">lejátszó elmosás borító szín</string>
     <string name="show_background">Háttér megjelenítése</string>

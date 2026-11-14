@@ -1518,6 +1518,9 @@
     <string name="page_titles">Títulos de página</string>
     <string name="album_playlist_cards">Tarjetas de álbumes y playlists</string>
     <string name="open_the_keyboard">Abrir el teclado</string>
+    <string name="keyboard_when_search_opens">Al abrir Buscar</string>
+    <string name="keyboard_second_tap">Tocar Buscar de nuevo</string>
+    <string name="keyboard_second_tap_info">Listo para escribir al abrir Buscar, o con el teclado oculto hasta que se toque de nuevo la pestaña Buscar. Abrir Buscar desde los controles multimedia persistentes lo muestra igualmente al instante.</string>
     <string name="search_typing">buscar escribir</string>
     <string name="player_blur_cover_color">reproductor desenfoque portada color</string>
     <string name="show_background">Mostrar fondo</string>

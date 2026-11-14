@@ -1518,6 +1518,9 @@
     <string name="page_titles">Заголовки страниц</string>
     <string name="album_playlist_cards">Карточки альбомов и плейлистов</string>
     <string name="open_the_keyboard">Открывать клавиатуру</string>
+    <string name="keyboard_when_search_opens">При открытии Поиска</string>
+    <string name="keyboard_second_tap">Повторное нажатие на Поиск</string>
+    <string name="keyboard_second_tap_info">Готово к вводу при открытии Поиска или клавиатура остаётся скрытой, пока вкладка Поиск не будет нажата ещё раз. Открытие Поиска из постоянных элементов управления мультимедиа всё равно сразу показывает её.</string>
     <string name="search_typing">поиск ввод</string>
     <string name="player_blur_cover_color">плеер размытие обложка цвет</string>
     <string name="show_background">Показывать фон</string>

@@ -1518,6 +1518,9 @@
     <string name="page_titles">Sidtitlar</string>
     <string name="album_playlist_cards">Album- &amp; spellistkort</string>
     <string name="open_the_keyboard">Öppna tangentbordet</string>
+    <string name="keyboard_when_search_opens">När Sök öppnas</string>
+    <string name="keyboard_second_tap">Tryck på Sök igen</string>
+    <string name="keyboard_second_tap_info">Redo att skriva när Sök öppnas, eller med tangentbordet nere tills fliken Sök trycks igen. Att öppna Sök från de beständiga mediekontrollerna visar det ändå direkt.</string>
     <string name="search_typing">sök skriva</string>
     <string name="player_blur_cover_color">spelare oskärpa omslag färg</string>
     <string name="show_background">Visa bakgrund</string>

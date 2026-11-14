@@ -1518,6 +1518,9 @@
     <string name="page_titles">عناوين الصفحات</string>
     <string name="album_playlist_cards">بطاقات الألبومات وقوائم التشغيل</string>
     <string name="open_the_keyboard">فتح لوحة المفاتيح</string>
+    <string name="keyboard_when_search_opens">عند فتح البحث</string>
+    <string name="keyboard_second_tap">النقر على البحث مرة أخرى</string>
+    <string name="keyboard_second_tap_info">جاهز للكتابة عند فتح البحث، أو مع بقاء لوحة المفاتيح مغلقة حتى يتم النقر على تبويب البحث مرة ثانية. فتح البحث من عناصر التحكم الدائمة في الوسائط لا يزال يرفعها فورًا.</string>
     <string name="search_typing">بحث كتابة</string>
     <string name="player_blur_cover_color">المشغّل تمويه غلاف لون</string>
     <string name="show_background">إظهار الخلفية</string>
