@@ -65,7 +65,7 @@ class PersistentKeepAliveService : AccessibilityService() {
 
     companion object {
         /** How often the playback service is checked on (it may be stopped without the process going). */
-        private const val EVERY_MS = 15_000L
+        private const val EVERY_MS = 5_000L
 
         /** Whether the listener has turned Prism's keep-alive accessibility service on. */
         fun enabled(context: android.content.Context): Boolean {
