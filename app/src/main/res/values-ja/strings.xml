@@ -1518,6 +1518,9 @@
     <string name="page_titles">ページのタイトル</string>
     <string name="album_playlist_cards">アルバムとプレイリストのカード</string>
     <string name="open_the_keyboard">キーボードを開く</string>
+    <string name="keyboard_when_search_opens">検索を開いたとき</string>
+    <string name="keyboard_second_tap">検索をもう一度タップ</string>
+    <string name="keyboard_second_tap_info">検索を開いたらすぐに入力できるようにするか、検索タブをもう一度タップするまでキーボードを閉じておきます。常駐メディアコントロールから検索を開いた場合は、どちらでもすぐにキーボードが開きます。</string>
     <string name="search_typing">検索 入力</string>
     <string name="player_blur_cover_color">プレーヤー ぼかし ジャケット 色</string>
     <string name="show_background">背景を表示</string>

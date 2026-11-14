@@ -1518,6 +1518,9 @@
     <string name="page_titles">Seitentitel</string>
     <string name="album_playlist_cards">Album- &amp; Playlist-Karten</string>
     <string name="open_the_keyboard">Tastatur öffnen</string>
+    <string name="keyboard_when_search_opens">Wenn Suche geöffnet wird</string>
+    <string name="keyboard_second_tap">Suche erneut antippen</string>
+    <string name="keyboard_second_tap_info">Bereit zum Tippen, wenn die Suche geöffnet wird, oder mit geschlossener Tastatur, bis die Suche-Registerkarte erneut angetippt wird. Das Öffnen der Suche über die dauerhaften Mediensteuerungen öffnet sie trotzdem sofort.</string>
     <string name="search_typing">suche tippen tastatur</string>
     <string name="player_blur_cover_color">player unschärfe cover farbe</string>
     <string name="show_background">Hintergrund zeigen</string>

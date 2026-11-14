@@ -1518,6 +1518,9 @@
     <string name="page_titles">पेज टाइटल</string>
     <string name="album_playlist_cards">एल्बम &amp; प्लेलिस्ट कार्ड</string>
     <string name="open_the_keyboard">कीबोर्ड खोलें</string>
+    <string name="keyboard_when_search_opens">सर्च खुलने पर</string>
+    <string name="keyboard_second_tap">सर्च पर फिर टैप करें</string>
+    <string name="keyboard_second_tap_info">सर्च खुलने पर टाइप के लिए तैयार, या सर्च टैब पर दोबारा टैप होने तक कीबोर्ड नीचे रहता है। स्थायी मीडिया नियंत्रणों से सर्च खोलने पर भी यह तुरंत ऊपर आता है।</string>
     <string name="search_typing">खोज टाइप करना</string>
     <string name="player_blur_cover_color">प्लेयर ब्लर कवर रंग</string>
     <string name="show_background">बैकग्राउंड दिखाएं</string>

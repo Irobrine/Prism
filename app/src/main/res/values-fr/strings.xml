@@ -1518,6 +1518,9 @@
     <string name="page_titles">Titres des pages</string>
     <string name="album_playlist_cards">Cartes d’album et de playlist</string>
     <string name="open_the_keyboard">Ouvrir le clavier</string>
+    <string name="keyboard_when_search_opens">À l\'ouverture de Recherche</string>
+    <string name="keyboard_second_tap">Toucher Recherche à nouveau</string>
+    <string name="keyboard_second_tap_info">Prêt à taper à l\'ouverture de Recherche, ou avec le clavier masqué jusqu\'à ce que l\'onglet Recherche soit touché à nouveau. Ouvrir Recherche depuis les commandes multimédias persistantes l\'affiche quand même aussitôt.</string>
     <string name="search_typing">recherche saisie</string>
     <string name="player_blur_cover_color">lecteur flou pochette couleur</string>
     <string name="show_background">Afficher l’arrière-plan</string>

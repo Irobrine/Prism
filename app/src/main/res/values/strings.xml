@@ -1603,6 +1603,9 @@
     <string name="page_titles">Page titles</string>
     <string name="album_playlist_cards">Album &amp; playlist cards</string>
     <string name="open_the_keyboard">Open the keyboard</string>
+    <string name="keyboard_when_search_opens">When Search opens</string>
+    <string name="keyboard_second_tap">Tapping Search again</string>
+    <string name="keyboard_second_tap_info">Ready to type when Search opens, or with the keyboard down until the Search tab is tapped a second time. Opening Search from the persistent media controls still brings it up at once.</string>
     <string name="search_typing">search typing</string>
     <string name="player_blur_cover_color">player blur cover color</string>
     <string name="show_background">Show background</string>

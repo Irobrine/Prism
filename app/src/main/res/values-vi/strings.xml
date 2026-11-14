@@ -1518,6 +1518,9 @@
     <string name="page_titles">Tiêu đề trang</string>
     <string name="album_playlist_cards">Thẻ album &amp; danh sách phát</string>
     <string name="open_the_keyboard">Mở bàn phím</string>
+    <string name="keyboard_when_search_opens">Khi mở Tìm kiếm</string>
+    <string name="keyboard_second_tap">Nhấn Tìm kiếm lần nữa</string>
+    <string name="keyboard_second_tap_info">Sẵn sàng gõ khi mở Tìm kiếm, hoặc giữ bàn phím ẩn cho đến khi nhấn lại thẻ Tìm kiếm. Mở Tìm kiếm từ các điều khiển phương tiện thường trực vẫn bật bàn phím ngay lập tức.</string>
     <string name="search_typing">tìm kiếm gõ phím</string>
     <string name="player_blur_cover_color">trình phát làm mờ ảnh bìa màu</string>
     <string name="show_background">Hiện hình nền</string>

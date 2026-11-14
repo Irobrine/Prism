@@ -18,6 +18,7 @@ import com.prism.music.data.prefs.LibraryTile
 import com.prism.music.data.prefs.LibraryView
 import com.prism.music.data.prefs.RecentShows
 import com.prism.music.data.prefs.ReplayGraph
+import com.prism.music.data.prefs.SearchKeyboardMode
 import com.prism.music.data.prefs.SearchSection
 import com.prism.music.tr
 import com.prism.music.ui.LocalNavigator
@@ -81,7 +82,12 @@ fun HomeLibraryPage(bottomPadding: Dp, find: String? = null, showBack: Boolean =
     val recentChanged = reset.add(tr(R.string.recently_played_shows), s.behavior.recentShows, d.behavior.recentShows, { it.label }) { prefs.setRecentShows(it) }
     val topButtons = HomeChoices.topButtons(s)
     val topButtonsChanged = reset.add(tr(R.string.buttons_at_the_top_of_home), topButtons, HomeChoices.topButtons(d), { it.label }) { HomeChoices.setTopButtons(prefs, it) }
-    val keyboardChanged = reset.add(tr(R.string.open_the_keyboard), s.searchKeyboard, d.searchKeyboard, onOff) { prefs.setSearchKeyboard(it) }
+    // "Open the keyboard" (1.8.6): one choice over the two switches it is stored as (as Full-width pictures is).
+    val keyboard = SearchKeyboardMode.of(s.searchKeyboard, s.searchKeyboardOnSecondTap)
+    val keyboardChanged = reset.add(tr(R.string.open_the_keyboard), keyboard, SearchKeyboardMode.of(d.searchKeyboard, d.searchKeyboardOnSecondTap), { it.label }) { v ->
+        prefs.setSearchKeyboard(v != SearchKeyboardMode.OFF)
+        prefs.setSearchKeyboardOnSecondTap(v == SearchKeyboardMode.ON_SECOND_TAP)
+    }
     val arrangeDefault = d.searchSections to d.searchChips
     val arrangeChanged = reset.add(tr(R.string.arrange_search), s.searchSections to s.searchChips, arrangeDefault, asPrismComes(arrangeDefault)) { (sections, chips) ->
         prefs.setSearchSections(sections); prefs.setSearchChips(chips)
@@ -137,7 +143,13 @@ fun HomeLibraryPage(bottomPadding: Dp, find: String? = null, showBack: Boolean =
             ) { HomeChoices.setTopButtons(prefs, it) }
         }
         group(HlGroups.search) {
-            SwitchRow(tr(R.string.open_the_keyboard), s.searchKeyboard, info = tr(R.string.ready_to_type_when_search_opens), changed = keyboardChanged) { prefs.setSearchKeyboard(it) }
+            ChoiceRow(
+                tr(R.string.open_the_keyboard), SearchKeyboardMode.entries, keyboard, { it.label },
+                info = tr(R.string.keyboard_second_tap_info), changed = keyboardChanged,
+            ) { v ->
+                prefs.setSearchKeyboard(v != SearchKeyboardMode.OFF)
+                prefs.setSearchKeyboardOnSecondTap(v == SearchKeyboardMode.ON_SECOND_TAP)
+            }
             // Search's own sheet (its sections and chips), which only Search's page opened before (plan §2.11).
             LinkRow(
                 tr(R.string.arrange_search), value = tr(R.string.hl_shown_of, s.searchSections.size, SearchSection.entries.size), changed = arrangeChanged,
@@ -350,7 +362,7 @@ val homeLibraryIndex: List<SettingEntry> by lazy {
         SettingEntry(page, g.home, tr(R.string.buttons_at_the_top_of_home), words(R.string.podcasts_button, R.string.customize_button_at_the_top)),
         // Search
         SettingEntry(page, g.search, tr(R.string.search)),
-        SettingEntry(page, g.search, tr(R.string.open_the_keyboard), tr(R.string.search_typing)),
+        SettingEntry(page, g.search, tr(R.string.open_the_keyboard), words(R.string.search_typing, R.string.keyboard_when_search_opens, R.string.keyboard_second_tap)),
         SettingEntry(page, g.search, tr(R.string.arrange_search), words(R.string.hl_arrange_search_keywords, R.string.search_chips)),
         // Replay card
         SettingEntry(page, g.replayCard, tr(R.string.look), tr(R.string.replay_teaser_look_style_design_quiet), shown = g.replayCard),

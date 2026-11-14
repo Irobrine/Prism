@@ -1518,6 +1518,9 @@
     <string name="page_titles">Názvy stránek</string>
     <string name="album_playlist_cards">Karty alb a playlistů</string>
     <string name="open_the_keyboard">Otevřít klávesnici</string>
+    <string name="keyboard_when_search_opens">Když se otevře Hledání</string>
+    <string name="keyboard_second_tap">Další klepnutí na Hledání</string>
+    <string name="keyboard_second_tap_info">Připraveno k psaní při otevření Hledání, nebo klávesnice zůstane dole, dokud se znovu neklepne na kartu Hledání. Otevření Hledání z trvalých ovládacích prvků přehrávače ji přesto zvedne okamžitě.</string>
     <string name="search_typing">hledání psaní</string>
     <string name="player_blur_cover_color">přehrávač rozmazání obal barva</string>
     <string name="show_background">Zobrazit pozadí</string>

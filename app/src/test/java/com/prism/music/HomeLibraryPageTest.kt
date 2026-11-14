@@ -12,6 +12,7 @@ import com.prism.music.data.prefs.LibraryTile
 import com.prism.music.data.prefs.LibraryView
 import com.prism.music.data.prefs.RecentShows
 import com.prism.music.data.prefs.ReplayGraph
+import com.prism.music.data.prefs.SearchKeyboardMode
 import com.prism.music.data.prefs.SearchSection
 import com.prism.music.data.prefs.ThemeMode
 import com.prism.music.ui.Routes
@@ -121,9 +122,14 @@ class HomeLibraryPageTest : HomePagesHarness() {
         until("home_podcasts_button") { !it.homePodcastsButton && !it.homeCustomizeTopButton }
         assertEquals(TopButtons.NONE.label, valueOf(topButtons))
 
-        // search_keyboard
-        tap(keyboard)
-        until("search_keyboard") { it.searchKeyboard != d.searchKeyboard }
+        // search_keyboard, search_keyboard_second_tap: one choice of three.
+        assertEquals(SettingsTags.ROW_CHOICE, typeOf(keyboard))
+        assertEquals(SearchKeyboardMode.OFF.label, valueOf(keyboard))
+        choose(keyboard, SearchKeyboardMode.ON_SECOND_TAP.label)
+        until("search_keyboard_second_tap") { it.searchKeyboard && it.searchKeyboardOnSecondTap }
+        assertEquals(SearchKeyboardMode.ON_SECOND_TAP.label, valueOf(keyboard))
+        choose(keyboard, SearchKeyboardMode.WHEN_SEARCH_OPENS.label)
+        until("search_keyboard") { it.searchKeyboard && !it.searchKeyboardOnSecondTap }
         // search_sections, search_chips: Search's own "Arrange Search" sheet, opened from here.
         tap(arrangeSearch)
         compose.onNode(hasContentDescription(SearchSection.MOODS.label) and isToggleable()).performClick()
@@ -220,7 +226,7 @@ class HomeLibraryPageTest : HomePagesHarness() {
         val p = container.settings
         val d = AppSettings()
         p.setHomeContinue(!d.homeContinue); p.setRecentShows(RecentShows.COLLECTIONS); p.setHomePodcastsButton(false)
-        p.setSearchKeyboard(!d.searchKeyboard); p.setSearchSections(d.searchSections - SearchSection.MOODS)
+        p.setSearchKeyboard(!d.searchKeyboard); p.setSearchKeyboardOnSecondTap(true); p.setSearchSections(d.searchSections - SearchSection.MOODS)
         p.setReplayCard(ReplayCardStyle.RING.name); p.setReplayGraph(ReplayGraph.DAYS)
         p.setLibraryTiles(d.libraryTiles + LibraryTile.HISTORY); p.setLibraryTabView("ALBUMS", LibraryView.GRID); p.setLibraryColumns(LibraryColumns.THREE)
         p.setLibrarySubtitles(!d.librarySubtitles); p.setLibraryStartTab("ALBUMS"); p.setMergeLikedVideos(!d.mergeLikedVideos)
@@ -243,6 +249,7 @@ class HomeLibraryPageTest : HomePagesHarness() {
         until("the reset") { it.behavior == d.behavior && it.view == d.view }
         until("the reset") {
             it.homeContinue == d.homeContinue && it.homePodcastsButton == d.homePodcastsButton && it.searchKeyboard == d.searchKeyboard &&
+                it.searchKeyboardOnSecondTap == d.searchKeyboardOnSecondTap &&
                 it.searchSections == d.searchSections && it.replayCard == d.replayCard && it.libraryTiles == d.libraryTiles &&
                 it.libraryViews == d.libraryViews && it.libraryColumns == d.libraryColumns && it.librarySubtitles == d.librarySubtitles &&
                 it.libraryStartTab == d.libraryStartTab && it.mergeLikedVideos == d.mergeLikedVideos && it.playlistHeroCover == d.playlistHeroCover

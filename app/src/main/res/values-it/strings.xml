@@ -1518,6 +1518,9 @@
     <string name="page_titles">Titoli delle pagine</string>
     <string name="album_playlist_cards">Schede di album e playlist</string>
     <string name="open_the_keyboard">Apri la tastiera</string>
+    <string name="keyboard_when_search_opens">All\'apertura di Cerca</string>
+    <string name="keyboard_second_tap">Tocca di nuovo Cerca</string>
+    <string name="keyboard_second_tap_info">Pronto a digitare all\'apertura di Cerca, oppure con la tastiera abbassata finché non si tocca di nuovo la scheda Cerca. Aprire Cerca dai controlli multimediali persistenti la mostra comunque subito.</string>
     <string name="search_typing">cerca digitazione tastiera</string>
     <string name="player_blur_cover_color">player sfocatura copertina colore</string>
     <string name="show_background">Mostra lo sfondo</string>

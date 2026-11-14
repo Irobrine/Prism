@@ -82,6 +82,7 @@ import com.prism.music.data.model.ArtistItem
 import com.prism.music.data.model.BrowseItem
 import com.prism.music.data.model.PlaylistItem
 import com.prism.music.data.model.SongItem
+import com.prism.music.data.prefs.SearchKeyboardMode
 import com.prism.music.ui.Load
 import com.prism.music.ui.LocalNavigator
 import com.prism.music.ui.components.Artwork
@@ -168,9 +169,12 @@ fun SearchScreen(bottomPadding: Dp) {
         saveQuery(q)
     }
 
-    // Settings → Layout & navigation → Search → "Open the keyboard" (#71): an empty Search comes up ready to type.
+    // Settings → Home & Library → Search → "Open the keyboard" (#71, 1.8.6): ready to type as Search opens (as before),
+    // or waiting for the Search tab to be tapped again while it shows. Search opened from anywhere else (the persistent
+    // media controls, a shortcut, a link) brings it up at once in either case.
+    val keyboardMode = SearchKeyboardMode.of(settings.searchKeyboard, settings.searchKeyboardOnSecondTap)
     LaunchedEffect(Unit) {
-        if (c.settings.current.searchKeyboard && query.isBlank()) {
+        if (keyboardMode == SearchKeyboardMode.WHEN_SEARCH_OPENS && query.isBlank()) {
             delay(250) // after the tab's own transition, or the keyboard can come up and drop again
             runCatching { focusRequester.requestFocus() }
         }
@@ -276,6 +280,25 @@ fun SearchScreen(bottomPadding: Dp) {
         val step = SearchKeyboard.step(focused, imeUp, imeWasUp, windowFocused)
         imeWasUp = step.imeWasUp
         if (step.showResults) focus.clearFocus()
+    }
+
+    // "Tapping Search again" (#71, 1.8.6): a second tap of Search's tab, or Search opened from elsewhere while it already
+    // shows, brings the keyboard up. Search opened this way arrives with its ask waiting, so the screen looks for one from
+    // its first moment. [settled] waits out the tab's own transition for an ask that comes as the screen opens.
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(250); settled = true }
+    LaunchedEffect(Unit) {
+        nav.searchKeyboardRequests.collect { ask ->
+            if (ask == 0L) return@collect
+            // Taken at once: leaving before it comes up mustn't leave it waiting for the next time Search opens.
+            nav.searchKeyboardTaken()
+            val wanted = SearchKeyboardMode.of(c.settings.current.searchKeyboard, c.settings.current.searchKeyboardOnSecondTap)
+            if (wanted == SearchKeyboardMode.OFF) return@collect
+            if (!settled) delay(250)
+            // The listener asking for the keyboard isn't the keyboard being put away (#395).
+            imeWasUp = false
+            runCatching { focusRequester.requestFocus() }
+        }
     }
 
     val ui = com.prism.music.ui.theme.LocalUi.current

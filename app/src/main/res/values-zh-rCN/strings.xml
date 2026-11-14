@@ -1518,6 +1518,9 @@
     <string name="page_titles">页面标题</string>
     <string name="album_playlist_cards">专辑和播放列表卡片</string>
     <string name="open_the_keyboard">打开键盘</string>
+    <string name="keyboard_when_search_opens">打开搜索时</string>
+    <string name="keyboard_second_tap">再次点击搜索</string>
+    <string name="keyboard_second_tap_info">打开搜索时即可输入，或保持键盘收起，直到再次点击搜索标签页。从常驻媒体控件打开搜索时仍会立即弹出键盘。</string>
     <string name="search_typing">搜索 输入 键盘</string>
     <string name="player_blur_cover_color">播放器 模糊 封面 颜色</string>
     <string name="show_background">显示背景</string>

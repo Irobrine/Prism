@@ -462,6 +462,21 @@ enum class FullWidthPictures(val label: String) {
     }
 }
 
+/**
+ * Search's keyboard (#71, 1.8.6): ready to type as soon as Search opens (as before), or only when the Search tab is
+ * tapped again while Search is showing. Kept as two switches ([AppSettings.searchKeyboard], as always, and
+ * [AppSettings.searchKeyboardOnSecondTap]), so what was stored before reads as it did: on is [WHEN_SEARCH_OPENS].
+ */
+enum class SearchKeyboardMode(val label: String) {
+    OFF(tr(R.string.off)),
+    WHEN_SEARCH_OPENS(tr(R.string.keyboard_when_search_opens)),
+    ON_SECOND_TAP(tr(R.string.keyboard_second_tap));
+
+    companion object {
+        fun of(opens: Boolean, secondTap: Boolean) = when { !opens -> OFF; secondTap -> ON_SECOND_TAP; else -> WHEN_SEARCH_OPENS }
+    }
+}
+
 /** The lock screen's layouts (1.8.2). */
 enum class LockLayout(val label: String, val detail: String) {
     COVER(tr(R.string.lock_screen_layout_cover), tr(R.string.lock_screen_layout_cover_detail)),
@@ -1587,6 +1602,8 @@ data class AppSettings(
     val audioDiagnostics: Boolean = false,
     /** Search opens with the keyboard up (#71). */
     val searchKeyboard: Boolean = false,
+    /** Search's keyboard waits for a second tap of its tab while Search shows (1.8.6); see [SearchKeyboardMode]. */
+    val searchKeyboardOnSecondTap: Boolean = false,
     /** Double-tapping the left or right of the player's cover seeks back / ahead this many seconds (#79); 0 = off. */
     val doubleTapSeekSeconds: Int = 10,
     /** Swiping Prism away from Recents stops the music (#45); off, it keeps playing in the background. */
@@ -2054,6 +2071,7 @@ class SettingsRepository(
         val showTrackLength = booleanPreferencesKey("show_track_length")
         val audioDiagnostics = booleanPreferencesKey("audio_diagnostics")
         val searchKeyboard = booleanPreferencesKey("search_keyboard")
+        val searchKeyboardOnSecondTap = booleanPreferencesKey("search_keyboard_second_tap")
         val doubleTapSeekSeconds = intPreferencesKey("double_tap_seek_seconds")
         val stopOnSwipeAway = booleanPreferencesKey("stop_on_swipe_away")
         val dataSaver = booleanPreferencesKey("data_saver")
@@ -2455,7 +2473,7 @@ class SettingsRepository(
                 "show_quality", "square_video_covers", "lyrics_on_mobile_data", "best_part_button", "show_video_switch",
                 "hold_seek_seconds", "canvas_with_downloads", "canvas_with_downloads_cellular", "audio_quality", "cellular_quality",
                 "premium_stream", "autoplay", "autoplay_source", "radio_songs_only", "songs_everywhere", "show_track_length",
-                "audio_diagnostics", "search_keyboard", "double_tap_seek_seconds", "stop_on_swipe_away", "data_saver",
+                "audio_diagnostics", "search_keyboard", "search_keyboard_second_tap", "double_tap_seek_seconds", "stop_on_swipe_away", "data_saver",
                 "video_continues", "lossless", "lossless_local", "normalize", "skip_silence", "mix", "mix_seconds", "mix_auto",
                 "mix_beat_match", "mix_tempo_cellular", "content_country", "video_max_height", "cache_size_mb", "download_wifi_only",
                 "download_likes", "download_on_stream", "download_video_on_stream", "download_queue_ahead", "smart_downloads", "smart_download_gb", "offline_gb", "smart_downloads_cellular", "eq",
@@ -2656,6 +2674,7 @@ class SettingsRepository(
             showTrackLength = p[K.showTrackLength] ?: d.showTrackLength,
             audioDiagnostics = p[K.audioDiagnostics] ?: d.audioDiagnostics,
             searchKeyboard = p[K.searchKeyboard] ?: d.searchKeyboard,
+            searchKeyboardOnSecondTap = p[K.searchKeyboardOnSecondTap] ?: d.searchKeyboardOnSecondTap,
             doubleTapSeekSeconds = p[K.doubleTapSeekSeconds] ?: d.doubleTapSeekSeconds,
             stopOnSwipeAway = p[K.stopOnSwipeAway] ?: d.stopOnSwipeAway,
             dataSaver = p[K.dataSaver] ?: d.dataSaver,
@@ -3337,6 +3356,7 @@ class SettingsRepository(
     fun setShowTrackLength(v: Boolean) = edit { it[K.showTrackLength] = v }
     fun setAudioDiagnostics(v: Boolean) = edit { it[K.audioDiagnostics] = v }
     fun setSearchKeyboard(v: Boolean) = edit { it[K.searchKeyboard] = v }
+    fun setSearchKeyboardOnSecondTap(v: Boolean) = edit { it[K.searchKeyboardOnSecondTap] = v }
     fun setDoubleTapSeekSeconds(v: Int) = edit { it[K.doubleTapSeekSeconds] = v }
     fun setStopOnSwipeAway(v: Boolean) = edit { it[K.stopOnSwipeAway] = v }
     fun setDataSaver(v: Boolean) = edit { it[K.dataSaver] = v }

@@ -1518,6 +1518,9 @@
     <string name="page_titles">পেজের শিরোনাম</string>
     <string name="album_playlist_cards">অ্যালবাম ও প্লেলিস্ট কার্ড</string>
     <string name="open_the_keyboard">কিবোর্ড খুলুন</string>
+    <string name="keyboard_when_search_opens">সার্চ খোলা হলে</string>
+    <string name="keyboard_second_tap">সার্চে আবার ট্যাপ</string>
+    <string name="keyboard_second_tap_info">সার্চ খোলা হলে টাইপ করার জন্য প্রস্তুত, অথবা সার্চ ট্যাবে আবার ট্যাপ না করা পর্যন্ত কীবোর্ড নিচে থাকে। স্থায়ী মিডিয়া নিয়ন্ত্রণ থেকে সার্চ খুললে এটি তবুও সাথে সাথে উঠে আসে।</string>
     <string name="search_typing">সার্চ টাইপ করা</string>
     <string name="player_blur_cover_color">প্লেয়ার ব্লার কভার রং</string>
     <string name="show_background">ব্যাকগ্রাউন্ড দেখান</string>

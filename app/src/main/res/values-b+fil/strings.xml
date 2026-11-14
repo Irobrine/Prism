@@ -1518,6 +1518,9 @@
     <string name="page_titles">Mga pamagat ng page</string>
     <string name="album_playlist_cards">Mga card ng album at playlist</string>
     <string name="open_the_keyboard">Buksan ang keyboard</string>
+    <string name="keyboard_when_search_opens">Kapag binuksan ang Search</string>
+    <string name="keyboard_second_tap">Pagtapik muli sa Search</string>
+    <string name="keyboard_second_tap_info">Handa nang mag-type kapag binuksan ang Search, o nakababa ang keyboard hanggang matapik muli ang tab ng Search. Ang pagbubukas ng Search mula sa persistent media controls ay nagpapataas pa rin nito agad.</string>
     <string name="search_typing">search paghahanap pag-type</string>
     <string name="player_blur_cover_color">player blur malabo cover kulay</string>
     <string name="show_background">Ipakita ang background</string>
