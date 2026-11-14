@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -65,6 +66,9 @@ fun LibrarySearchScreen(initial: String, bottomPadding: androidx.compose.ui.unit
 
     val likedSongs by c.library.likedShown.collectAsState()
     val downloads by c.downloadState.collectAsState()
+    // Only which downloads are done matters here, and the downloads' map changes with every progress tick: read as a
+    // set, this changes only when one finishes (or goes), not while one runs.
+    val completed = remember { derivedStateOf { downloads.filterValues { it.state == androidx.media3.exoplayer.offline.Download.STATE_COMPLETED }.keys.toSet() } }
     val files by c.localMusic.tracks.collectAsState()
     val prismLists by c.prismLibrary.lists.collectAsState()
     val playlists by c.library.playlists.collectAsState()
@@ -72,7 +76,7 @@ fun LibrarySearchScreen(initial: String, bottomPadding: androidx.compose.ui.unit
     val artists by c.library.artists.collectAsState()
     val spellings by c.titleSpellings.known.collectAsState()
     // Everything that's the listener's, as entries; read again when any of it changes.
-    val entries by produceState<List<LibEntry>?>(null, likedSongs, downloads, files, prismLists, playlists, albums, artists) {
+    val entries by produceState<List<LibEntry>?>(null, likedSongs, completed.value, files, prismLists, playlists, albums, artists) {
         value = withContext(Dispatchers.Default) {
             val tagged = runCatching { c.db.tags().allWithSongs() }.getOrDefault(emptyList())
             val songs = LibrarySearch.songEntries(
@@ -88,7 +92,12 @@ fun LibrarySearchScreen(initial: String, bottomPadding: androidx.compose.ui.unit
     }
     // Titles in other scripts get their Latin spelling, in the background, while this page is open.
     LaunchedEffect(entries) { entries?.let { e -> c.titleSpellings.want(e.flatMap { it.names }) } }
-    val index = remember(entries, spellings) { entries?.let { LibrarySearch.Index(it, spellings) } }
+    // The index normalizes every name of everything (10,000 songs, say): built off the main thread, so opening the page
+    // or a spelling arriving never holds a frame up.
+    val index by produceState<LibrarySearch.Index?>(null, entries, spellings) {
+        val e = entries ?: return@produceState
+        value = withContext(Dispatchers.Default) { LibrarySearch.Index(e, spellings) }
+    }
     val found by produceState(emptyList<LibEntry>(), index, query, filter) {
         val i = index ?: return@produceState
         value = withContext(Dispatchers.Default) { LibrarySearch.find(i, query, filter) }

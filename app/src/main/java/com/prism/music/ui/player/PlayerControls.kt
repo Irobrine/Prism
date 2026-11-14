@@ -160,6 +160,11 @@ fun ThinSlider(
     shape: BlendShape? = null,
     /** Points (0–1) that give a haptic step when dragged across without a tick drawn (the shaped bar's start of the blend). */
     quietMarks: List<Float> = emptyList(),
+    /**
+     * The value as it is *now*, read while drawing rather than passed in: a playhead moving every frame then redraws
+     * the bar alone, without recomposing the player around it ([value] is used when this is null).
+     */
+    valueAt: (() -> Float)? = null,
 ) {
     var dragging by remember { mutableStateOf(false) }
     // The shaped bar's outline, kept between frames; only made once a shape is there.
@@ -211,7 +216,9 @@ fun ThinSlider(
     ) {
         Canvas(Modifier.fillMaxWidth().height(height)) {
             val r = CornerRadius(size.height / 2f)
-            val filled = size.width * value.coerceIn(0f, 1f)
+            // Read here (the draw phase) when the caller gives [valueAt]: the playhead redraws only this bar.
+            val v = valueAt?.invoke() ?: value
+            val filled = size.width * v.coerceIn(0f, 1f)
             // The player is always dark: White light's white (not its mid grey) on it (Reddit: "white is giving gray").
             val brush = fill ?: if (spectrum) Brush.horizontalGradient(*com.prism.music.ui.theme.PrismTokens.spectrumColors(true).toTypedArray(), startX = 0f, endX = size.width) else null
             if (wave != null && wave.isNotEmpty()) {
@@ -269,7 +276,7 @@ fun ThinSlider(
             }
             if (thumb) {
                 // On the shaped bar the knob rides the shape: as small as the bar is thin there (1.8.1).
-                val ride = if (shape != null && outline != null && wave == null) BlendShape.knobScale(shape.height(value.coerceIn(0f, 1f))) else 1f
+                val ride = if (shape != null && outline != null && wave == null) BlendShape.knobScale(shape.height(v.coerceIn(0f, 1f))) else 1f
                 val base = (if (dragging) 9.dp else 7.dp).toPx()
                 val knob = base * ride
                 val x = filled.coerceIn(knob, size.width - knob)
@@ -363,16 +370,30 @@ private fun onDark(c: Color): Color {
 }
 
 /**
- * [PlayerScrubber] reading the playhead itself ([rememberPositionState]): as the song plays only the bar and its times
- * recompose, not the player around them (1.7.4; the whole player was redone four times a second).
+ * [PlayerScrubber] reading the playhead itself ([rememberPositionState]): as the song plays the bar alone is redrawn and
+ * only the times recompose, once a second, rather than the player around them (1.7.4 stopped its own four-a-second
+ * recompositions of the player; 1.8.5 that of the scrubber too).
  */
 @Composable
 fun PlayheadScrubber(position: androidx.compose.runtime.State<Long>, durationMs: Long, centerLabel: @Composable BoxScope.() -> Unit = {}) =
-    PlayerScrubber(position.value, durationMs, centerLabel)
+    PlayerScrubberBody(0L, position, durationMs, centerLabel)
 
 /** Seek bar with elapsed / remaining under it and a centre label between them. */
 @Composable
-fun PlayerScrubber(positionMs: Long, durationMs: Long, centerLabel: @Composable BoxScope.() -> Unit = {}) {
+fun PlayerScrubber(positionMs: Long, durationMs: Long, centerLabel: @Composable BoxScope.() -> Unit = {}) =
+    PlayerScrubberBody(positionMs, null, durationMs, centerLabel)
+
+/**
+ * The bar itself. [positionState], when there is one, is read where it's used: in the bar's drawing, so a playhead moving
+ * every 60 ms only redraws it, and through [second], so the times recompose once a second rather than with every tick.
+ */
+@Composable
+private fun PlayerScrubberBody(
+    positionMs: Long,
+    positionState: androidx.compose.runtime.State<Long>?,
+    durationMs: Long,
+    centerLabel: @Composable BoxScope.() -> Unit,
+) {
     val pc = LocalContainer.current.player
     val current by pc.currentSong.collectAsState()
     // A live stream has no start or end: a full bar marked LIVE, not a clock of its rolling window.
@@ -390,9 +411,16 @@ fun PlayerScrubber(positionMs: Long, durationMs: Long, centerLabel: @Composable 
         }
         return
     }
-    var scrub by remember { mutableStateOf<Float?>(null) }
+    val scrub = remember { mutableStateOf<Float?>(null) }
     val duration = durationMs.coerceAtLeast(1)
-    val shown = scrub ?: (positionMs.toFloat() / duration).coerceIn(0f, 1f)
+    // The value as it's drawn: the song's playhead (read in the drawing, see [ThinSlider.valueAt]) or where it's dragged.
+    val fraction = { scrub.value ?: ((positionState?.value ?: positionMs).toFloat() / duration).coerceIn(0f, 1f) }
+    // The times change once a second: read through a derived value so they recompose then, not on every playhead tick.
+    val second by remember(duration, positionMs, positionState) {
+        derivedStateOf {
+            (scrub.value?.let { (it * duration).toLong() } ?: (positionState?.value ?: positionMs)) / 1000
+        }
+    }
     val style = LocalAppSettings.current.scrubberStyle
     // The song's length or the time left (#82): tapping the time switches, and it stays that way.
     val showLength = LocalAppSettings.current.showTrackLength
@@ -440,12 +468,13 @@ fun PlayerScrubber(positionMs: Long, durationMs: Long, centerLabel: @Composable 
     Column(Modifier.fillMaxWidth()) {
         // Spectrum: a thin line, the played part in the split light (or the color picked for it).
         ThinSlider(
-            value = shown,
+            value = 0f,
+            valueAt = { fraction() },
             modifier = Modifier.testTag("progressBar").then(
                 if (blendShape != null) Modifier.semantics { this[CrossfadeShapeKey] = blendShape.semanticsValue() } else Modifier,
             ),
-            onValueChange = { scrub = it },
-            onValueChangeFinished = { scrub?.let { pc.seekTo((it * duration).toLong()) }; scrub = null },
+            onValueChange = { scrub.value = it },
+            onValueChangeFinished = { scrub.value?.let { pc.seekTo((it * duration).toLong()) }; scrub.value = null },
             idleHeight = if (waved) 22.dp else barHeights(style, thick).first,
             activeHeight = if (waved) 26.dp else barHeights(style, thick).second,
             thumb = knob != com.prism.music.data.prefs.ScrubberThumb.NONE,
@@ -463,9 +492,9 @@ fun PlayerScrubber(positionMs: Long, durationMs: Long, centerLabel: @Composable 
             val elapsed = settings.playerTimes == com.prism.music.data.prefs.PlayerTimes.BOTH || settings.playerTimes == com.prism.music.data.prefs.PlayerTimes.ELAPSED
             val left = settings.playerTimes == com.prism.music.data.prefs.PlayerTimes.BOTH || settings.playerTimes == com.prism.music.data.prefs.PlayerTimes.LEFT
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                if (elapsed) Text(formatTime((shown * duration).toLong()), style = times, color = Color.White.copy(alpha = 0.55f)) else Spacer(Modifier.width(1.dp))
+                if (elapsed) Text(formatTime(second * 1000L), style = times, color = Color.White.copy(alpha = 0.55f)) else Spacer(Modifier.width(1.dp))
                 if (left) Text(
-                    if (showLength) formatTime(duration) else "−" + formatTime(duration - (shown * duration).toLong()),
+                    if (showLength) formatTime(duration) else "−" + formatTime(duration - second * 1000L),
                     style = times, color = Color.White.copy(alpha = 0.55f),
                     modifier = Modifier
                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))

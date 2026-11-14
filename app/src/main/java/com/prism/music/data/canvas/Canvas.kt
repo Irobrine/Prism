@@ -36,11 +36,20 @@ data class CanvasArtwork(
  */
 internal fun String.normalizeForMatch(): String =
     Normalizer.normalize(this, Normalizer.Form.NFD)
-        .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        .replace(MARKS, "")
         .lowercase(Locale.ROOT)
-        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
-        .replace(Regex("\\s+"), " ")
+        .replace(NOT_WORD, " ")
+        .replace(SPACES, " ")
         .trim()
+
+private val MARKS = Regex("\\p{InCombiningDiacriticalMarks}+")
+private val NOT_WORD = Regex("[^\\p{L}\\p{N}\\s]")
+private val SPACES = Regex("\\s+")
+private val LATIN = Regex("[a-z0-9]")
+private val CLEANED = Regex(
+    "\\((?:from|official|lyrical|video|audio|feat\\.?|ft\\.?)[^)]*\\)|\\[[^]]*]|\\b(?:official (?:video|audio|music video)|lyrical|4k video)\\b",
+    RegexOption.IGNORE_CASE,
+)
 
 private val ARTIST_SEPARATORS = Regex(
     "(?:\\s*,\\s*|\\s*&\\s*|\\s+×\\s+|\\s+x\\s+|\\bfeat\\.?\\b|\\bft\\.?\\b|\\bfeaturing\\b|\\bwith\\b)",
@@ -171,17 +180,15 @@ class CanvasRepository(private val http: OkHttpClient) {
     private fun parse(text: String?): JsonElement? = text?.let { runCatching { InnerTube.json.parseToJsonElement(it) }.getOrNull() }
     private fun JsonElement?.f(key: String): JsonElement? = (this as? JsonObject)?.get(key)
 
-    private fun String.cleaned(): String = replace(
-        Regex("\\((?:from|official|lyrical|video|audio|feat\\.?|ft\\.?)[^)]*\\)|\\[[^]]*]|\\b(?:official (?:video|audio|music video)|lyrical|4k video)\\b", RegexOption.IGNORE_CASE),
-        " ",
-    ).substringBefore(" | ").replace(Regex("\\s+"), " ").trim().ifBlank { this }
+    private fun String.cleaned(): String = replace(CLEANED, " ")
+        .substringBefore(" | ").replace(SPACES, " ").trim().ifBlank { this }
 
     /**
      * A lookup made before non-Latin titles and artists could be matched ([MATCHING]), for a song with one: the old rules
      * reduced its title or artist to nothing, which "matched" other songs' clips (#58). It's asked again, saved or not.
      */
     private fun Entry.suspect(song: Song) = v < MATCHING && (latinless(song.title) || latinless(song.primaryArtist))
-    private fun latinless(s: String) = !Regex("[a-z0-9]").containsMatchIn(Normalizer.normalize(s, Normalizer.Form.NFD).lowercase(Locale.ROOT))
+    private fun latinless(s: String) = !LATIN.containsMatchIn(Normalizer.normalize(s, Normalizer.Form.NFD).lowercase(Locale.ROOT))
     private fun entry(song: Song): Entry? = cache[song.id]?.takeIf { !it.suspect(song) }
 
     fun cached(song: Song): CanvasArtwork? = synchronized(cache) { entry(song)?.art }

@@ -52,10 +52,12 @@ private const val MAX_READ_TRIES = 20L
 class LibraryRepository(private val c: AppContainer) {
     private val songs = c.db.songs()
 
-    val likedIds: StateFlow<Set<String>> = songs.likedIdsFlow().resilient("liked ids").map { it.toSet() }
+    val likedIds: StateFlow<Set<String>> = songs.likedIdsFlow().resilient("liked ids").distinctUntilChanged().map { it.toSet() }
         .stateIn(c.scope, SharingStarted.Eagerly, emptySet())
 
-    val liked = songs.likedFlow().resilient("liked songs").map { list -> list.map { it.toSong() } }
+    // Room reads these lists again whenever any song changes (every play updates one), and each read turns every row
+    // into a Song (decoding its artists). Equal rows are dropped before that: only a real change re-makes the list.
+    val liked = songs.likedFlow().resilient("liked songs").distinctUntilChanged().map { list -> list.map { it.toSong() } }
         .stateIn(c.scope, SharingStarted.Eagerly, emptyList())
 
     /**
@@ -68,11 +70,11 @@ class LibraryRepository(private val c: AppContainer) {
             if (merge) LikedMerge.merge(list, c.queue.counterparts) else list
         }.flowOn(kotlinx.coroutines.Dispatchers.Default).stateIn(c.scope, SharingStarted.Eagerly, emptyList())
 
-    val recent = songs.recentFlow(40).resilient("recent songs").map { list -> list.map { it.toSong() } }
+    val recent = songs.recentFlow(40).resilient("recent songs").distinctUntilChanged().map { list -> list.map { it.toSong() } }
         .stateIn(c.scope, SharingStarted.Eagerly, emptyList())
 
     /** Ids of the phone's own files, most recently played first. */
-    val recentLocalIds: StateFlow<List<String>> = songs.recentLocalIdsFlow().resilient("recent files")
+    val recentLocalIds: StateFlow<List<String>> = songs.recentLocalIdsFlow().resilient("recent files").distinctUntilChanged()
         .stateIn(c.scope, SharingStarted.Lazily, emptyList())
 
     val playlists = MutableStateFlow<List<BrowseItem>>(emptyList())

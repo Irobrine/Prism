@@ -412,21 +412,27 @@ internal fun CollectionContent(type: CollectionType, live: LiveCollection, initi
     }
     // #216: "Hide them" leaves explicit songs out of the list (they're never played either way).
     val explicit = settings.behavior.explicitContent
+    // Each song's names as the search below reads them, lowercased once for the list rather than on every keystroke.
+    val searchHay = remember(songs, query.isNotBlank()) {
+        if (query.isBlank()) emptyMap() else songs.associate { s ->
+            s.id to "${s.title} ${s.artistText} ${s.album?.title.orEmpty()}".lowercase()
+        }
+    }
     val visible = remember(songs, genreFilter, sort, query, explicit, if (genreFilter != null || sort == SortMode.GENRE || groupByGenre) genreVersion else 0) {
-        val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val words = query.trim().lowercase().split(SPACES).filter { it.isNotEmpty() }
         val filtered = page.songs.filter { s ->
             com.prism.music.data.ExplicitFilter.shows(explicit, s) &&
             (genreFilter == null || genreFilter in genresOf(s.id)) &&
                 // Every word typed has to turn up in the title, the artists or the album.
-                (words.isEmpty() || "${s.title} ${s.artistText} ${s.album?.title.orEmpty()}".lowercase().let { hay -> words.all { it in hay } })
+                (words.isEmpty() || words.all { it in searchHay[s.id].orEmpty() })
         }
         when (sort) {
             SortMode.DEFAULT -> filtered
-            SortMode.TITLE -> filtered.sortedBy { it.title.lowercase() }
-            SortMode.ARTIST -> filtered.sortedBy { it.artistText.lowercase() }
-            SortMode.GENRE -> filtered.sortedWith(compareBy<Song> { genres[it.id] ?: "￿" }.thenBy { it.artistText.lowercase() })
+            SortMode.TITLE -> filtered.sortedByKey { it.title.lowercase() }
+            SortMode.ARTIST -> filtered.sortedByKey { it.artistText.lowercase() }
+            SortMode.GENRE -> filtered.sortedByKey({ genres[it.id] ?: "￿" }, { it.artistText.lowercase() })
             SortMode.DURATION -> filtered.sortedBy { it.durationSec }
-            SortMode.ALBUM -> filtered.sortedBy { it.album?.title?.lowercase() ?: "" }
+            SortMode.ALBUM -> filtered.sortedByKey { it.album?.title?.lowercase() ?: "" }
             SortMode.OLDEST -> filtered.asReversed()
         }
     }
@@ -2043,6 +2049,9 @@ fun FailedDownloadsSheet(onDismiss: () -> Unit) {
 }
 
 private const val MAX_FAILED_ROWS = 60
+
+/** The gaps between the words of a search ("ac   dc"). */
+private val SPACES = Regex("\\s+")
 
 /** Downloads' ⋯ menu entries: lyrics and bulk deletes. */
 @Composable

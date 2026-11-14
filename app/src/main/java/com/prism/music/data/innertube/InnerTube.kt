@@ -41,6 +41,9 @@ class InnerTube(
         const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         private val JSON_TYPE = "application/json".toMediaType()
+        /** The language and region shapes YouTube accepts, made once rather than on every request. */
+        private val LANGUAGE = Regex("[a-z]{2,3}")
+        private val REGION = Regex("[A-Z]{2}")
         val json = Json { ignoreUnknownKeys = true; isLenient = true }
         /** The TV client's version (YouTube on smart TVs); bump it if TV playback starts being refused. */
         const val TV_CLIENT_VERSION = "7.20260707.07.00"
@@ -79,15 +82,15 @@ class InnerTube(
     private var plainContext = false
 
     /** The phone's language as YouTube takes it. */
-    private val hl: String get() = if (plainContext) "en" else locale.language.lowercase().takeIf { it.matches(Regex("[a-z]{2,3}")) } ?: "en"
+    private val hl: String get() = if (plainContext) "en" else locale.language.lowercase().takeIf { it.matches(LANGUAGE) } ?: "en"
 
     /**
      * The country picked in Settings (for places YouTube Music isn't offered), else the phone's. Regions that aren't
      * countries ("419" in es-419, Latin America) make YouTube refuse requests.
      */
     private val gl: String get() = if (plainContext) "US" else
-        current.contentCountry.uppercase().takeIf { it.matches(Regex("[A-Z]{2}")) }
-            ?: locale.country.uppercase().takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "US"
+        current.contentCountry.uppercase().takeIf { it.matches(REGION) }
+            ?: locale.country.uppercase().takeIf { it.matches(REGION) } ?: "US"
 
     /** A brand account's id when the signed-in session is one (DATASYNC_ID "brand||user"), else null. */
     private fun onBehalfOfUser(): String? {

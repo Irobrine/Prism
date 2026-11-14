@@ -343,13 +343,26 @@ fun LibraryScreen(bottomPadding: Dp) {
     val sortedSongs = remember(songsBase, songSort) {
         when (songSort) {
             SongSort.RECENT -> songsBase
-            SongSort.TITLE -> songsBase.sortedBy { it.title.lowercase() }
-            SongSort.ARTIST -> songsBase.sortedWith(compareBy<com.prism.music.data.model.Song> { it.primaryArtist.lowercase() }.thenBy { it.album?.title?.lowercase() ?: "" })
-            SongSort.ALBUM -> songsBase.sortedWith(compareBy<com.prism.music.data.model.Song> { it.album?.title?.lowercase() ?: "\uFFFF" }.thenBy { it.title.lowercase() })
+            SongSort.TITLE -> songsBase.sortedByKey { it.title.lowercase() }
+            SongSort.ARTIST -> songsBase.sortedByKey({ it.primaryArtist.lowercase() }, { it.album?.title?.lowercase() ?: "" })
+            SongSort.ALBUM -> songsBase.sortedByKey({ it.album?.title?.lowercase() ?: "\uFFFF" }, { it.title.lowercase() })
         }
     }
-    val shownSongs = remember(sortedSongs, songQuery) {
-        if (songQuery.isBlank()) sortedSongs else sortedSongs.filter { s -> libraryMatches(songQuery, s.title, s.artistText, s.album?.title.orEmpty()) }
+    // Each song's names as search reads them, normalized once for the list: filtering as the listener types used to
+    // normalize every name of every song on every keystroke, the slowest part of a Library search.
+    val songHay = remember(sortedSongs, songQuery.isNotBlank()) {
+        if (songQuery.isBlank()) emptyMap() else sortedSongs.associate { s ->
+            s.id to libraryHaystack(listOf(s.title, s.artistText, s.album?.title.orEmpty()))
+        }
+    }
+    val shownSongs = remember(sortedSongs, songQuery, songHay) {
+        val words = libraryWords(songQuery)
+        when {
+            songQuery.isBlank() -> sortedSongs
+            // Punctuation only ("!!!" is a band): looked for in the names themselves, as [libraryMatches] does.
+            words.isEmpty() -> sortedSongs.filter { s -> libraryMatches(songQuery, s.title, s.artistText, s.album?.title.orEmpty()) }
+            else -> sortedSongs.filter { s -> words.all { it in songHay[s.id].orEmpty() } }
+        }
     }
     val albumSongs = remember(mine) { mine.filter { it.album?.id != null }.groupBy { it.album!!.id!! } }
     // Downloaded songs per album: by the album's id, and by its title for albums YouTube lists under another edition's id.
@@ -365,8 +378,8 @@ fun LibraryScreen(bottomPadding: Dp) {
             AlbumSort.LIBRARY -> albums
             AlbumSort.DOWNLOADED -> albums.sortedByDescending { downloaded(it) }
             AlbumSort.MOST -> albums.sortedByDescending { albumSongs[it.id]?.size ?: 0 }
-            AlbumSort.TITLE -> albums.sortedBy { it.title.lowercase() }
-            AlbumSort.ARTIST -> albums.sortedWith(compareBy<com.prism.music.data.model.BrowseItem> { artistOf(it).lowercase() }.thenBy { it.title.lowercase() })
+            AlbumSort.TITLE -> albums.sortedByKey { it.title.lowercase() }
+            AlbumSort.ARTIST -> albums.sortedByKey({ artistOf(it).lowercase() }, { it.title.lowercase() })
             AlbumSort.ADDED -> albumsRecentlyAdded(albums, savedAlbums.associate { it.id to it.savedAt }, albumsSeen)
         }
     }
@@ -382,7 +395,7 @@ fun LibraryScreen(bottomPadding: Dp) {
         when (artistSort) {
             ArtistSort.LIBRARY -> artists
             ArtistSort.MOST -> artists.sortedWith(compareByDescending<com.prism.music.data.model.BrowseItem> { it.id in fav }.thenByDescending { artistSongs[it.id] ?: 0 })
-            ArtistSort.NAME -> artists.sortedWith(compareByDescending<com.prism.music.data.model.BrowseItem> { it.id in fav }.thenBy { it.title.lowercase().removePrefix("the ") })
+            ArtistSort.NAME -> artists.sortedByKey({ if (it.id in fav) 0 else 1 }, { it.title.lowercase().removePrefix("the ") })
         }
     }
     val shownArtists = remember(sortedArtists, artistQuery, pinned) {
@@ -501,6 +514,14 @@ fun LibraryScreen(bottomPadding: Dp) {
                 }.value
             } else null
             val fromAccountShown = fromAccount && settings.isLoggedIn
+            // Filtering the whole account history is only redone when the list or the search changes, not on every
+            // recomposition of the tab (a row scrolled in, the playing song's change).
+            val accountSections = if (fromAccountShown) remember(accountHistory, historyQuery) {
+                accountHistory?.getOrNull()?.let { all ->
+                    if (historyQuery.isBlank()) all
+                    else all.map { (t, songs) -> t to songs.filter { s -> libraryMatches(historyQuery, s.title, s.artistText, s.album?.title.orEmpty()) } }.filter { it.second.isNotEmpty() }
+                }
+            } else null
             // "Go to the playing song" (D54) on Songs: its place among the songs shown (-1: not one of them).
             val locate = remember { com.prism.music.ui.components.LocateState() }
             val playingId = if (tab == LibTab.SONGS) c.player.currentSong.collectAsState().value?.id else null
@@ -772,10 +793,7 @@ fun LibraryScreen(bottomPadding: Dp) {
                         findField(historyQuery, tr(R.string.search_history), historyCount) { historyQuery = it }
                         if (fromAccountShown) {
                             val result = accountHistory
-                            val sections = result?.getOrNull()?.let { all ->
-                                if (historyQuery.isBlank()) all
-                                else all.map { (t, songs) -> t to songs.filter { s -> libraryMatches(historyQuery, s.title, s.artistText, s.album?.title.orEmpty()) } }.filter { it.second.isNotEmpty() }
-                            }
+                            val sections = accountSections
                             when {
                                 sections != null && sections.isEmpty() && historyQuery.isNotBlank() -> nothingFound(tr(R.string.history), historyQuery)
                                 result == null -> item(span = { GridItemSpan(maxLineSpan) }) {

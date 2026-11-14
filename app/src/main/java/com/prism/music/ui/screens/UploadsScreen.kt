@@ -76,9 +76,16 @@ private enum class UploadSongSort(val label: String) { LIBRARY(tr(R.string.libra
 private enum class UploadAlbumSort(val label: String) { LIBRARY(tr(R.string.library_order)), TITLE(tr(R.string.title)), ARTIST(tr(R.string.artist)), YEAR(tr(R.string.newest_first)) }
 private enum class UploadArtistSort(val label: String) { LIBRARY(tr(R.string.library_order)), NAME(tr(R.string.name)), MOST(tr(R.string.most_songs)) }
 
+/** The gaps between the words of a search ("ac   dc"). */
+private val SPACES = Regex("\\s+")
+
+/** The words of a search, as [matchesWords] looks for them ("AC  DC" → "ac", "dc"); empty for a blank one. */
+internal fun searchWords(query: String): List<String> =
+    query.trim().lowercase().split(SPACES).filter { it.isNotEmpty() }
+
 /** Every word typed turns up in [hay], as in Local files' search. */
 internal fun matchesWords(query: String, hay: String): Boolean {
-    val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val words = searchWords(query)
     val text = hay.lowercase()
     return words.all { it in text }
 }
@@ -90,16 +97,16 @@ internal fun uploadAlbumArtist(subtitle: String): String {
 }
 
 internal fun sortUploadedSongs(songs: List<Song>, by: String): List<Song> = when (by) {
-    "TITLE" -> songs.sortedBy { it.title.lowercase() }
-    "ARTIST" -> songs.sortedWith(compareBy<Song> { it.primaryArtist.lowercase() }.thenBy { it.album?.title?.lowercase() ?: "" }.thenBy { it.title.lowercase() })
-    "ALBUM" -> songs.sortedWith(compareBy<Song> { it.album?.title?.lowercase() ?: "￿" }.thenBy { it.title.lowercase() })
+    "TITLE" -> songs.sortedByKey { it.title.lowercase() }
+    "ARTIST" -> songs.sortedByKey({ it.primaryArtist.lowercase() }, { it.album?.title?.lowercase() ?: "" }, { it.title.lowercase() })
+    "ALBUM" -> songs.sortedByKey({ it.album?.title?.lowercase() ?: "￿" }, { it.title.lowercase() })
     "LENGTH" -> songs.sortedByDescending { it.durationSec }
     else -> songs
 }
 
 internal fun sortUploadedAlbums(albums: List<AlbumItem>, by: String): List<AlbumItem> = when (by) {
-    "TITLE" -> albums.sortedBy { it.title.lowercase() }
-    "ARTIST" -> albums.sortedWith(compareBy<AlbumItem> { uploadAlbumArtist(it.subtitle).lowercase() }.thenBy { it.title.lowercase() })
+    "TITLE" -> albums.sortedByKey { it.title.lowercase() }
+    "ARTIST" -> albums.sortedByKey({ uploadAlbumArtist(it.subtitle).lowercase() }, { it.title.lowercase() })
     "YEAR" -> albums.sortedByDescending { Releases.yearOf(it) }
     else -> albums
 }
@@ -136,11 +143,28 @@ fun UploadsScreen(bottomPadding: Dp) {
     var songSort by remember { mutableStateOf(UploadSongSort.entries.firstOrNull { it.name == c.library.sortOf("uploads:songs") } ?: UploadSongSort.LIBRARY) }
     var albumSort by remember { mutableStateOf(UploadAlbumSort.entries.firstOrNull { it.name == c.library.sortOf("uploads:albums") } ?: UploadAlbumSort.LIBRARY) }
     var artistSort by remember { mutableStateOf(UploadArtistSort.entries.firstOrNull { it.name == c.library.sortOf("uploads:artists") } ?: UploadArtistSort.LIBRARY) }
-    val songs = remember(lists.songs, songSort, query) {
-        sortUploadedSongs(lists.songs, songSort.name).filter { s -> matchesWords(query, "${s.title} ${s.artistText} ${s.album?.title.orEmpty()}") }
+    // Sorted once per list and sort, then searched as the listener types: the sort used to be done again on every
+    // keystroke, and every name lowercased again for every song.
+    val sortedSongs = remember(lists.songs, songSort) { sortUploadedSongs(lists.songs, songSort.name) }
+    val songHay = remember(sortedSongs, query.isNotBlank()) {
+        if (query.isBlank()) emptyMap() else sortedSongs.associate { s ->
+            s.id to "${s.title} ${s.artistText} ${s.album?.title.orEmpty()}".lowercase()
+        }
     }
-    val albums = remember(lists.albums, albumSort, query) { sortUploadedAlbums(lists.albums, albumSort.name).filter { matchesWords(query, "${it.title} ${it.subtitle}") } }
-    val artists = remember(lists.artists, lists.songs, artistSort, query) { sortUploadedArtists(lists.artists, lists.songs, artistSort.name).filter { matchesWords(query, it.title) } }
+    val songs = remember(sortedSongs, query, songHay) {
+        val words = searchWords(query)
+        if (words.isEmpty()) sortedSongs else sortedSongs.filter { s -> val hay = songHay[s.id].orEmpty(); words.all { it in hay } }
+    }
+    val sortedAlbums = remember(lists.albums, albumSort) { sortUploadedAlbums(lists.albums, albumSort.name) }
+    val albums = remember(sortedAlbums, query) {
+        val words = searchWords(query)
+        if (words.isEmpty()) sortedAlbums else sortedAlbums.filter { a -> val hay = "${a.title} ${a.subtitle}".lowercase(); words.all { it in hay } }
+    }
+    val sortedArtists = remember(lists.artists, lists.songs, artistSort) { sortUploadedArtists(lists.artists, lists.songs, artistSort.name) }
+    val artists = remember(sortedArtists, query) {
+        val words = searchWords(query)
+        if (words.isEmpty()) sortedArtists else sortedArtists.filter { a -> val hay = a.title.lowercase(); words.all { it in hay } }
+    }
 
     // Without a network only what's on the phone plays or opens; the rest is dimmed, as on album pages.
     val online by c.network.online.collectAsState()

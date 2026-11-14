@@ -1043,7 +1043,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.releaseGrid(
     val items = when (sort) {
         ReleaseSort.NEWEST -> Releases.newestFirst(shelf.items)
         ReleaseSort.OLDEST -> Releases.oldestFirst(shelf.items)
-        ReleaseSort.TITLE -> shelf.items.sortedBy { it.title.lowercase() }
+        ReleaseSort.TITLE -> shelf.items.sortedByKey { it.title.lowercase() }
     }
     // An artist's own discography leaves their name out; a grid of many artists' releases (YouTube's "New releases")
     // needs it, or every card just said "Album".

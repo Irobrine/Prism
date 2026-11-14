@@ -21,7 +21,19 @@ import com.prism.music.data.model.Song
 import com.prism.music.data.model.UNKNOWN_ARTIST
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "songs")
+@Entity(
+    tableName = "songs",
+    indices = [
+        // The library's own questions of this table, asked again whenever any song changes (every play touches one):
+        // liked songs in their order, recently played ones, an album's or an artist's songs, smart downloads. Without
+        // an index each one read the whole table (a big library's list sorted every song to answer).
+        Index(value = ["liked", "likedAt"]),
+        Index(value = ["lastPlayed"]),
+        Index(value = ["albumId"]),
+        Index(value = ["artistId"]),
+        Index(value = ["smartDownload"]),
+    ],
+)
 data class SongEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -63,8 +75,22 @@ data class SongEntity(
 private val artistsJsonFormat = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 private val artistListSerializer = kotlinx.serialization.builtins.ListSerializer(ArtistRef.serializer())
 
-private fun storedArtists(json: String?): List<ArtistRef>? =
-    json?.let { runCatching { artistsJsonFormat.decodeFromString(artistListSerializer, it) }.getOrNull() }
+/**
+ * Each stored artist list, decoded once: a library's songs mostly name the same few hundred artists, and every read of a
+ * list (Room reads them again whenever any song changes, which every play does) turned every row into a [Song], parsing
+ * each row's artists again. Recently used ones stay; the lists are never changed, so sharing one between songs is safe.
+ */
+private val artistsCache = object : LinkedHashMap<String, List<ArtistRef>>(64, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<ArtistRef>>) = size > 400
+}
+
+private fun storedArtists(json: String?): List<ArtistRef>? {
+    if (json == null) return null
+    synchronized(artistsCache) { artistsCache[json] }?.let { return it }
+    val decoded = runCatching { artistsJsonFormat.decodeFromString(artistListSerializer, json) }.getOrNull() ?: return null
+    synchronized(artistsCache) { artistsCache[json] = decoded }
+    return decoded
+}
 
 fun Song.toEntity(base: SongEntity? = null) = SongEntity(
     id = id,
@@ -84,7 +110,7 @@ fun Song.toEntity(base: SongEntity? = null) = SongEntity(
     smartDownload = base?.smartDownload ?: false,
 )
 
-@Entity(tableName = "play_events", indices = [Index("songId"), Index("timestamp")])
+@Entity(tableName = "play_events", indices = [Index("songId"), Index("timestamp"), Index(value = ["songId", "timestamp"])])
 data class PlayEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val songId: String,
@@ -236,12 +262,16 @@ val SongPlays.mainArtist: String
  * plays and time of all of them; most listened first, as the query orders them.
  */
 fun List<SongPlays>.mergeUploads(): List<SongPlays> {
-    fun key(s: SongPlays) = s.title.lowercase().replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "").replace(Regex("\\s+"), " ").trim() +
+    // Made once: a history's merge used to build both of them again for every song.
+    fun key(s: SongPlays) = s.title.lowercase().replace(BRACKETS, "").replace(SPACES, " ").trim() +
         "|" + s.mainArtist.lowercase()
     return groupBy { if (it.mainArtist.isBlank()) it.songId else key(it) }.values
         .map { same -> same.maxBy { it.ms }.copy(plays = same.sumOf { it.plays }, ms = same.sumOf { it.ms }) }
         .sortedWith(compareByDescending<SongPlays> { it.ms }.thenByDescending { it.plays })
 }
+
+private val BRACKETS = Regex("\\s*[(\\[][^)\\]]*[)\\]]")
+private val SPACES = Regex("\\s+")
 
 @kotlinx.serialization.Serializable
 data class ArtistPlays(val artistName: String, val plays: Int, val ms: Long, val thumbnail: String?, val artistId: String?)
@@ -705,7 +735,7 @@ interface RomanizedDao {
         RomanizedEntity::class, ReleaseEntity::class, MixEntity::class, BlendEntity::class, RecognitionEntity::class,
         ImportedPlayEntity::class, ImportMatchEntity::class, SongTraitsEntity::class, SongTagEntity::class],
     views = [CountedPlay::class],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class PrismDatabase : RoomDatabase() {
@@ -815,6 +845,19 @@ abstract class PrismDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("CREATE TABLE IF NOT EXISTS `song_tags` (`tag` TEXT NOT NULL, `songId` TEXT NOT NULL, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`tag`, `songId`))")
                     db.execSQL("CREATE INDEX IF NOT EXISTS `index_song_tags_songId` ON `song_tags` (`songId`)")
+                }
+            },
+            // 1.8.5: the library's lists and a song's play count read through an index rather than every row (see the
+            // indices on SongEntity and PlayEventEntity). The table is only rebuilt by SQLite for an index, so the
+            // listener's songs and history are untouched.
+            object : Migration(11, 12) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_songs_liked_likedAt` ON `songs` (`liked`, `likedAt`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_songs_lastPlayed` ON `songs` (`lastPlayed`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_songs_albumId` ON `songs` (`albumId`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_songs_artistId` ON `songs` (`artistId`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_songs_smartDownload` ON `songs` (`smartDownload`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_play_events_songId_timestamp` ON `play_events` (`songId`, `timestamp`)")
                 }
             },
         )

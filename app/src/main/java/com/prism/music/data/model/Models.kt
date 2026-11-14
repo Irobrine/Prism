@@ -1,16 +1,20 @@
 package com.prism.music.data.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 /** What a song without an artist (a file with no artist tag) shows. Shown only: never counted as an artist. */
 const val UNKNOWN_ARTIST = "Unknown artist"
 
+@Immutable
 @Serializable
 data class ArtistRef(val name: String, val id: String? = null)
 
+@Immutable
 @Serializable
 data class AlbumRef(val title: String, val id: String? = null)
 
+@Immutable
 @Serializable
 data class Song(
     val id: String,
@@ -33,8 +37,16 @@ data class Song(
      */
     val isUpload: Boolean = false,
 ) {
-    val artistText: String get() = artists.joinToString(", ") { it.name }.ifBlank { UNKNOWN_ARTIST }
-    val primaryArtist: String get() = artists.firstOrNull()?.name ?: ""
+    /**
+     * The artists as one line ("A, B"). Made once, with the song: rows, sorts, searches and the lists built for the
+     * player read it many times for each song, and joining it each time left a string and a StringBuilder behind on
+     * every read (a library's sort read it twice per comparison).
+     */
+    val artistText: String = artists.joinToString(", ") { it.name }.ifBlank { UNKNOWN_ARTIST }
+
+    /** The song's main artist (what Replay, Rewind and the mixes count it under); kept with the song, as above. */
+    val primaryArtist: String = artists.firstOrNull()?.name ?: ""
+
     /** A music file on the phone (Library → Local music), not a YouTube Music song: it plays from the file. */
     val isLocal: Boolean get() = id.startsWith(LOCAL_PREFIX)
     /**
@@ -51,6 +63,7 @@ data class Song(
     }
 }
 
+@Immutable
 sealed interface BrowseItem {
     val id: String
     val title: String
@@ -62,6 +75,7 @@ sealed interface BrowseItem {
  * A song or video in a list. [plays]: how often it's been played, as a search result says ("189M plays", a video's
  * "120M views"), in any language; null where nothing says (1.8.0: search ranks songs of the same title by it).
  */
+@Immutable
 data class SongItem(val song: Song, val plays: Long? = null) : BrowseItem {
     override val id get() = song.id
     override val title get() = song.title
@@ -69,6 +83,7 @@ data class SongItem(val song: Song, val plays: Long? = null) : BrowseItem {
     override val thumbnail get() = song.thumbnail
 }
 
+@Immutable
 data class AlbumItem(
     override val id: String,
     override val title: String,
@@ -77,6 +92,7 @@ data class AlbumItem(
     val playlistId: String? = null,
 ) : BrowseItem
 
+@Immutable
 data class PlaylistItem(
     override val id: String,
     override val title: String,
@@ -89,6 +105,7 @@ data class PlaylistItem(
     val params: String? = null,
 ) : BrowseItem
 
+@Immutable
 data class ArtistItem(
     override val id: String,
     override val title: String,
@@ -97,6 +114,7 @@ data class ArtistItem(
 ) : BrowseItem
 
 /** A podcast show. [id] is its browse id ("MPSP" + its playlist id); [subtitle] is the host. */
+@Immutable
 data class PodcastItem(
     override val id: String,
     override val title: String,
@@ -108,6 +126,7 @@ data class PodcastItem(
 }
 
 /** One episode on a show's page, with what the list shows beside it. */
+@Immutable
 data class Episode(
     val song: Song,
     /** "Oct 2", "1d ago". */
@@ -118,6 +137,7 @@ data class Episode(
     val played: Boolean = false,
 )
 
+@Immutable
 data class PodcastPage(
     val id: String,
     val title: String,
@@ -133,6 +153,7 @@ data class PodcastPage(
 }
 
 /** Mood / genre navigation tile from YouTube Music's "Moods & genres". */
+@Immutable
 data class MoodItem(
     override val id: String,
     override val title: String,
@@ -143,6 +164,7 @@ data class MoodItem(
     override val thumbnail: String? get() = null
 }
 
+@Immutable
 data class Shelf(
     val title: String,
     val strapline: String? = null,
@@ -206,18 +228,22 @@ object Releases {
     /**
      * Newest first. YouTube's discography lists are mostly newest first but tack live albums, radio
      * specials and remixes on at the end in their own runs; a stable sort keeps its order within a year.
+     * Each release's year is read once (a sort otherwise reads it again on every comparison).
      */
     fun newestFirst(items: List<BrowseItem>): List<BrowseItem> =
-        if (items.none { it is AlbumItem }) items else items.sortedByDescending { yearOf(it) }
+        if (items.none { it is AlbumItem }) items
+        else items.map { it to yearOf(it) }.sortedByDescending { it.second }.map { it.first }
 
     fun oldestFirst(items: List<BrowseItem>): List<BrowseItem> =
-        items.sortedWith(compareBy<BrowseItem> { yearOf(it).takeIf { y -> y > 0 } ?: Int.MAX_VALUE })
+        items.map { it to (yearOf(it).takeIf { y -> y > 0 } ?: Int.MAX_VALUE) }.sortedBy { it.second }.map { it.first }
 }
 
+@Immutable
 data class HomeFeed(val shelves: List<Shelf>, val continuation: String?)
 
 enum class CollectionKind { ALBUM, PLAYLIST }
 
+@Immutable
 data class CollectionPage(
     val id: String,
     val kind: CollectionKind,
@@ -277,6 +303,7 @@ fun popularTracks(plays: Map<String, Long>): Set<String> {
     return sorted.take(cap).filter { it.value >= median * 2 }.map { it.key }.toSet()
 }
 
+@Immutable
 data class ArtistPage(
     val id: String,
     val name: String,
@@ -388,14 +415,20 @@ fun formatDuration(sec: Int): String {
 fun parseDuration(text: String?): Int {
     if (text.isNullOrBlank()) return 0
     // Episodes give their length in words: "2 hr 54 min", "47 min", "1 hr", "35 sec".
-    if (!text.contains(':') && Regex("\\d+\\s*(hr|min|sec)").containsMatchIn(text)) {
-        fun part(unit: String) = Regex("(\\d+)\\s*$unit").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        return part("hr") * 3600 + part("min") * 60 + part("sec")
+    if (!text.contains(':') && WORD_DURATION.containsMatchIn(text)) {
+        fun part(unit: Regex) = unit.find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        return part(HR) * 3600 + part(MIN) * 60 + part(SEC)
     }
     val parts = text.trim().split(":").mapNotNull { it.toIntOrNull() }
     if (parts.isEmpty()) return 0
     return parts.fold(0) { acc, p -> acc * 60 + p }
 }
+
+// Compiled once: parseDuration reads every song of a page (and a search's many), and made these again on each call.
+private val WORD_DURATION = Regex("\\d+\\s*(hr|min|sec)")
+private val HR = Regex("(\\d+)\\s*hr")
+private val MIN = Regex("(\\d+)\\s*min")
+private val SEC = Regex("(\\d+)\\s*sec")
 
 /**
  * YouTube's word for what an item is, first in its subtitle ("Album • Artist • 2024"): kept in English so code can read

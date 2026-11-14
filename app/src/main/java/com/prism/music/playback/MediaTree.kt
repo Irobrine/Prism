@@ -407,6 +407,9 @@ class MediaTree(private val c: AppContainer) {
 /** The tile for a playlist, mix or album whose cover is missing. */
 private const val AUTO_PLAYLIST = "ic_auto_playlist"
 
+/** Prism's own tiles' names (`ic_auto_…`), made once rather than on every tile asked for. */
+private val TILE_NAME = Regex("ic_auto_[a-z_]+")
+
 /**
  * Serves cover art to Android Auto, which only loads content:// images for
  * browse lists. Downloads the (Google-hosted) image once and caches it.
@@ -472,7 +475,7 @@ class ArtworkProvider : ContentProvider() {
 
     /** One of Prism's own `ic_auto_` tiles, drawn once per version of the app. */
     private fun tile(ctx: android.content.Context, name: String): ParcelFileDescriptor? {
-        if (!name.matches(Regex("ic_auto_[a-z_]+"))) return null
+        if (!name.matches(TILE_NAME)) return null
         @Suppress("DiscouragedApi")
         val id = ctx.resources.getIdentifier(name, "drawable", ctx.packageName).takeIf { it != 0 } ?: return null
         return cached(ctx, "$RES$name@${BuildConfig.VERSION_CODE}") {

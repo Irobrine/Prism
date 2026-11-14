@@ -9,11 +9,19 @@ internal const val LIBRARY_SEARCH_FROM = 8
  * punctuation ("!!!" is a band) goes by the characters themselves.
  */
 internal fun libraryMatches(query: String, vararg names: String): Boolean {
-    val words = phoneNorm(query).split(' ').filter { it.isNotBlank() }
+    val words = libraryWords(query)
     if (words.isEmpty()) return names.any { it.contains(query.trim(), ignoreCase = true) }
-    val hay = names.joinToString(" ") { phoneNorm(it) }
-    return words.all { it in hay }
+    return words.all { it in libraryHaystack(names.asIterable()) }
 }
+
+/** What's typed, as the words [libraryMatches] looks for ("Beyonce", "ac dc"). Empty for punctuation only. */
+internal fun libraryWords(query: String): List<String> = phoneNorm(query).split(' ').filter { it.isNotBlank() }
+
+/**
+ * The names as [libraryMatches] reads them, made once per entry where a list is filtered as the listener types:
+ * normalizing every name of every song on each keystroke was the slow part of a Library search.
+ */
+internal fun libraryHaystack(names: Iterable<String>): String = names.joinToString(" ") { phoneNorm(it) }
 
 /** The names of an album's subtitle, without the kind it starts with ("Album • An artist • 2024": searching "album" shouldn't find them all). */
 internal fun albumNames(subtitle: String, single: String): List<String> =

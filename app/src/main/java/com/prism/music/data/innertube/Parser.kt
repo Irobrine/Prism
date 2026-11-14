@@ -67,6 +67,9 @@ object Parser {
     }
     private val localYear = Regex("^(\\d{4})\\s*[년年]$")
 
+    /** The page types that make a name an artist (made once: every song parsed asked for this set again). */
+    private val ARTIST_PAGES = setOf(ARTIST, CHANNEL)
+
     /** A subtitle ("노래 • 아이유 • 2026년") with its type label and year in English ("Song • 아이유 • 2026"). */
     fun canonical(subtitle: String): String {
         if (subtitle.isEmpty()) return subtitle
@@ -111,7 +114,7 @@ object Parser {
     private fun isSeparator(t: String) = t.isBlank() || t.trim() == "•" || t.trim() == "&" || t.trim() == ","
 
     fun artistsFromRuns(runs: List<JsonObject>): List<ArtistRef> {
-        val linked = runs.filter { pageType(it["navigationEndpoint"]) in setOf(ARTIST, CHANNEL) }.map {
+        val linked = runs.filter { pageType(it["navigationEndpoint"]) in ARTIST_PAGES }.map {
             ArtistRef(it.str("text") ?: "", it.str("navigationEndpoint", "browseEndpoint", "browseId"))
         }
         if (linked.isNotEmpty()) return linked
