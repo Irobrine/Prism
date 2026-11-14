@@ -158,11 +158,20 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     private lateinit var lockScreen: com.prism.music.ui.lockscreen.LockScreenGate
     private val silentKeepAlive by lazy { SilentKeepAlive(this) }
+    /** The persistent card's notification, with the play/pause button left out while it reports playing. */
+    private lateinit var notificationProvider: PersistentNotificationProvider
     /** A real song that isn't playing: the persistent card takes its place while Prism is out of sight. */
     private var pausedForControls = false
+    /** The persistent card's reactivation (see [reactivatePersistentCard]). */
+    private var reactivatingCard = false
+    /** Which placeholder item the card shows: a new one on each reactivation (see [placeholderItem]). */
+    private var placeholderPulse = 0
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        notificationProvider = PersistentNotificationProvider(this)
+        setMediaNotificationProvider(notificationProvider)
         PlaybackServices.running = this::class.java
         if (com.prism.music.BuildConfig.DEBUG) {
             PlaybackServices.failForTest = { onPlayerError(it) }
@@ -263,6 +272,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         sessionPlayer.onPlaceholderPlay = {
             scope.launch { if (!playLastPlayed()) runPersistentAction(PersistentAction.LIBRARY_SONGS) }
         }
+        sessionPlayer.onPlaceholderPaused = { reactivatePersistentCard() }
         carLyrics = CarLyrics(this, c, player, sessionPlayer, scope)
         // The lyrics button works the car's switch in a car and the notification's elsewhere (#392).
         carLyrics.onPlaceChange = { updateButtons() }
@@ -939,7 +949,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             if (::sessionPlayer.isInitialized && sessionPlayer.placeholder) {
                 android.util.Log.i("PrismControl", "the persistent card was dismissed: putting it back")
                 setNotificationClosed(false)
-                triggerNotificationUpdate()
+                reactivatePersistentCard()
                 return
             }
             // Dismissing a song's card leaves the persistent controls (rather than keeping the paused song).
@@ -978,6 +988,32 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
 
     /** Whether one of Prism's own screens is showing (a foreground service alone doesn't count). */
     private fun uiInFront(): Boolean = c.visible.value
+
+    /**
+     * The persistent card was dismissed: the phone paused or stopped it ([LyricsOverlayPlayer.onPlaceholderPaused]),
+     * or told us it was swiped away. A plain re-post is ignored once a phone has hidden a card, so report a pause and
+     * a play again, with a new item id: a state and media change is what makes the card come back.
+     */
+    private fun reactivatePersistentCard() {
+        if (!c.settings.current.persistent.controls) return
+        if (!::sessionPlayer.isInitialized || !sessionPlayer.placeholder) return
+        if (reactivatingCard) return
+        reactivatingCard = true
+        android.util.Log.i("PrismControl", "the persistent card was dismissed: bringing it back")
+        sessionPlayer.placeholderPulsing = true
+        triggerNotificationUpdate()
+        scope.launch {
+            // Long enough for the phone to take the pause, short enough not to be seen.
+            delay(150)
+            placeholderPulse++
+            sessionPlayer.setPlaceholderItem(placeholderItem())
+            sessionPlayer.placeholderPulsing = false
+            syncPlaceholder()
+            triggerNotificationUpdate()
+            delay(500)
+            reactivatingCard = false
+        }
+    }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (isPlaying) setNotificationClosed(false)
@@ -2428,13 +2464,16 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         val artwork = Uri.parse("android.resource://$packageName/${AppIcons.current(this).foreground}")
         val silence = Uri.parse("android.resource://$packageName/${R.raw.persistent_silence}")
         return MediaItem.Builder()
-            .setMediaId("prism:persistent-placeholder")
+            // A different id each time the card is brought back: the phone reads it as new media, not the card it hid.
+            .setMediaId("prism:persistent-placeholder-$placeholderPulse")
             // A real (silent) resource: some phones only show a media card for a session whose item can be played.
             .setUri(silence)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(tr(R.string.app_name))
-                    .setArtist(tr(R.string.persistent_nothing_playing))
+                    // Zero-width spaces (invisible), a different count each time, so even the notification's text is
+                    // new to the phone that hid the last card.
+                    .setArtist(tr(R.string.persistent_nothing_playing) + "\u200B".repeat(placeholderPulse % 4 + 1))
                     .setArtworkUri(artwork)
                     .build()
             )
@@ -2453,6 +2492,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private fun syncPlaceholder() {
         if (!::sessionPlayer.isInitialized || !::player.isInitialized) return
         sessionPlayer.setPlaceholderAsPlaying(c.settings.current.persistent.compatibility)
+        if (::notificationProvider.isInitialized) notificationProvider.hidePlayPause = sessionPlayer.placeholderAsPlaying
         // Compatibility mode also keeps a silent audio track playing, so the phone sees a real playing app and keeps
         // the card on the lock screen and after the app is dismissed.
         if (c.settings.current.persistent.controls && c.settings.current.persistent.compatibility && placeholderWanted()) {
@@ -3401,6 +3441,28 @@ internal fun wontPlayHere(error: Throwable, refused: Boolean = false): Boolean {
  */
 internal fun readAheadFailed(failedSong: String?, current: Set<String>, next: Set<String>): Boolean =
     failedSong != null && failedSong !in current && failedSong in next
+
+/**
+ * The persistent card's notification: Media3's own, with the system play/pause button left out while the card reports
+ * playing. The command itself stays available, because a phone's swipe-away reaches the session as a pause: that is how
+ * the card knows it was dismissed and comes back.
+ */
+@OptIn(UnstableApi::class)
+private class PersistentNotificationProvider(context: Context) : DefaultMediaNotificationProvider(context) {
+    /** Whether the card is the placeholder, reported as playing. */
+    @Volatile var hidePlayPause = false
+
+    override fun getMediaButtons(
+        session: MediaSession,
+        playerCommands: Player.Commands,
+        mediaButtonPreferences: ImmutableList<CommandButton>,
+        showPauseButton: Boolean,
+    ): ImmutableList<CommandButton> {
+        val buttons = super.getMediaButtons(session, playerCommands, mediaButtonPreferences, showPauseButton)
+        if (!hidePlayPause) return buttons
+        return ImmutableList.copyOf(buttons.filter { it.playerCommand != Player.COMMAND_PLAY_PAUSE })
+    }
+}
 
 /** How long a song that wouldn't play is shown, with its reason, before the next one starts. */
 private const val SKIP_AFTER_FAILURE_MS = 1_500L
