@@ -151,6 +151,12 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private val videoRetriedAt = HashMap<String, Long>()
     private var saveJob: Job? = null
     private var extrasJob: Job? = null
+    /** The Quick picks made behind the music, and the library brought up to date behind it (one of each at a time). */
+    private var quickPicksJob: Job? = null
+    private var librarySyncJob: Job? = null
+    /** When each was last done, so pressing the button again doesn't sync the same thing over and over. */
+    private var quickPicksMadeAt = 0L
+    private var librarySyncedAt = 0L
 
     private lateinit var lockScreen: com.prism.music.ui.lockscreen.LockScreenGate
     private val silentKeepAlive by lazy { SilentKeepAlive(this) }
@@ -2670,52 +2676,103 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         if (!played) toast(tr(R.string.persistent_no_songs))
     }
 
-    /** Quick picks, made afresh (YouTube's own and the set around the listener's artists), then shuffled. */
+    /**
+     * Quick picks: the set made today, if it has been, starts at once; then a fresh one is made behind the music (it
+     * means a Home page and three radios, about 5 s) and kept for the next press. Without a set for today the first
+     * one has to be made now.
+     */
     private suspend fun shuffleQuickPicks(): Boolean {
-        toast(tr(R.string.persistent_getting_quick_picks))
         val settings = c.settings.current
         val owner = settings.accountName
+        val whose = "${settings.authUser}|${settings.dataSyncId}|${settings.accountName}"
+        val day = java.time.LocalDate.now().toString()
+        val kept = runCatching { c.homeCache.readPicks(day, whose) }.getOrNull().orEmpty()
+        if (kept.isNotEmpty()) {
+            playQuickPicks(kept)
+            // Today's set again behind the music now and then, so a later press (and tomorrow) has a fresh one.
+            val now = SystemClock.elapsedRealtime()
+            if (quickPicksJob?.isActive != true && (quickPicksMadeAt == 0L || now - quickPicksMadeAt > QUICK_PICKS_REFRESH_EVERY_MS)) {
+                quickPicksMadeAt = now
+                quickPicksJob = c.scope.launch(Dispatchers.IO) { runCatching { makeQuickPicks(owner, whose, day) } }
+            }
+            return true
+        }
+        toast(tr(R.string.persistent_getting_quick_picks))
+        val songs = makeQuickPicks(owner, whose, day)
+        if (songs.isEmpty()) return false
+        quickPicksMadeAt = SystemClock.elapsedRealtime()
+        playQuickPicks(songs)
+        return true
+    }
+
+    private fun playQuickPicks(songs: List<Song>) {
+        c.player.playQueue(songs, 0, QueueSource(QueueKind.OTHER, tr(R.string.persistent_quick_picks)), shuffle = true)
+    }
+
+    /**
+     * Quick picks made afresh (YouTube's own and, unless the listener chose YouTube's only, the set around their
+     * artists), then kept for the rest of the day. The Home pages after the one Quick picks is on only matter to Home,
+     * so they aren't waited for.
+     */
+    private suspend fun makeQuickPicks(owner: String, whose: String, day: String): List<Song> {
         val shelves = withTimeoutOrNull(20_000) {
-            runCatching { c.ytm.fullHomePages(pages = 3, maxPages = 8) { got -> got.quickPicks(owner) != null } }.getOrNull()?.first
+            runCatching {
+                c.ytm.fullHomePages(pages = 1, maxPages = 8) { got -> got.quickPicks(owner) != null }.first
+            }.getOrNull()
         }.orEmpty()
         val youtube = shelves.quickPicks(owner)?.items?.filterIsInstance<SongItem>()?.map { it.song }.orEmpty()
-        var songs = withTimeoutOrNull(25_000) {
+        val youtubeOnly = c.settings.current.behavior.quickPicksSource == com.prism.music.data.prefs.QuickPicksSource.YOUTUBE
+        var songs = if (youtubeOnly) youtube else withTimeoutOrNull(25_000) {
             runCatching {
                 c.yourMusic.quickPicks(youtube, radioOf = { seed: Song -> c.ytm.next(seed.id, playlistId = "RDAMVM${seed.id}").songs })
             }.getOrNull()
         }.orEmpty()
         if (songs.isEmpty()) songs = youtube
-        if (songs.isEmpty()) {
-            val whose = "${settings.authUser}|${settings.dataSyncId}|${settings.accountName}"
-            songs = runCatching { c.homeCache.readPicks(java.time.LocalDate.now().toString(), whose) }.getOrNull().orEmpty()
-        }
+        if (songs.isEmpty()) songs = runCatching { c.homeCache.readPicks(day, whose) }.getOrNull().orEmpty()
         if (songs.isEmpty()) songs = runCatching { c.yourMusic.offlinePicks() }.getOrDefault(emptyList())
-        if (songs.isEmpty()) return false
-        c.player.playQueue(songs, 0, QueueSource(QueueKind.OTHER, tr(R.string.persistent_quick_picks)), shuffle = true)
-        return true
+        if (songs.isNotEmpty()) runCatching { c.homeCache.writePicks(day, whose, songs) }
+        return songs
     }
 
     /**
-     * Library → Songs as the listener has it (liked songs plus the playlists picked under "From"), refreshed first: the
-     * library syncs, and each YouTube playlist is checked for the songs added since it was last read.
+     * Library → Songs as the listener has it (liked songs plus the playlists picked under "From"), then shuffled.
+     * What the phone already keeps starts at once; syncing the library and checking the playlists for new songs happens
+     * behind the music (it means the whole liked library and a page of each playlist), so the next press has what's new.
      */
     private suspend fun shuffleLibrarySongs(): Boolean {
-        toast(tr(R.string.persistent_getting_library_songs))
-        if (c.settings.current.isLoggedIn) runCatching { c.library.sync() }
-        // The flow that Home and Library read gets the freshly synced likes on its own collector: give it a moment.
-        kotlinx.coroutines.delay(250)
+        val settings = c.settings.current
         val from = SongsFrom.decode(c.library.sortOf(SongsFrom.KEY))
-        val own = c.prismLibrary.lists.value.associateBy { it.id }
-        val lists = from.playlists.map { id ->
-            own[id]?.songs ?: runCatching {
-                c.playlistSongs.refresh(id)
-                c.playlistSongs.songs(id)
-            }.getOrNull().orEmpty()
+        var songs = librarySongsNow(from)
+        if (songs.isEmpty()) {
+            // Nothing kept yet (a new install or a new account): this first time has to wait for the sync.
+            toast(tr(R.string.persistent_getting_library_songs))
+            if (settings.isLoggedIn) runCatching { c.library.sync() }
+            // The flow that Home and Library read gets the freshly synced likes on its own collector: give it a moment.
+            delay(250)
+            songs = librarySongsNow(from)
+        } else if (librarySyncJob?.isActive != true && (librarySyncedAt == 0L || SystemClock.elapsedRealtime() - librarySyncedAt > LIBRARY_REFRESH_EVERY_MS)) {
+            librarySyncedAt = SystemClock.elapsedRealtime()
+            librarySyncJob = c.scope.launch(Dispatchers.IO) {
+                // A moment first, so the song that just started isn't held up by the sync.
+                delay(3_000)
+                if (settings.isLoggedIn) runCatching { c.library.sync() }
+                val own = c.prismLibrary.lists.value.map { it.id }.toSet()
+                from.playlists.filter { it !in own }.forEach { id ->
+                    c.playlistSongs.refresh(id)
+                    runCatching { c.playlistSongs.songs(id) }
+                }
+            }
         }
-        val songs = if (from.isDefault) c.library.likedShown.value else SongsFrom.merge(c.library.likedShown.value, lists, from)
         if (songs.isEmpty()) return false
         c.player.playQueue(songs, 0, QueueSource(QueueKind.LIBRARY, tr(R.string.library)), shuffle = true)
         return true
+    }
+
+    /** Library → Songs' songs from what the phone keeps, without asking YouTube. */
+    private suspend fun librarySongsNow(from: SongsFrom): List<Song> {
+        val own = c.prismLibrary.lists.value.associateBy { it.id }
+        val lists = from.playlists.map { id -> own[id]?.songs ?: c.playlistSongs.cached(id).orEmpty() }
+        return if (from.isDefault) c.library.likedShown.value else SongsFrom.merge(c.library.likedShown.value, lists, from)
     }
 
     /** Resumes what was playing before Prism stopped, at the place it stopped; the queue file keeps that place. */
@@ -3511,6 +3568,10 @@ internal fun readAheadFailed(failedSong: String?, current: Set<String>, next: Se
 private const val SKIP_AFTER_FAILURE_MS = 1_500L
 /** How long Autoplay's songs are waited for after a last song that wouldn't play. */
 private const val AUTOPLAY_WAIT_MS = 15_000L
+/** How often the persistent card's Shuffle Quick picks makes today's set again behind the music. */
+private const val QUICK_PICKS_REFRESH_EVERY_MS = 30 * 60_000L
+/** How often its Shuffle Library songs brings the library and its playlists up to date behind the music. */
+private const val LIBRARY_REFRESH_EVERY_MS = 10 * 60_000L
 
 /**
  * Whether [error] is the audio decoder failing or going away rather than the song's bytes: Android releases a background
